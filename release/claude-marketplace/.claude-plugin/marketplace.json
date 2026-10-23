@@ -1,0 +1,14 @@
+{
+  "name": "musicbee-tagger",
+  "description": "Local MusicBee metadata investigation tools for Claude Code.",
+  "owner": {
+    "name": "MusicBee Tagger MCP"
+  },
+  "plugins": [
+    {
+      "name": "musicbee-tagger",
+      "source": "./plugins/musicbee-tagger",
+      "description": "Investigate MusicBee audio metadata and stage verified tag proposals."
+    }
+  ]
+}
