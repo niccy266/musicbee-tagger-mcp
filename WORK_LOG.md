@@ -22,8 +22,8 @@ A specialized metadata bridge connecting **MusicBee**, local audio files, and th
 ---
 
 ## 🛠️ Environment & Paths
-* **Repository Path**: `C:\Users\niccy\.gemini\antigravity\scratch\musicbee-tagger-mcp`
-* **Worktree Path**: `C:\Users\niccy\.gemini\antigravity\worktrees\musicbee-tagger-mcp\musicbee_metadata_bridge`
+* **Repository Path**: repository root (`.`)
+* **Worktree Path**: separate worktree named `musicbee_metadata_bridge` (location depends on the user's environment)
 * **GitHub Remote (Private)**: `git@github.com:niccy266/musicbee-tagger-mcp.git`
 * **Python Version**: Python 3.14
 * **Virtual Environment**: `.venv` in repository root
@@ -44,7 +44,7 @@ musicbee_metadata_bridge/
 │       ├── server.py              # FastMCP server exposing 11 read-only/staging tools
 │       ├── file_registry.py       # Session-scoped token ↔ path indirection (paths never leak)
 │       ├── playlist.py            # M3U/M3U8 parsing and relative path resolution
-│       ├── staging.py             # Manifest staging manager (%APPDATA%\musicbee-tagger-mcp\staged)
+│       ├── staging.py             # Manifest staging manager (user application-data directory: musicbee-tagger-mcp/staged)
 │       ├── apply_staged.py        # User CLI tool for interactive review & commits (ONLY write path)
 │       ├── metadata_reader.py     # Mutagen wrapper (ID3v2.4, Vorbis OGG/FLAC, MP4/M4A)
 │       ├── filename_parser.py     # Regex clue extractor (brackets, years, track #, artist/title candidates)
@@ -80,7 +80,7 @@ musicbee_metadata_bridge/
 
 ### 1. Run Unit Tests (22/22 Passing)
 ```powershell
-cd C:\Users\niccy\.gemini\antigravity\scratch\musicbee-tagger-mcp
+Set-Location .
 .\.venv\Scripts\Activate.ps1
 pytest -v
 ```
@@ -117,7 +117,7 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - All 22 test cases passing.
 
 ### 2026-10-23 — Investigator follow-up
-- Confirmed the active repository is `K:\dev\vibe-coding\musicbee-mcp-server` on branch `claude-session` (five commits ahead of `origin`); the working tree was clean before this follow-up. The three handoff sample audio files are present.
+- Confirmed the active repository root on branch `claude-session` (five commits ahead of `origin`); the working tree was clean before this follow-up. The three handoff sample audio files are present.
 - Read sample metadata through the token-based batch brief. Durations: “The Sunshine Of Marseilles” 166.277s, “The Knack (Main Theme)” 174.681s, and “I'd Be A Millionaire” 214.056s. The filename clue parser reverses the artist/title guesses for these filename patterns, so the embedded tags were used for searches.
 - MusicBrainz searches did not find candidates for the Sunshine or David tracks. A broad John Barry search returned a “The Knack” recording (MBID `aaf8c36e-11fb-49f1-8032-6e2b4030ceb0`, 176.81s). It has not been confirmed as the local “The Knack (Main Theme)” version: the successful live verification compared against the shorter expected title “The Knack”, so a verification using the full local title remains necessary.
 - Fixed the verifier request to use the `musicbrainzngs` library's supported recording includes (`artists` and `releases`); added an assertion for those includes. Added a conservative `Unknown` classification when release-group type metadata is missing, rather than assuming “Studio Album”; added regression coverage.
