@@ -1,0 +1,9 @@
+"""Configured MusicBrainz API client shared by search and verification."""
+
+import musicbrainzngs
+
+musicbrainzngs.set_useragent(
+    "musicbee-tagger-mcp",
+    "0.1.0",
+    "https://github.com/niccy266/musicbee-tagger-mcp",
+)

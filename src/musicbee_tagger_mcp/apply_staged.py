@@ -15,6 +15,7 @@ import json
 import sys
 from pathlib import Path
 
+from .staged_apply import get_staged_applier
 from .staging import get_staging_manager
 
 
@@ -51,8 +52,8 @@ def cmd_list(staging) -> None:
         print()
 
 
-def cmd_apply_one(staging, stage_id: str, dry_run: bool, no_backup: bool) -> None:
-    manifest = staging.load(stage_id)
+def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> None:
+    manifest = applier.load(stage_id)
     if manifest.get("applied"):
         print(f"[SKIP] {stage_id} has already been applied.")
         return
@@ -74,7 +75,7 @@ def cmd_apply_one(staging, stage_id: str, dry_run: bool, no_backup: bool) -> Non
         print("Skipped.")
         return
 
-    result = staging.apply(stage_id, create_backup=not no_backup)
+    result = applier.apply(stage_id, create_backup=not no_backup)
     fields = result.get("fields_written", [])
     backed_up = result.get("backup_created", False)
     print(f"\n✓ Applied {len(fields)} field(s): {', '.join(fields)}")
@@ -100,13 +101,14 @@ def main() -> None:
 
     args = parser.parse_args()
     staging = get_staging_manager()
+    applier = get_staged_applier()
 
     if args.list:
         cmd_list(staging)
         return
 
     if args.stage_id:
-        cmd_apply_one(staging, args.stage_id, dry_run=args.dry_run, no_backup=args.no_backup)
+        cmd_apply_one(applier, args.stage_id, dry_run=args.dry_run, no_backup=args.no_backup)
         return
 
     if args.all:
@@ -117,7 +119,7 @@ def main() -> None:
         print(f"Found {len(pending)} pending change(s).\n")
         for entry in pending:
             cmd_apply_one(
-                staging,
+                applier,
                 entry["stage_id"],
                 dry_run=args.dry_run,
                 no_backup=args.no_backup,

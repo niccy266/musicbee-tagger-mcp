@@ -76,7 +76,7 @@ def test_register_display_name_is_filename_only(registry, tmp_audio):
 def test_register_files_error_does_not_expose_path(
     tmp_path, monkeypatch, error, expected
 ):
-    import musicbee_tagger_mcp.server as server
+    from musicbee_tagger_mcp.tools import files as file_tools
 
     missing_path = str(tmp_path / "private" / "missing.mp3")
 
@@ -84,9 +84,9 @@ def test_register_files_error_does_not_expose_path(
         def register(self, path):
             raise error(f"File operation failed: {path}")
 
-    monkeypatch.setattr(server, "get_registry", lambda: MissingFileRegistry())
+    monkeypatch.setattr(file_tools, "get_registry", lambda: MissingFileRegistry())
 
-    result = server.register_files([missing_path])
+    result = file_tools.register_files([missing_path])
 
     assert result == [{"error": expected}]
     assert missing_path not in json.dumps(result)
@@ -182,7 +182,24 @@ def test_list_pending_no_paths(staging, tmp_audio):
 def test_apply_staged_not_in_mcp_server():
     """apply_staged / apply_tags must NOT be registered as MCP tools."""
     import musicbee_tagger_mcp.server as server
+    from musicbee_tagger_mcp.server import app
+
     tool_names = [t for t in dir(server) if not t.startswith("_")]
+    registered_tool_names = set(app._tool_manager._tools)
     assert "apply_staged" not in tool_names
     assert "apply_tags" not in tool_names
     assert "apply_tags_to_file" not in tool_names
+    assert "apply_tags_to_file" not in registered_tool_names
+    assert registered_tool_names == {
+        "register_files",
+        "register_playlist",
+        "read_track_metadata",
+        "extract_filename_clues",
+        "get_batch_brief",
+        "repair_mojibake",
+        "search_canonical_release",
+        "verify_mbid",
+        "preview_tags",
+        "stage_tag_changes",
+        "list_staged_changes",
+    }
