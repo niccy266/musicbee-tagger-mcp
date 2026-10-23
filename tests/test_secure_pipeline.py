@@ -42,7 +42,10 @@ def staging(tmp_path):
     return StagingManager(staging_dir=staging_dir)
 
 
-FAKE_DIFF = [{"field": "album", "old": None, "new": "Test Album"}]
+FAKE_PREVIEW_DIFF = {
+    "album": {"before": None, "after": "Test Album", "changed": True},
+    "artist": {"before": "Test Artist", "after": "Test Artist", "changed": False},
+}
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +131,7 @@ def test_revoke_removes_token(registry, tmp_audio):
 
 def test_stage_returns_stage_id_not_path(staging, tmp_audio):
     with patch("musicbee_tagger_mcp.staging.preview_tag_changes",
-               return_value={"changes": FAKE_DIFF}):
+               return_value={"diff": FAKE_PREVIEW_DIFF}):
         result = staging.stage(
             absolute_path=tmp_audio,
             display_name=tmp_audio.name,
@@ -137,6 +140,9 @@ def test_stage_returns_stage_id_not_path(staging, tmp_audio):
     assert "stage_id" in result
     assert "display_name" in result
     assert "message" in result
+    assert result["diff_summary"] == [
+        {"field": "album", "old": None, "new": "Test Album"}
+    ]
     # The absolute path must NOT appear anywhere in the returned dict
     result_str = json.dumps(result)
     assert str(tmp_audio.parent) not in result_str
@@ -144,7 +150,7 @@ def test_stage_returns_stage_id_not_path(staging, tmp_audio):
 
 def test_stage_manifest_written_to_disk(staging, tmp_audio):
     with patch("musicbee_tagger_mcp.staging.preview_tag_changes",
-               return_value={"changes": FAKE_DIFF}):
+               return_value={"diff": FAKE_PREVIEW_DIFF}):
         result = staging.stage(
             absolute_path=tmp_audio,
             display_name=tmp_audio.name,
@@ -156,7 +162,7 @@ def test_stage_manifest_written_to_disk(staging, tmp_audio):
 
 def test_list_pending_no_paths(staging, tmp_audio):
     with patch("musicbee_tagger_mcp.staging.preview_tag_changes",
-               return_value={"changes": FAKE_DIFF}):
+               return_value={"diff": FAKE_PREVIEW_DIFF}):
         staging.stage(
             absolute_path=tmp_audio,
             display_name=tmp_audio.name,

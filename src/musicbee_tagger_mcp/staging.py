@@ -58,7 +58,21 @@ class StagingManager:
         """
         # Generate the field-by-field diff (reads file for current values)
         diff_result = preview_tag_changes(str(absolute_path), proposed_tags)
-        diff = diff_result.get("changes", [])
+        preview_diff = diff_result.get("diff", {})
+        if isinstance(preview_diff, dict):
+            diff = [
+                {
+                    "field": field,
+                    "old": change.get("before"),
+                    "new": change.get("after"),
+                }
+                for field, change in preview_diff.items()
+                if change.get("changed")
+            ]
+        elif isinstance(preview_diff, list):
+            diff = preview_diff
+        else:
+            raise ValueError("Tag preview returned an invalid diff")
 
         stage_id = str(uuid.uuid4())
         manifest = {
