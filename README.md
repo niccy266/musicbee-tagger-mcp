@@ -11,7 +11,8 @@ confirmation, and it creates backups by default.
 ## Windows desktop release
 
 The release bundle includes a Python wheel, source distribution, Windows
-installer, Claude Code MCP configuration, and Claude Code plugin archive.
+installer, Claude Code MCP configuration, and Claude Code plugin archive with
+the model-invocable `musicbee-investigator` skill.
 The installer defaults to:
 
 - Application and virtual environment: `K:\tools\mcp-servers\musicbee-tags\`
@@ -27,7 +28,7 @@ automatic cleanup or retention is performed.
 2. In PowerShell, run the included installer, supplying the downloaded wheel:
 
    ```powershell
-   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.1.0-py3-none-any.whl
+   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.1.1-py3-none-any.whl
    ```
 
    The installer creates a dedicated virtual environment, installs the wheel,
@@ -51,7 +52,15 @@ automatic cleanup or retention is performed.
    ```
 
    The plugin uses the stable `K:\bin` launcher and defaults to the same private
-   data root. Restart or reload Claude Code after configuring the server.
+   data root. It also provides the `musicbee-investigator` skill for metadata
+   investigation. Restart or reload Claude Code after configuring the server.
+   To refresh an existing local-marketplace installation after extracting a
+   newer release over its marketplace directory, run:
+
+   ```powershell
+   claude plugin marketplace update musicbee-tagger
+   claude plugin update musicbee-tagger@musicbee-tagger
+   ```
 5. Confirm the server is connected with `claude mcp list`, then use the
    registered MusicBee tools. Tokens are process-local and expire when the MCP
    server exits.

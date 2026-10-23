@@ -206,3 +206,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Limited lint scope to application source rather than mixing test-style diagnostics into the application score.
 - Kept the full Pylint report and score visible as advisory output, while making Pylint errors a separate blocking step. Existing warnings remain visible for gradual cleanup rather than making every push fail on an unconfigured legacy baseline.
 - Validation: the revised report completes with a 9.13/10 application-source score and no unresolved-import findings; the separate `--errors-only` gate passes.
+
+### 2026-10-24 — Bundle investigator skill in Claude plugin
+- Added the `musicbee-investigator` skill at the Claude plugin's root-level `skills/` directory and a regression test that keeps it synchronized with the project skill source.
+- Clarified that the MCP server boundary does not prevent shell-based audio writes, and that unresolved candidates should be reported to the user because no MCP review-flagging tool exists.
+- Bumped package and plugin metadata to `0.1.1`; updated the Windows install examples and documented refreshing an installed local marketplace plugin.
+- Validation: all 37 tests pass, Pylint `--errors-only` passes, Claude Code plugin validation passes with marketplace metadata warnings, and the plugin/marketplace/Windows release archives build with the new skill.

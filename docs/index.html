@@ -81,14 +81,14 @@
     <section id="release">
       <h2>Windows desktop release and Claude Code</h2>
       <p>The release bundle contains a Python wheel, source distribution, Windows installer, standalone Claude Code MCP config, and a Claude Code plugin marketplace. Extract the release bundle, then install the wheel into a dedicated environment:</p>
-      <pre><code>.\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.1.0-py3-none-any.whl</code></pre>
+      <pre><code>.\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.1.1-py3-none-any.whl</code></pre>
       <p>The installer defaults to <code>K:\tools\mcp-servers\musicbee-tags\</code>, stores stage data separately under <code>data\staged\</code>, and creates <code>K:\bin\musicbee-tagger-mcp.cmd</code> and <code>K:\bin\musicbee-tagger-apply.cmd</code>. Existing data is preserved during reinstall. Override <code>-InstallRoot</code> or <code>-BinRoot</code> only if the MCP config and plugin launcher paths are updated to match.</p>
       <p>To install the MCP server into Claude Code's user scope from PowerShell, load the provided <code>release/claude-code/mcp-config.json</code> entry:</p>
       <pre><code>$server = (Get-Content .\mcp-config.json -Raw | ConvertFrom-Json).mcpServers.'musicbee-tagger'
 $json = $server | ConvertTo-Json -Compress -Depth 10
 claude mcp add-json --scope user musicbee-tagger $json
 claude mcp get musicbee-tagger</code></pre>
-      <p>Alternatively, add the extracted <code>claude-marketplace</code> directory with <code>claude plugin marketplace add .\claude-marketplace</code>, then install it with <code>claude plugin install musicbee-tagger@musicbee-tagger</code>. Restart or reload Claude Code after configuration. The MCP process and apply CLI share the private data root through <code>MUSICBEE_TAGGER_DATA_DIR</code>; manually invoking the CLI requires setting the same variable first.</p>
+      <p>Alternatively, add the extracted <code>claude-marketplace</code> directory with <code>claude plugin marketplace add .\claude-marketplace</code>, then install it with <code>claude plugin install musicbee-tagger@musicbee-tagger</code>. The plugin includes the model-invocable <code>musicbee-investigator</code> skill. After extracting a newer release over the existing marketplace directory, run <code>claude plugin marketplace update musicbee-tagger</code> and <code>claude plugin update musicbee-tagger@musicbee-tagger</code>, then restart Claude Code. The MCP process and apply CLI share the private data root through <code>MUSICBEE_TAGGER_DATA_DIR</code>; manually invoking the CLI requires setting the same variable first.</p>
       <p>Pending stage manifests are the only application state currently persisted. Back up the install's <code>data</code> folder to preserve them. Search logs, applied-record archives, retry queues, and confidence-based auto-staging are not part of this release.</p>
     </section>
 

@@ -59,3 +59,24 @@ def test_plugin_version_matches_project_version():
     )
 
     assert plugin["version"] == project_version
+
+
+def test_plugin_bundles_the_investigator_skill():
+    """Keep Claude's plugin skill discoverable and synchronized with its source."""
+    source_skill = (
+        ROOT / ".agents" / "skills" / "musicbee-investigator" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    plugin_skill = (
+        ROOT
+        / "release"
+        / "claude-marketplace"
+        / "plugins"
+        / "musicbee-tagger"
+        / "skills"
+        / "musicbee-investigator"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    assert plugin_skill == source_skill
+    assert "name: musicbee-investigator" in plugin_skill
+    assert "description:" in plugin_skill
