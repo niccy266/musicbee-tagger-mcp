@@ -3,6 +3,9 @@
 ## Working with the User
 
 - Prefer implementing clear requests over returning only a plan. Explain assumptions when they affect behavior; ask before proceeding when uncertainty materially changes scope or risk.
+- Honor explicit requests to use a context-isolated subagent. For playlist work, keep the playlist path in the parent session, register it there, and never pass the path or path-bearing output to the subagent. Before assigning MCP actions, verify the subagent can use the same server process/token registry; otherwise delegate path-free metadata analysis and keep token-dependent verification/staging in the parent.
+- For metadata investigations, use web search to corroborate weak, conflicting, or incomplete MusicBrainz matches; use reliable discographic sources and retain links for material conclusions. Do not silently omit web research when requested or when the investigation workflow calls for it.
+- Optimize batch work by reusing one MCP server/client session and one batch brief, respecting MusicBrainz rate limits, and returning compact outcome summaries instead of repeated full payloads. Do not assume the API can batch unrelated searches in one request.
 - Give concise progress updates at meaningful milestones. For substantive code changes, append what changed and how it was verified to the end of `WORK_LOG.md`.
 - The user has authorized commits on this working branch. Commit coherent, verified changes regularly, use a clear message, and include the repository's required Copilot co-author trailer. Do not amend existing commits.
 - Explain system behavior in practical terms when asked, especially how MCP tools, tokens, playlists, and MusicBrainz entities fit together.
