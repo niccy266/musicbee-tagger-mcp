@@ -136,11 +136,19 @@
       </ul>
     </section>
 
-    <section id="limits">
-      <h2>Current limits and possible batch search</h2>
+    <section id="proposals">
+      <h2>Feature proposals</h2>
+      <h3>Batch MusicBrainz search</h3>
       <p>The current MCP surface has one MusicBrainz search tool per candidate query; there is no batch-search tool yet. MusicBrainz's Search API accepts one Lucene query per request. Combining unrelated titles into one Lucene expression does not provide independent per-track ranking, so it is not a safe substitute for separate searches.</p>
       <p>A future <code>search_canonical_releases_batch</code> MCP wrapper is a small-to-moderate change: it can accept a list of per-track query objects, deduplicate identical inputs, search sequentially at the service's rate limit, and return compact per-track results. A bounded in-memory cache can avoid duplicate work within the process. This reduces agent/MCP call overhead, but it cannot reduce the number of distinct MusicBrainz HTTP requests or their rate-limit time floor.</p>
       <p>Proposed safeguards for that wrapper: validate and cap batch size, deduplicate normalized queries, keep sequential rate limiting, isolate per-track errors, avoid caching transient failures, and test cache keys/expiration and privacy-safe output. A minimal version is a few hours of focused work; production-ready retry and cache tests could make it roughly a half-day to a day, depending on how much resilience is desired.</p>
+
+      <h3>Persistent state and database evaluation</h3>
+      <p>Consider replacing staged-change JSON manifests with a database only if measured needs justify it, such as durable searchable stage history, concurrent clients, or multi-user operation. The current token-to-path registry is process-local memory, metadata is read from audio files on demand, and small stage manifests are the only routine application persistence. A database is not expected to speed up audio metadata reads or physical tag writes.</p>
+      <p>Before choosing a backend, benchmark registration, metadata reading, MusicBrainz requests, stage creation/listing, and CLI apply separately. For a single-user local stdio server, evaluate SQLite first because it provides transactional durable state without requiring a separate server. Consider PostgreSQL if the product becomes a shared service or needs multi-user concurrency, and account for authentication, per-user ownership, schema migrations, backups, and operations.</p>
+      <p>Any persistent backend must preserve the path privacy and user-controlled write model: restrict access to stored paths, never expose them in MCP responses or logs, isolate records by session/user, and keep physical audio writes exclusive to the explicit user-controlled CLI. A remote database does not give a remote MCP host safe access to audio files on a user's computer. Treat this as an evaluation proposal, not a decision to adopt PostgreSQL.</p>
+
+      <h3>Module organization</h3>
       <p>Several Python modules currently exceed the preferred 100-line guideline. Treat that number as a refactoring signal, not a hard limit: split cohesive responsibilities when editing those modules, keep tests aligned, and avoid splitting merely to hit a line count.</p>
     </section>
   </main>
