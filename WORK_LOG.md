@@ -200,3 +200,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added a distributable README, a repeatable release builder for wheel, source distribution, plugin archive, and Windows release bundle, and aligned the human guide.
 - Added regression tests for configured data-root selection and path-sanitized failures. No audio files were modified.
 - Validation: all 36 tests pass; changed Python files score 10/10 in Pylint with the pre-existing broad-exception warning excluded; built the wheel, source distribution, plugin archive, marketplace archive, and Windows bundle; installed the wheel into an isolated test location; confirmed the generated launcher completes MCP initialization and exposes the existing 11 tools without an apply/write tool. The Claude CLI is not installed here, so interactive plugin installation could not be exercised.
+
+### 2026-10-24 — Correct Pylint CI environment and scope
+- Updated the Pylint workflow to install the project and its development dependencies from `pyproject.toml`, eliminating unresolved-import noise caused by installing only Pylint.
+- Limited lint scope to application source rather than mixing test-style diagnostics into the application score.
+- Kept the full Pylint report and score visible as advisory output, while making Pylint errors a separate blocking step. Existing warnings remain visible for gradual cleanup rather than making every push fail on an unconfigured legacy baseline.
+- Validation: the revised report completes with a 9.13/10 application-source score and no unresolved-import findings; the separate `--errors-only` gate passes.
