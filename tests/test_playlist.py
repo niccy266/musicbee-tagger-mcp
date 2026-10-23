@@ -1,0 +1,88 @@
+import json
+
+import pytest
+
+from musicbee_tagger_mcp.file_registry import FileRegistry
+from musicbee_tagger_mcp.playlist import parse_m3u_playlist
+
+
+def test_parse_m3u_resolves_relative_entries_and_reports_skips(tmp_path):
+    music_dir = tmp_path / "Music"
+    music_dir.mkdir()
+    track = music_dir / "track one.ogg"
+    track.write_bytes(b"audio")
+
+    playlist = tmp_path / "list.m3u8"
+    playlist.write_text(
+        "\ufeff#EXTM3U\n"
+        "#EXTINF:120,Artist - Title\n"
+        "Music/track one.ogg\n"
+        f"{track}\n"
+        "missing.mp3\n"
+        "https://example.com/track.mp3\n"
+        "notes.txt\n",
+        encoding="utf-8",
+    )
+
+    entries = parse_m3u_playlist(str(playlist))
+
+    assert entries == [
+        (3, track, None),
+        (4, track, None),
+        (5, tmp_path / "missing.mp3", None),
+        (6, None, "Remote playlist entries are not supported"),
+        (7, None, "Unsupported audio format"),
+    ]
+
+
+def test_register_playlist_returns_tokens_without_paths(tmp_path, monkeypatch):
+    import musicbee_tagger_mcp.server as server
+
+    music_dir = tmp_path / "Music"
+    music_dir.mkdir()
+    track = music_dir / "song.mp3"
+    track.write_bytes(b"audio")
+    playlist = tmp_path / "list.m3u"
+    playlist.write_text("#EXTM3U\nMusic/song.mp3\nmissing.flac\n", encoding="utf-8")
+    registry = FileRegistry()
+    monkeypatch.setattr(server, "get_registry", lambda: registry)
+
+    result = server.register_playlist(str(playlist))
+
+    assert result["registered"][0]["line"] == 2
+    assert result["registered"][0]["display_name"] == "song.mp3"
+    assert registry.resolve(result["registered"][0]["token"]) == track.resolve()
+    assert result["skipped"] == [{"line": 3, "error": "File not found"}]
+    assert str(tmp_path) not in json.dumps(result)
+
+
+def test_register_playlist_hides_playlist_path_on_error(tmp_path):
+    from musicbee_tagger_mcp.server import register_playlist
+
+    missing_playlist = str(tmp_path / "private" / "missing.m3u")
+
+    assert register_playlist(missing_playlist) == {"error": "Playlist not found"}
+    unsupported_playlist = tmp_path / "private" / "list.txt"
+    unsupported_playlist.parent.mkdir()
+    unsupported_playlist.write_text("track.mp3", encoding="utf-8")
+    assert register_playlist(str(unsupported_playlist)) == {
+        "error": "Unsupported playlist format"
+    }
+
+
+def test_parse_m3u_rejects_unsupported_playlist_extension(tmp_path):
+    playlist = tmp_path / "list.txt"
+    playlist.write_text("track.mp3", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Unsupported playlist format"):
+        parse_m3u_playlist(str(playlist))
+
+
+def test_parse_m3u_falls_back_to_windows_1252(tmp_path):
+    track_name = "Beyoncé.mp3"
+    playlist = tmp_path / "legacy.m3u"
+    playlist.write_bytes(track_name.encode("cp1252"))
+
+    entries = parse_m3u_playlist(str(playlist))
+
+    assert entries == [(1, tmp_path / track_name, None)]

@@ -18,6 +18,7 @@ from .mojibake import fix_mojibake
 from .musicbrainz_client import search_recordings_forensic, verify_recording_mbid
 from .tag_writer import preview_tag_changes
 from .filename_parser import extract_clues_from_filename
+from .playlist import parse_m3u_playlist
 
 app = MCPServer("musicbee-tagger")
 
@@ -46,11 +47,67 @@ def register_files(paths: List[str]) -> List[Dict[str, str]]:
             results.append({"error": "File not found"})
         except OSError:
             results.append({"error": "Unable to access file"})
+        except (RuntimeError, ValueError):
+            results.append({"error": "Unable to resolve file"})
     return results
 
 
 # ---------------------------------------------------------------------------
-# Tool 2: Read metadata via token (path never returned)
+# Tool 2: Playlist registration — resolve paths privately, return tokens
+# ---------------------------------------------------------------------------
+
+@app.tool()
+def register_playlist(playlist_path: str) -> Dict[str, Any]:
+    """
+    Register local audio files listed in an M3U/M3U8 playlist.
+
+    Relative entries are resolved against the playlist's directory. Full paths
+    are never returned; entries contain only tokens, display names, and line
+    numbers.
+    """
+    try:
+        entries = parse_m3u_playlist(playlist_path)
+    except FileNotFoundError:
+        return {"error": "Playlist not found"}
+    except PermissionError:
+        return {"error": "Unable to access playlist"}
+    except OSError:
+        return {"error": "Unable to read playlist"}
+    except ValueError as error:
+        if str(error) == "Unsupported playlist format":
+            return {"error": "Unsupported playlist format"}
+        return {"error": "Unable to resolve playlist"}
+    except RuntimeError:
+        return {"error": "Unable to resolve playlist"}
+
+    registry = get_registry()
+    registered: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+
+    for line_number, entry_path, skip_reason in entries:
+        if skip_reason:
+            skipped.append({"line": line_number, "error": skip_reason})
+            continue
+
+        if entry_path is None:
+            skipped.append({"line": line_number, "error": "Invalid playlist entry"})
+            continue
+
+        try:
+            result = registry.register(str(entry_path))
+            registered.append({"line": line_number, **result})
+        except FileNotFoundError:
+            skipped.append({"line": line_number, "error": "File not found"})
+        except OSError:
+            skipped.append({"line": line_number, "error": "Unable to access file"})
+        except (RuntimeError, ValueError):
+            skipped.append({"line": line_number, "error": "Unable to resolve file"})
+
+    return {"registered": registered, "skipped": skipped}
+
+
+# ---------------------------------------------------------------------------
+# Tool 3: Read metadata via token (path never returned)
 # ---------------------------------------------------------------------------
 
 @app.tool()
@@ -70,7 +127,7 @@ def read_track_metadata(token: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Tool 3: Extract filename clues (stateless, no paths)
+# Tool 4: Extract filename clues (stateless, no paths)
 # ---------------------------------------------------------------------------
 
 @app.tool()
@@ -86,7 +143,7 @@ def extract_filename_clues(token: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Tool 4: Batch Brief (high density inspection for multi-track batches)
+# Tool 5: Batch Brief (high density inspection for multi-track batches)
 # ---------------------------------------------------------------------------
 
 @app.tool()
@@ -117,7 +174,7 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Tool 5: Mojibake repair (stateless, no paths)
+# Tool 6: Mojibake repair (stateless, no paths)
 # ---------------------------------------------------------------------------
 
 @app.tool()
@@ -131,7 +188,7 @@ def repair_mojibake(text: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Tool 6: MusicBrainz forensic search (stateless, no paths)
+# Tool 7: MusicBrainz forensic search (stateless, no paths)
 # ---------------------------------------------------------------------------
 
 @app.tool()
@@ -157,7 +214,7 @@ def search_canonical_release(
 
 
 # ---------------------------------------------------------------------------
-# Tool 7: Verify MBID / Eval Gate (stateless, no paths)
+# Tool 8: Verify MBID / Eval Gate (stateless, no paths)
 # ---------------------------------------------------------------------------
 
 @app.tool()
@@ -183,7 +240,7 @@ def verify_mbid(
 
 
 # ---------------------------------------------------------------------------
-# Tool 8: Preview tag changes (reads file via token, writes nothing)
+# Tool 9: Preview tag changes (reads file via token, writes nothing)
 # ---------------------------------------------------------------------------
 
 @app.tool()
@@ -206,7 +263,7 @@ def preview_tags(token: str, new_tags: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Tool 9: Stage tag changes (writes manifest only, NO audio file writes)
+# Tool 10: Stage tag changes (writes manifest only, NO audio file writes)
 # ---------------------------------------------------------------------------
 
 @app.tool()
@@ -246,7 +303,7 @@ def stage_tag_changes(
 
 
 # ---------------------------------------------------------------------------
-# Tool 10: List all pending staged changes (safe fields only)
+# Tool 11: List all pending staged changes (safe fields only)
 # ---------------------------------------------------------------------------
 
 @app.tool()

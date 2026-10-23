@@ -41,35 +41,38 @@ musicbee_metadata_bridge/
 ├── src/
 │   └── musicbee_tagger_mcp/
 │       ├── __init__.py
-│       ├── server.py              # FastMCP server exposing 10 read-only/staging tools
+│       ├── server.py              # FastMCP server exposing 11 read-only/staging tools
 │       ├── file_registry.py       # Session-scoped token ↔ path indirection (paths never leak)
+│       ├── playlist.py            # M3U/M3U8 parsing and relative path resolution
 │       ├── staging.py             # Manifest staging manager (%APPDATA%\musicbee-tagger-mcp\staged)
 │       ├── apply_staged.py        # User CLI tool for interactive review & commits (ONLY write path)
 │       ├── metadata_reader.py     # Mutagen wrapper (ID3v2.4, Vorbis OGG/FLAC, MP4/M4A)
-│       ├── filename_parser.py     # Regex clue extractor (brackets, years, track #, artist/title guess)
+│       ├── filename_parser.py     # Regex clue extractor (brackets, years, track #, artist/title candidates)
 │       ├── mojibake.py            # Encoding repair heuristics (CP1251 <-> Latin1, Shift-JIS, ftfy)
 │       ├── musicbrainz_client.py  # Forensic search + verify_recording_mbid (Eval gate)
 │       └── tag_writer.py          # Safe tag applicator with diff preview & backup
 └── tests/
     ├── test_tagger.py             # Charsets, mojibake, duration scoring, release classification
     ├── test_secure_pipeline.py    # Token concealment, path safety, and zero-write server surface
+    ├── test_playlist.py           # M3U parsing, relative resolution, and safe registration
     └── test_investigator_tools.py # Filename parsing, string similarity, and MBID eval gate
 ```
 
 ---
 
-## 🛡️ MCP Tools Surface (10 Tools)
+## 🛡️ MCP Tools Surface (11 Tools)
 
 1. `register_files(paths: list[str])` -> Ingests paths, returns `[{"token": "uuid", "display_name": "filename"}]`.
-2. `read_track_metadata(token: str)` -> Format, technical specs, existing tags (no paths returned).
-3. `extract_filename_clues(token: str)` -> Structured hints from filename (brackets, year, track #, artist/title).
-4. `get_batch_brief(tokens: list[str])` -> High-density brief combining metadata and clues for batch triage.
-5. `repair_mojibake(text: str)` -> Fixes CP1251/Latin-1 or Shift-JIS corruption.
-6. `search_canonical_release(...)` -> Lucene query + duration proximity scoring.
-7. `verify_mbid(recording_id, ...)` -> **The Eval Gate**: confirms recording title, artist, duration match (<2.5s), and releases.
-8. `preview_tags(token: str, new_tags: dict)` -> Field-by-field diff preview.
-9. `stage_tag_changes(token: str, new_tags: dict, ...)` -> Writes staging manifest to disk, returns `stage_id`.
-10. `list_staged_changes()` -> Lists pending staged changes without leaking paths.
+2. `register_playlist(playlist_path: str)` -> Resolves local M3U/M3U8 entries and returns tokens plus safe skip reasons.
+3. `read_track_metadata(token: str)` -> Format, technical specs, existing tags (no paths returned).
+4. `extract_filename_clues(token: str)` -> Structured hints from filename (brackets, years, track #, artist/title candidates).
+5. `get_batch_brief(tokens: list[str])` -> High-density brief combining metadata and clues for batch triage.
+6. `repair_mojibake(text: str)` -> Fixes CP1251/Latin-1 or Shift-JIS corruption.
+7. `search_canonical_release(...)` -> Lucene query + duration proximity scoring.
+8. `verify_mbid(recording_id, ...)` -> **The Eval Gate**: confirms recording title, artist, duration match (<2.5s), and releases.
+9. `preview_tags(token: str, new_tags: dict)` -> Field-by-field diff preview.
+10. `stage_tag_changes(token: str, new_tags: dict, ...)` -> Writes staging manifest to disk, returns `stage_id`.
+11. `list_staged_changes()` -> Lists pending staged changes without leaking paths.
 
 ---
 
@@ -139,3 +142,10 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - The first MCP stdio attempt failed because the filename containing an invisible U+200E mark could not be encoded using the default Windows console encoding. Retrying with UTF-8 stdio succeeded.
 - The agent received all three metadata briefs and ambiguous filename candidate pairs. Tag values and durations matched the prior MCP batch call; album/year/track/disc/MusicBrainz ID fields were empty, and all genres were `Другое`. No search, preview, staging, or apply tool was called; no audio was modified.
 - Observed parser limitations from the MCP interaction: `_1` is not reported as a track number, and the invisible U+200E remains in the third file's artist tag. These are logged for future consideration; no code change was made as part of this simulation.
+
+### 2026-10-23 — M3U playlist batch registration
+- Added `register_playlist(playlist_path)` MCP tool. It reads local `.m3u`/`.m3u8` files, handles UTF-8 BOM and falls back to Windows-1252, resolves relative entries against the playlist folder, and passes supported local audio paths to the existing token registry.
+- Returns registered tokens and bare display names with playlist line numbers. Missing/unreadable entries, remote URLs, and unsupported file types receive path-free skip reasons. Playlist read/resolve failures return generic errors; no playlist or audio paths are returned.
+- Updated the investigator skill and MCP tool inventory. Added playlist parser/registration tests for relative entries, comments, BOM, unsupported/remote entries, missing files, path concealment, and invalid playlist extensions.
+- End-to-end MCP stdio check: a temporary playlist referencing all three sample audio files registered three tokens; `get_batch_brief` returned the expected titles, artists, tags, and durations with no skipped entries.
+- Validation: full suite passes (31 tests). The first full run found a test fixture setup error (the test wrote into a nonexistent parent directory); fixed the fixture and reran successfully. `git diff --check` passes. No playlist or audio files remain from the integration check, and no audio was modified.
