@@ -2,20 +2,27 @@
 
 import json
 import os
-import tempfile
 from pathlib import Path
 from typing import List, Optional
 
 
 def default_staging_dir() -> Path:
     """Return the user's persistent staging directory."""
-    appdata = os.environ.get("APPDATA")
-    base = Path(appdata) if appdata else Path.home()
-    directory = base / "musicbee-tagger-mcp" / "staged"
+    configured_root = os.environ.get("MUSICBEE_TAGGER_DATA_DIR")
+    if configured_root:
+        directory = Path(configured_root).expanduser() / "staged"
+    else:
+        appdata = os.environ.get("APPDATA")
+        base = Path(appdata) if appdata else Path.home()
+        directory = base / "musicbee-tagger-mcp" / "staged"
+
     try:
         directory.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        directory = Path(tempfile.mkdtemp(prefix="musicbee-tagger-staged-"))
+    except OSError:
+        raise RuntimeError(
+            "Unable to access the MusicBee Tagger MCP data directory; "
+            "check MUSICBEE_TAGGER_DATA_DIR and local permissions."
+        ) from None
     return directory
 
 
@@ -26,12 +33,14 @@ class StageManifestStore:
         self.directory = directory or default_staging_dir()
 
     def save(self, manifest: dict) -> None:
+        """Persist one staged-change manifest."""
         path = self.directory / f"{manifest['stage_id']}.json"
         path.write_text(
             json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
         )
 
     def load(self, stage_id: str) -> dict:
+        """Load a manifest by its stage identifier."""
         path = self.directory / f"{stage_id}.json"
         if not path.exists():
             raise FileNotFoundError(f"No staged change found for stage_id: {stage_id}")
