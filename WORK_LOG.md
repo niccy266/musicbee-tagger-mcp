@@ -58,5 +58,36 @@ musicbee-tagger-mcp/
 ### 2026-10-23
 - Initialized Git repository at `C:\Users\niccy\.gemini\antigravity\scratch\musicbee-tagger-mcp`.
 - Created shortcut at `K:\dev\AntigravityScratchPad.lnk` targeting the scratch directory.
-- Created `.gitignore` and `WORK_LOG.md`.
-- Finalized Phase 1 Python MCP specification.
+- Created `.gitignore` and `pyproject.toml`.
+- Implemented `mojibake.py` (Cyrillic CP1251 <-> Latin1, Japanese Shift-JIS/CP932, ftfy auto-repair).
+- Implemented `metadata_reader.py` (Mutagen wrapper for MP3 ID3v2.4, FLAC Vorbis, MP4/M4A, stream duration/bitrate).
+- Implemented `musicbrainz_client.py` (Forensic recording search, duration proximity scoring, release classification).
+- Implemented `tag_writer.py` (Safe UTF-8 tag writing, diff preview, automatic `.bak` backups).
+- Implemented `server.py` (FastMCP 2.x stdio server exposing 5 tools).
+- Implemented test suite in `tests/test_tagger.py` (5/5 tests passing).
+- Committed initial implementation to Git.
+
+---
+
+## 🚀 Running & Connecting the MCP Server
+
+### 1. Manual CLI Test / Inspection
+```powershell
+cd C:\Users\niccy\.gemini\antigravity\scratch\musicbee-tagger-mcp
+.\.venv\Scripts\Activate.ps1
+pytest -v
+```
+
+### 2. MCP Client Configuration (e.g. Claude Desktop, Antigravity, or VS Code MCP)
+Add to your client configuration JSON:
+```json
+{
+  "mcpServers": {
+    "musicbee-tagger": {
+      "command": "C:\\Users\\niccy\\.gemini\\antigravity\\scratch\\musicbee-tagger-mcp\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "musicbee_tagger_mcp.server"]
+    }
+  }
+}
+```
+
