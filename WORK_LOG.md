@@ -191,3 +191,12 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Captured user preferences: single-user Windows desktop; Python package; user-level Claude Code-style configuration; install root under `K:\tools\mcp-servers\musicbee-tags\`; launcher under `K:\bin\`; configurable private state root with that requested default; path concealment; and path-free applied/search logs.
 - Documented confidence bands as initial heuristic routing proposals, not probabilities. Auto-stage never means write audio. Physical edits remain user-controlled via the CLI unless separately redesigned and explicitly approved.
 - No runtime code or audio files changed.
+
+### 2026-10-24 — Windows release package and Claude Code integration
+- Added a Windows release installer that creates a dedicated virtual environment, installs a wheel, preserves the separate `data` directory, and generates MCP/apply launchers under `K:\bin`.
+- Added a configurable `MUSICBEE_TAGGER_DATA_DIR` for staged manifests. Removed the silent temporary-directory fallback and made data-root access failures explicit without returning the configured path.
+- Added a standalone Claude Code user-scope MCP config and a Claude Code plugin manifest/config using the official plugin layout. Both invoke the stable Windows launcher and set the same private data root.
+- Added a local Claude Code marketplace catalog so the plugin can be installed persistently through the supported plugin manager workflow.
+- Added a distributable README, a repeatable release builder for wheel, source distribution, plugin archive, and Windows release bundle, and aligned the human guide.
+- Added regression tests for configured data-root selection and path-sanitized failures. No audio files were modified.
+- Validation: all 36 tests pass; changed Python files score 10/10 in Pylint with the pre-existing broad-exception warning excluded; built the wheel, source distribution, plugin archive, marketplace archive, and Windows bundle; installed the wheel into an isolated test location; confirmed the generated launcher completes MCP initialization and exposes the existing 11 tools without an apply/write tool. The Claude CLI is not installed here, so interactive plugin installation could not be exercised.
