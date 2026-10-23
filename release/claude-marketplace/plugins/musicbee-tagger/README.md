@@ -6,6 +6,22 @@ release's `install.ps1`; the plugin invokes `K:\bin\musicbee-tagger-mcp.cmd`.
 It also bundles the model-invocable `musicbee-investigator` skill, which guides
 Claude through the token-based metadata investigation workflow.
 
+The MCP server accepts tokens, not playlist or audio paths. Register a playlist
+locally in a separate PowerShell window, then give the agent only the returned
+tokens:
+
+```powershell
+K:\bin\musicbee-tagger-register-playlist.cmd
+```
+
+Enter the playlist path at the local prompt; do not paste it into the agent
+conversation or run this command through an agent-controlled terminal.
+Registrations persist in the configured private data directory across MCP
+restarts. To delete saved playlist-to-file mappings after an investigation,
+run `K:\bin\musicbee-tagger-clear-registrations.cmd` in a separate local
+terminal and confirm the prompt; this does not alter audio files or staged
+proposals.
+
 The plugin config sets the private data root to
 `K:\tools\mcp-servers\musicbee-tags\data`. Update both this plugin's
 `.mcp.json` and the installer paths if you choose a different installation

@@ -217,3 +217,12 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added a repository-root Claude marketplace catalog pointing to the maintained plugin directory on the `release-ready-mcp` branch.
 - Updated installation guidance to distinguish local release-bundle snapshots from the GitHub-hosted marketplace and document migration/update commands.
 - Added regression coverage for the root marketplace catalog. The local marketplace was confirmed to point into the extracted v0.1.0 bundle; future updates need a Git-backed source to follow repository commits.
+
+### 2026-10-24 — Human-only persistent playlist registration
+- Removed path-taking playlist/file registration from the MCP tool surface. Added a human-run local playlist registration command that reads a path from a separate terminal and outputs only tokens, bare filenames, and path-free skip reasons.
+- Persisted token-to-path records under the configured data directory so MCP tools can resolve tokens across process restarts and logins for the same user/install. Added a confirmation-gated cleanup command for registration records.
+- Sanitized metadata, preview, and staging errors at MCP boundaries to prevent file paths in tool responses. Updated investigator instructions, Windows launchers, release docs, and tests.
+- Privacy boundary: this prevents paths from entering chat and MCP request/response payloads; it does not defend against arbitrary same-user shell access. A separate Windows service account is needed for that stronger threat model.
+- Validation: all 44 tests passed, Pylint `--errors-only` passed, Claude marketplace validation passed with its existing missing-author warning, installer syntax parsed, and `git diff --check` passed. Built and inspected the 0.1.2 wheel, source distribution, Claude plugin/marketplace archives, and Windows bundle; the release-specific tests passed (5 tests).
+- Added an installer preflight that refuses upgrades while this server executable is running, avoiding Windows file-lock failures before pip modifies the installed package. Updated the Windows bundle and upgrade instructions.
+- Installed 0.1.2 locally, verified all four launchers and `pip check`, completed an MCP handshake with exactly nine tools, and smoke-tested the installed registration CLI using a synthetic playlist. Its output contained no test path, and the token resolved from a fresh registry instance; the existing registration-record count remained unchanged (zero).

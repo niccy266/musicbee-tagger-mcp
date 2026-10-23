@@ -94,3 +94,26 @@ def test_repository_marketplace_tracks_plugin_in_release_tree():
         marketplace["plugins"][0]["source"]
         == "./release/claude-marketplace/plugins/musicbee-tagger"
     )
+
+
+def test_human_playlist_registration_command_is_packaged():
+    """Ensure the private registration CLI is installed alongside the server."""
+    project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    installer = (ROOT / "release" / "windows" / "install.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        'musicbee-tagger-register-playlist = '
+        '"musicbee_tagger_mcp.register_playlist_cli:main"'
+    ) in project
+    assert (
+        'musicbee-tagger-clear-registrations = '
+        '"musicbee_tagger_mcp.clear_registrations_cli:main"'
+    ) in project
+    assert "musicbee-tagger-register-playlist.exe" in installer
+    assert "musicbee-tagger-register-playlist.cmd" in installer
+    assert "musicbee-tagger-clear-registrations.exe" in installer
+    assert "musicbee-tagger-clear-registrations.cmd" in installer
+    assert "Get-CimInstance Win32_Process" in installer
+    assert "Close MCP clients using this server" in installer

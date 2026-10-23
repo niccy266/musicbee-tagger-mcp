@@ -4,9 +4,17 @@ MusicBee Tagger MCP is a local stdio MCP server for investigating and proposing
 audio metadata corrections. It reads audio metadata, searches and verifies
 MusicBrainz candidates, and stages proposals for review.
 
-**The MCP server never writes audio files.** Only the separate
-`musicbee-tagger-apply` CLI can apply staged changes, after interactive user
-confirmation, and it creates backups by default.
+**The MCP server never writes audio files.** It also exposes no MCP tool that
+accepts playlist or audio paths. Run the local registration command yourself
+in a separate PowerShell window and give the agent only its returned tokens.
+Only the separate `musicbee-tagger-apply` CLI can apply staged changes, after
+interactive user confirmation, and it creates backups by default.
+
+This keeps paths out of chat and MCP request/response payloads. It is not a
+Windows security boundary: an agent with unrestricted local shell access as
+your Windows user could inspect the registration files. Use the cleanup command
+after the investigation; use a separately isolated service account if that
+stronger threat model is required.
 
 ## Windows desktop release
 
@@ -18,21 +26,29 @@ The installer defaults to:
 - Application and virtual environment: `K:\tools\mcp-servers\musicbee-tags\`
 - Launchers: `K:\bin\`
 - Private stage data: `K:\tools\mcp-servers\musicbee-tags\data\staged\`
+- Private registration data: `K:\tools\mcp-servers\musicbee-tags\data\registered\`
 
 The `data` directory is separate from the installed environment so package
-upgrades do not replace pending proposals. The installer preserves existing
-data. Back up the data directory to preserve pending stage manifests; no
-automatic cleanup or retention is performed.
+upgrades do not replace pending proposals or local registrations. The installer
+preserves existing data. Back up the data directory to preserve them. There is
+no automatic cleanup; use the confirmation-gated registration cleanup command
+after investigations.
 
 1. Download the Windows release bundle and extract it.
 2. In PowerShell, run the included installer, supplying the downloaded wheel:
 
    ```powershell
-   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.1.1-py3-none-any.whl
+   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.1.2-py3-none-any.whl
    ```
 
+   Before upgrading an existing installation, close MCP clients using the
+   server. The installer checks for running server processes and refuses to
+   upgrade while the launcher is in use.
+
    The installer creates a dedicated virtual environment, installs the wheel,
-   and writes `musicbee-tagger-mcp.cmd` and `musicbee-tagger-apply.cmd`.
+   and writes `musicbee-tagger-mcp.cmd`, `musicbee-tagger-apply.cmd`,
+   `musicbee-tagger-register-playlist.cmd`, and
+   `musicbee-tagger-clear-registrations.cmd`.
 3. To add the standalone MCP server to Claude Code at user scope, import the
    provided `mcp-config.json` entry:
 
@@ -68,9 +84,24 @@ automatic cleanup or retention is performed.
    The bundled `.\claude-marketplace` directory remains useful for offline
    installation, but it is a snapshot: updates only see files written to that
    same directory. It does not follow future release bundles automatically.
-5. Confirm the server is connected with `claude mcp list`, then use the
-   registered MusicBee tools. Tokens are process-local and expire when the MCP
-   server exits.
+5. Register a playlist without sending its path to the agent. Open a separate
+   PowerShell window (not the agent's terminal) and run:
+
+   ```powershell
+   K:\bin\musicbee-tagger-register-playlist.cmd
+   ```
+
+   Enter the playlist path at the prompt, then paste only the returned tokens
+   into your agent conversation. The path-to-token mappings stay in
+   `K:\tools\mcp-servers\musicbee-tags\data\registered\` and persist across MCP
+   restarts and Windows logins for the same user. After the investigation, run
+   the cleanup command in a separate terminal and type `YES` when prompted:
+
+   ```powershell
+   K:\bin\musicbee-tagger-clear-registrations.cmd
+   ```
+6. Confirm the server is connected with `claude mcp list`, then use the
+   registered token-only MusicBee tools.
 
 To inspect or apply pending proposals, use the user CLI launcher:
 
@@ -86,14 +117,15 @@ run an apply command unless you intend to modify the corresponding audio file.
 ### Configuration and data
 
 The standalone config sets `MUSICBEE_TAGGER_DATA_DIR` for the server process.
-The generated apply launcher sets the same value, so both commands use the
-same staged manifests. When invoking the CLI manually, set that environment
-variable to the install's `data` directory first.
+The generated CLI launchers set the same value, so the MCP server, playlist
+registration command, and apply CLI use the same persistent data directory.
 
-Files are read-only to the MCP process except for private stage manifests. The
-server accepts paths only at file/playlist registration, then uses opaque
-tokens. It does not return absolute paths in tool results. The process-local
-token registry is not preserved across restarts.
+Audio files are read-only to the MCP process except when the user applies
+staged changes with the CLI. The MCP server accepts opaque tokens only. The
+human-run registration command resolves the playlist locally and stores
+token-to-path mappings in the private data directory. Tokens remain usable
+across MCP restarts and Windows logins for the same user and install. The
+separate cleanup command removes those mappings after explicit confirmation.
 
 ## Development
 
