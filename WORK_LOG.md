@@ -10,85 +10,105 @@ A specialized metadata bridge connecting **MusicBee**, local audio files, and th
    - Live album tracks: clean title, live context stored in the `Album` tag.
    - Studio bonus tracks: clean `(Live)` suffix preserved.
    - Distributor fluff (`(Remastered 2021)`, `- Single`) stripped.
-4. **Two-Phase Architecture**:
-   - **Phase 1 (Active)**: Standalone Python MCP Server using `mutagen`, `musicbrainzngs`, and `ftfy`.
-   - **Phase 2 (Planned)**: C# MusicBee UI Plugin to send selected tracks directly into the MCP pipeline.
+4. **Security & Physical Write Isolation**:
+   - Agent operates strictly on opaque UUID tokens (`register_files(paths) -> tokens`).
+   - Absolute filesystem paths are never exposed to the agent or in logs.
+   - MCP server has zero write access to audio files. The agent can only *stage* proposed changes (`stage_tag_changes`).
+   - Only the user can commit changes via interactive CLI confirmation (`python -m musicbee_tagger_mcp.apply_staged`).
+5. **In-Window Investigator Agent (Zero Extra LLM Cost)**:
+   - Packaged as an Antigravity Skill (`.agents/skills/musicbee-investigator/SKILL.md`).
+   - The user + agent work interactively inside Antigravity using free window tokens, web search tools, and MCP forensic inspection.
 
 ---
 
 ## 🛠️ Environment & Paths
 * **Repository Path**: `C:\Users\niccy\.gemini\antigravity\scratch\musicbee-tagger-mcp`
+* **Worktree Path**: `C:\Users\niccy\.gemini\antigravity\worktrees\musicbee-tagger-mcp\musicbee_metadata_bridge`
 * **GitHub Remote (Private)**: `git@github.com:niccy266/musicbee-tagger-mcp.git`
-* **Convenience Shortcut**: `K:\dev\AntigravityScratchPad.lnk` (points to `C:\Users\niccy\.gemini\antigravity\scratch`)
 * **Python Version**: Python 3.14
 * **Virtual Environment**: `.venv` in repository root
 
 ---
 
-## 🏗️ Architecture: Phase 1 (Python MCP Server)
+## 🏗️ Architecture & Component Map
 
-### Directory Structure
 ```
-musicbee-tagger-mcp/
-├── .gitignore
-├── WORK_LOG.md
-├── pyproject.toml
+musicbee_metadata_bridge/
+├── .agents/
+│   └── skills/
+│       └── musicbee-investigator/
+│           └── SKILL.md           # Antigravity skill playbook for detective agent
 ├── src/
 │   └── musicbee_tagger_mcp/
 │       ├── __init__.py
-│       ├── server.py              # FastMCP server entrypoint & tools
-│       ├── metadata_reader.py     # Mutagen wrapper (ID3v2.4, Vorbis, MP4)
-│       ├── mojibake.py            # Encoding repair heuristics (ftfy + custom rules)
-│       ├── musicbrainz_client.py  # Forensic release search & recording matching
+│       ├── server.py              # FastMCP server exposing 10 read-only/staging tools
+│       ├── file_registry.py       # Session-scoped token ↔ path indirection (paths never leak)
+│       ├── staging.py             # Manifest staging manager (%APPDATA%\musicbee-tagger-mcp\staged)
+│       ├── apply_staged.py        # User CLI tool for interactive review & commits (ONLY write path)
+│       ├── metadata_reader.py     # Mutagen wrapper (ID3v2.4, Vorbis OGG/FLAC, MP4/M4A)
+│       ├── filename_parser.py     # Regex clue extractor (brackets, years, track #, artist/title guess)
+│       ├── mojibake.py            # Encoding repair heuristics (CP1251 <-> Latin1, Shift-JIS, ftfy)
+│       ├── musicbrainz_client.py  # Forensic search + verify_recording_mbid (Eval gate)
 │       └── tag_writer.py          # Safe tag applicator with diff preview & backup
 └── tests/
-    └── test_tagger.py
+    ├── test_tagger.py             # Charsets, mojibake, duration scoring, release classification
+    ├── test_secure_pipeline.py    # Token concealment, path safety, and zero-write server surface
+    └── test_investigator_tools.py # Filename parsing, string similarity, and MBID eval gate
 ```
 
-### Exposing MCP Tools
-1. `read_track_metadata(file_path: str)` -> Dict with tags, format, duration, bitrate, existing MBIDs.
-2. `repair_mojibake(text: str)` -> Clean text + detected source encoding.
-3. `search_canonical_release(artist: str, title: str, duration_sec: float = None, clue: str = None)` -> Ranked release candidates.
-4. `preview_tag_changes(file_path: str, new_tags: dict)` -> Before/after field-by-field diff.
-5. `apply_tags(file_path: str, new_tags: dict, create_backup: bool = True)` -> Writes UTF-8 tags to file.
+---
+
+## 🛡️ MCP Tools Surface (10 Tools)
+
+1. `register_files(paths: list[str])` -> Ingests paths, returns `[{"token": "uuid", "display_name": "filename"}]`.
+2. `read_track_metadata(token: str)` -> Format, technical specs, existing tags (no paths returned).
+3. `extract_filename_clues(token: str)` -> Structured hints from filename (brackets, year, track #, artist/title).
+4. `get_batch_brief(tokens: list[str])` -> High-density brief combining metadata and clues for batch triage.
+5. `repair_mojibake(text: str)` -> Fixes CP1251/Latin-1 or Shift-JIS corruption.
+6. `search_canonical_release(...)` -> Lucene query + duration proximity scoring.
+7. `verify_mbid(recording_id, ...)` -> **The Eval Gate**: confirms recording title, artist, duration match (<2.5s), and releases.
+8. `preview_tags(token: str, new_tags: dict)` -> Field-by-field diff preview.
+9. `stage_tag_changes(token: str, new_tags: dict, ...)` -> Writes staging manifest to disk, returns `stage_id`.
+10. `list_staged_changes()` -> Lists pending staged changes without leaking paths.
 
 ---
 
-## 📝 Work & Decision Log
+## 🚀 How to Run
 
-### 2026-10-23
-- Initialized Git repository at `C:\Users\niccy\.gemini\antigravity\scratch\musicbee-tagger-mcp`.
-- Created shortcut at `K:\dev\AntigravityScratchPad.lnk` targeting the scratch directory.
-- Created `.gitignore` and `pyproject.toml`.
-- Implemented `mojibake.py` (Cyrillic CP1251 <-> Latin1, Japanese Shift-JIS/CP932, ftfy auto-repair).
-- Implemented `metadata_reader.py` (Mutagen wrapper for MP3 ID3v2.4, FLAC Vorbis, MP4/M4A, stream duration/bitrate).
-- Implemented `musicbrainz_client.py` (Forensic recording search, duration proximity scoring, release classification).
-- Implemented `tag_writer.py` (Safe UTF-8 tag writing, diff preview, automatic `.bak` backups).
-- Implemented `server.py` (FastMCP 2.x stdio server exposing 5 tools).
-- Implemented test suite in `tests/test_tagger.py` (5/5 tests passing).
-- Committed initial implementation to Git.
-
----
-
-## 🚀 Running & Connecting the MCP Server
-
-### 1. Manual CLI Test / Inspection
+### 1. Run Unit Tests (22/22 Passing)
 ```powershell
 cd C:\Users\niccy\.gemini\antigravity\scratch\musicbee-tagger-mcp
 .\.venv\Scripts\Activate.ps1
 pytest -v
 ```
 
-### 2. MCP Client Configuration (e.g. Claude Desktop, Antigravity, or VS Code MCP)
-Add to your client configuration JSON:
-```json
-{
-  "mcpServers": {
-    "musicbee-tagger": {
-      "command": "C:\\Users\\niccy\\.gemini\\antigravity\\scratch\\musicbee-tagger-mcp\\.venv\\Scripts\\python.exe",
-      "args": ["-m", "musicbee_tagger_mcp.server"]
-    }
-  }
-}
+### 2. User Review & Apply CLI (The Only Code Path that Modifies Files)
+```powershell
+# List pending changes
+python -m musicbee_tagger_mcp.apply_staged --list
+
+# Review and apply one track interactively
+python -m musicbee_tagger_mcp.apply_staged --stage-id <uuid>
+
+# Review all pending tracks interactively (with dry-run option)
+python -m musicbee_tagger_mcp.apply_staged --all --dry-run
+python -m musicbee_tagger_mcp.apply_staged --all
 ```
 
+---
+
+## 📝 Work & Decision Log
+
+### 2026-10-23
+- Initialized Git repository, `.gitignore`, and `pyproject.toml`.
+- Implemented `mojibake.py`, `metadata_reader.py`, `musicbrainz_client.py`, `tag_writer.py`, and `server.py`.
+- **Security Refactor**:
+  - Implemented `file_registry.py`: opaque UUID tokens replace paths across all tools.
+  - Implemented `staging.py` & `apply_staged.py`: strictly two-phase commit. MCP server has zero write tools.
+  - Stripped `file_path` from all tool responses to prevent path leakage to agents or prompt logs.
+- **Investigator & Eval Infrastructure**:
+  - Implemented `filename_parser.py`: extracts bracketed clues (e.g. `(静岡)`), years, and title/artist guesses.
+  - Implemented `verify_recording_mbid`: built-in verification gate calculating duration proximity and string similarity before staging.
+  - Implemented `get_batch_brief`: single-turn multi-track batch inspection tool.
+  - Created Antigravity skill at `.agents/skills/musicbee-investigator/SKILL.md` for in-window zero-cost detective sessions.
+- All 22 test cases passing.

@@ -28,9 +28,34 @@ def normalize_track_number(val: Any) -> tuple[Optional[int], Optional[int]]:
         return None, None
 
 def get_first_tag(tags: Any, keys: list[str]) -> Optional[str]:
-    """Retrieve the first matching tag value from a list of possible tag keys."""
+    """Retrieve the first matching tag value from a list of possible tag keys.
+
+    Handles Vorbis comment dicts (OGG/FLAC) that raise ValueError on
+    membership tests for keys containing uppercase characters.
+    """
     if not tags:
         return None
+    for k in keys:
+        try:
+            if k in tags:
+                v = tags[k]
+                if isinstance(v, (list, tuple)) and len(v) > 0:
+                    return str(v[0]).strip()
+                if v:
+                    return str(v).strip()
+        except (ValueError, KeyError):
+            # Vorbis comment dicts reject uppercase key checks - try lowercase
+            k_lower = k.lower()
+            try:
+                if k_lower in tags:
+                    v = tags[k_lower]
+                    if isinstance(v, (list, tuple)) and len(v) > 0:
+                        return str(v[0]).strip()
+                    if v:
+                        return str(v).strip()
+            except (ValueError, KeyError):
+                continue
+    return None
     for k in keys:
         if k in tags:
             v = tags[k]
