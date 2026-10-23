@@ -150,3 +150,22 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - End-to-end MCP stdio check: a temporary playlist referencing all three sample audio files registered three tokens; `get_batch_brief` returned the expected titles, artists, tags, and durations with no skipped entries.
 - Validation: full suite passes (31 tests). The first full run found a test fixture setup error (the test wrote into a nonexistent parent directory); fixed the fixture and reran successfully. `git diff --check` passes. No playlist or audio files remain from the integration check, and no audio was modified.
 - During the Strange Tags playlist task, inspection found staged diffs were read from a nonexistent `changes` field although tag preview returns `diff`; this could produce empty change summaries. Updated staging to convert only changed preview fields into the CLI/MCP diff-summary format and added regression coverage. Targeted secure-pipeline and playlist tests pass (18 tests).
+
+### 2026-10-23 — Strange Tags playlist investigation and staging
+- Registered all 24 playlist entries through the local MCP server; none were skipped. The playlist path was supplied only to `register_playlist`, and no subagent was used. All later inspection and verification used opaque file tokens.
+- Staged 12 tracks for user review after checking MusicBrainz recording candidates. Reported confidence and local-to-MusicBrainz duration differences:
+  - “Aline Cherie” — 98.5%, 0.09s; corrected the artist credit and added the recording ID.
+  - “Crazy 'bout You” — 92.0%, 0.04s; corrected the title and added the recording ID.
+  - “Crazy, Man, Crazy” — 85.7%, 0.02s; corrected artist/title and added the recording ID.
+  - “I Go To Sleep” — 98.0%, 2.00s; identified as the demo version and added the recording ID.
+  - “King of the Jungle” — 100.0%, 0.20s; added the recording ID.
+  - “Oh My Love” — 98.3%, 0.70s; corrected the artist credit and added the recording ID.
+  - “Sad Hasselhoff vs. The Panopticon” — 100.0%, 0.12s; normalized the title and added the recording ID.
+  - “(Si Si) Je Suis Un Rock Star” — 98.5%, 1.67s; corrected the title and added the recording ID.
+  - “Trippy” — 100.0%, 0.04s; added the recording ID.
+  - “Wake Me Up Before You Go-Go” — 95.2%, 1.18s; corrected the artist/title and added the recording ID.
+  - “Young and Beautiful” — 100.0%, 0.00s; normalized the title and added the recording ID.
+  - “Only You” — 87.6%, 2.50s; corrected title and artist credit. The stage records the recording ID as verification metadata, but the proposed audio-tag changes are title/artist only; album/release tags were left unchanged.
+- Did not stage four other candidate matches: “Arrow Through Me” fell below the confidence threshold and had an artist mismatch; “The Knack” had insufficient artist-credit similarity; “Search and Destroy” matched a live release despite the local “Raw Power” album tag, while the studio candidate had no duration; and “Truth” had a plausible title/duration match but conflicting artist/release context.
+- Searches found no sufficiently credible candidate for the remaining eight tracks. These are unresolved, not evidence that no MusicBrainz recording exists. Search responses also produced `musicbrainzngs` XML warnings for newer/unknown MusicBrainz elements; some requests had intermittent service errors.
+- Confirmed that the staging list contains 12 pending proposals with path-free display names and diffs. No audio files were modified; user review and the explicit CLI apply step are still required. Genre corrections were not attempted because genre is not currently supported by the tag-writing pipeline.
