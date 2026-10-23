@@ -18,6 +18,7 @@ A specialized metadata bridge connecting **MusicBee**, local audio files, and th
 
 ## 🛠️ Environment & Paths
 * **Repository Path**: `C:\Users\niccy\.gemini\antigravity\scratch\musicbee-tagger-mcp`
+* **GitHub Remote (Private)**: `git@github.com:niccy266/musicbee-tagger-mcp.git`
 * **Convenience Shortcut**: `K:\dev\AntigravityScratchPad.lnk` (points to `C:\Users\niccy\.gemini\antigravity\scratch`)
 * **Python Version**: Python 3.14
 * **Virtual Environment**: `.venv` in repository root
