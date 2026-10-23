@@ -36,7 +36,7 @@ def test_parse_m3u_resolves_relative_entries_and_reports_skips(tmp_path):
 
 
 def test_register_playlist_returns_tokens_without_paths(tmp_path, monkeypatch):
-    import musicbee_tagger_mcp.server as server
+    from musicbee_tagger_mcp.tools import files as file_tools
 
     music_dir = tmp_path / "Music"
     music_dir.mkdir()
@@ -45,9 +45,9 @@ def test_register_playlist_returns_tokens_without_paths(tmp_path, monkeypatch):
     playlist = tmp_path / "list.m3u"
     playlist.write_text("#EXTM3U\nMusic/song.mp3\nmissing.flac\n", encoding="utf-8")
     registry = FileRegistry()
-    monkeypatch.setattr(server, "get_registry", lambda: registry)
+    monkeypatch.setattr(file_tools, "get_registry", lambda: registry)
 
-    result = server.register_playlist(str(playlist))
+    result = file_tools.register_playlist(str(playlist))
 
     assert result["registered"][0]["line"] == 2
     assert result["registered"][0]["display_name"] == "song.mp3"

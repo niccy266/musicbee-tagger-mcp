@@ -1,0 +1,33 @@
+"""MCP wrappers for MusicBrainz search and recording verification."""
+
+from typing import Any, Dict, List, Optional
+
+from ..musicbrainz_client import search_recordings_forensic, verify_recording_mbid
+
+
+def search_canonical_release(
+    artist: str,
+    title: str,
+    duration_sec: Optional[float] = None,
+    clue: Optional[str] = None,
+    limit: int = 5,
+) -> List[Dict[str, Any]]:
+    """Search and rank MusicBrainz recording candidates."""
+    return search_recordings_forensic(artist, title, duration_sec, clue, limit)
+
+
+def verify_mbid(
+    recording_id: str,
+    expected_artist: Optional[str] = None,
+    expected_title: Optional[str] = None,
+    duration_sec: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Verify a recording candidate against local title, artist, and duration."""
+    return verify_recording_mbid(
+        recording_id, expected_artist, expected_title, duration_sec
+    )
+
+
+def register_musicbrainz_tools(app) -> None:
+    app.tool()(search_canonical_release)
+    app.tool()(verify_mbid)

@@ -116,14 +116,14 @@
     <section id="layout">
       <h2>Project layout</h2>
       <ul>
-        <li><code>src/musicbee_tagger_mcp/server.py</code> — MCP tool definitions and server entrypoint.</li>
-        <li><code>src/musicbee_tagger_mcp/musicbrainz_client.py</code> — MusicBrainz search, candidate ranking, and recording verification.</li>
+        <li><code>src/musicbee_tagger_mcp/server.py</code> — small MCP app assembly and stdio entrypoint; tool implementations live in <code>tools/</code>, grouped by domain.</li>
+        <li><code>src/musicbee_tagger_mcp/musicbrainz_client.py</code> — compatibility facade; API setup, shared scoring, search, and verification live in focused sibling modules.</li>
         <li><code>src/musicbee_tagger_mcp/file_registry.py</code> and <code>playlist.py</code> — tokenized file registration and M3U/M3U8 parsing.</li>
         <li><code>src/musicbee_tagger_mcp/metadata_reader.py</code> and <code>filename_parser.py</code> — embedded metadata and filename clues.</li>
-        <li><code>src/musicbee_tagger_mcp/staging.py</code>, <code>tag_writer.py</code>, and <code>apply_staged.py</code> — safe previews, pending manifests, and user-controlled writes.</li>
+        <li><code>staging.py</code> and <code>stage_manifest_store.py</code> — pending proposals and manifest persistence; <code>staged_apply.py</code>, <code>tag_applier.py</code>, and <code>tag_format_writers.py</code> — CLI-only physical audio writes. MCP preview uses <code>tag_preview.py</code>.</li>
         <li><code>tests/</code> — regression tests; <code>.agents/skills/musicbee-investigator/SKILL.md</code> — detailed agent procedure; <code>docs/index.html</code> — this human/agent web guide.</li>
       </ul>
-      <p>The Python package is currently a small flat module set rather than nested subsystems. Several files exceed the preferred ~100-line guideline; split by cohesive responsibility when those areas next change, rather than refactoring everything only to meet a number.</p>
+      <p>The package keeps focused service modules for shared logic and groups MCP tool implementations by domain. Treat ~100 lines as a review signal, not a hard limit; preserve cohesive responsibilities instead of splitting solely to meet a number.</p>
     </section>
 
     <section id="matching">

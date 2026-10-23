@@ -56,14 +56,6 @@ def get_first_tag(tags: Any, keys: list[str]) -> Optional[str]:
             except (ValueError, KeyError):
                 continue
     return None
-    for k in keys:
-        if k in tags:
-            v = tags[k]
-            if isinstance(v, (list, tuple)) and len(v) > 0:
-                return str(v[0]).strip()
-            if v:
-                return str(v).strip()
-    return None
 
 def read_audio_metadata(file_path: str) -> Dict[str, Any]:
     """
