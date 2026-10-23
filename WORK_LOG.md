@@ -212,3 +212,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Clarified that the MCP server boundary does not prevent shell-based audio writes, and that unresolved candidates should be reported to the user because no MCP review-flagging tool exists.
 - Bumped package and plugin metadata to `0.1.1`; updated the Windows install examples and documented refreshing an installed local marketplace plugin.
 - Validation: all 37 tests pass, Pylint `--errors-only` passes, Claude Code plugin validation passes with marketplace metadata warnings, and the plugin/marketplace/Windows release archives build with the new skill.
+
+### 2026-10-24 — Add persistent GitHub-hosted Claude marketplace
+- Added a repository-root Claude marketplace catalog pointing to the maintained plugin directory on the `release-ready-mcp` branch.
+- Updated installation guidance to distinguish local release-bundle snapshots from the GitHub-hosted marketplace and document migration/update commands.
+- Added regression coverage for the root marketplace catalog. The local marketplace was confirmed to point into the extracted v0.1.0 bundle; future updates need a Git-backed source to follow repository commits.

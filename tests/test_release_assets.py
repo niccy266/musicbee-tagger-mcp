@@ -80,3 +80,17 @@ def test_plugin_bundles_the_investigator_skill():
     assert plugin_skill == source_skill
     assert "name: musicbee-investigator" in plugin_skill
     assert "description:" in plugin_skill
+
+
+def test_repository_marketplace_tracks_plugin_in_release_tree():
+    """Expose the release plugin through a repository-hosted marketplace."""
+    marketplace = json.loads(
+        (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
+    )
+
+    assert marketplace["name"] == "musicbee-tagger"
+    assert marketplace["plugins"][0]["name"] == "musicbee-tagger"
+    assert (
+        marketplace["plugins"][0]["source"]
+        == "./release/claude-marketplace/plugins/musicbee-tagger"
+    )

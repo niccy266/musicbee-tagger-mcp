@@ -43,24 +43,31 @@ automatic cleanup or retention is performed.
    claude mcp get musicbee-tagger
    ```
 
-4. Alternatively, add the included Claude Code marketplace and install its
-   plugin:
+4. Alternatively, use the persistent GitHub marketplace. This tracks the
+   `release-ready-mcp` branch, so future marketplace updates fetch the branch
+   rather than reading an old extracted release directory. To migrate an
+   existing local marketplace with the same name, remove it first (this also
+   uninstalls that marketplace's plugin), then run:
 
    ```powershell
-   claude plugin marketplace add .\claude-marketplace
+   claude plugin marketplace remove musicbee-tagger
+   claude plugin marketplace add niccy266/musicbee-tagger-mcp#release-ready-mcp --scope user
    claude plugin install musicbee-tagger@musicbee-tagger
    ```
 
    The plugin uses the stable `K:\bin` launcher and defaults to the same private
    data root. It also provides the `musicbee-investigator` skill for metadata
    investigation. Restart or reload Claude Code after configuring the server.
-   To refresh an existing local-marketplace installation after extracting a
-   newer release over its marketplace directory, run:
+   Future updates come from the tracked GitHub branch:
 
    ```powershell
    claude plugin marketplace update musicbee-tagger
    claude plugin update musicbee-tagger@musicbee-tagger
    ```
+
+   The bundled `.\claude-marketplace` directory remains useful for offline
+   installation, but it is a snapshot: updates only see files written to that
+   same directory. It does not follow future release bundles automatically.
 5. Confirm the server is connected with `claude mcp list`, then use the
    registered MusicBee tools. Tokens are process-local and expire when the MCP
    server exits.
