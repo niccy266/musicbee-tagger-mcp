@@ -13,17 +13,17 @@ You are a forensic audio archivist and metadata detective. Your goal is to take 
 
 ## 🔒 Security & Privacy Protocol
 
-1. **Tokens Only**: File paths are consumed only during `register_files(paths)` or `register_playlist(playlist_path)`. Playlist-relative entries are resolved inside the server. All subsequent operations use opaque UUID `token` values. Never attempt to log, display, or guess absolute filesystem paths.
+1. **Human Registration Only**: Never ask the user to put a playlist or audio path in chat, and never pass a path to an MCP tool or terminal tool. Ask the user to run `K:\bin\musicbee-tagger-register-playlist.cmd` in a separate local terminal. The local command resolves playlist-relative entries, stores path mappings in the configured private data directory, and prints only tokens, bare filenames, and path-free skip reasons. Continue only with the tokens the user provides.
 2. **No Audio Writes**: The MCP server does not expose a tool to apply tags. Do not use a shell, another tool, or the apply CLI to modify audio files. The user retains control over reviewing and applying staged changes via their CLI.
-3. **Path-Safe Delegation**: If the user asks for a context-isolated investigator, register the files or playlist in the parent session and keep every supplied path there. Never send a playlist path, absolute audio path, or path-bearing error to a subagent. Before delegating tool work, confirm the subagent can access the same MCP server process and token registry. If it cannot, do not send unusable tokens or imply it can call those tools: provide only a sanitized batch brief for independent analysis, then have the parent perform verification and staging. Keep delegated work bounded, load this skill for the investigator, and request a concise result.
+3. **Path-Safe Delegation**: Never send a playlist path, absolute audio path, or path-bearing error to a subagent. Before delegating token-dependent MCP work, confirm the subagent can access the same MCP server and local registration store. If it cannot, provide only sanitized metadata for independent analysis, then have the parent perform verification and staging. Keep delegated work bounded and request a concise result.
 
 ## ⚡ Efficient Investigation Protocol
 
-1. Reuse one MCP client/server session for registration, batch metadata, searches, verification, previews, staging, and final pending-stage confirmation whenever the tool runtime permits it. Tokens are process-local; do not assume they survive a server restart.
+1. Tokens map to locally persisted file registrations and survive MCP server restarts and logins when the same Windows user and data directory are used. Do not request or expose the private registration store.
 2. Call `get_batch_brief` once for the registered batch. Work from its tags, duration, and filename clues rather than repeatedly registering or rereading the same tracks.
 3. Form a short, track-specific candidate list from the brief. Search several independent titles/artists only when the API/tool actually supports that; do not assume one request batches many unrelated queries. Observe MusicBrainz's request-rate policy and never parallelize requests to evade it.
 4. Return compact summaries: candidate identity, duration difference, relevant release context, verification result, staged fields, and reasons for leaving tracks unresolved. Avoid dumping complete API responses or repeating the entire batch output.
-5. Log the completed investigation once as a coherent work-log entry, including the number registered, staged, unresolved, validation performed, and confirmation that no audio was applied.
+5. Remind the user they can clear local path registrations with `K:\bin\musicbee-tagger-clear-registrations.cmd` after the investigation. Log the completed investigation once as a coherent work-log entry, including the number registered, staged, unresolved, validation performed, and confirmation that no audio was applied.
 
 ---
 
@@ -31,7 +31,7 @@ You are a forensic audio archivist and metadata detective. Your goal is to take 
 
 ```mermaid
 flowchart TD
-    A["1. register_files(paths) or register_playlist(playlist_path)"] --> B["2. get_batch_brief([tokens])"]
+    A["1. Human runs local playlist registration and shares tokens"] --> B["2. get_batch_brief([tokens])"]
     B --> C["3. Mojibake & Charset Check"]
     C --> D["4. Search & Web Investigation"]
     D --> E["5. Eval Gate: verify_mbid()"]
@@ -40,13 +40,12 @@ flowchart TD
     F --> H["Instruct user to run apply_staged CLI"]
 ```
 
-### Step 1: Registration
-Register target files or a local M3U/M3U8 playlist to receive tokens:
-```python
-register_files(paths=["D:/Music/Track.mp3"]) -> [{"token": "...", "display_name": "Track.mp3"}]
-register_playlist(playlist_path="D:/Music/to-fix.m3u8") -> {"registered": [...], "skipped": [...]}
+### Step 1: Human-only Registration
+The MCP server intentionally has no path-taking registration tools. If the user has not supplied tokens, ask them to open a separate PowerShell window (not an agent-controlled terminal), run:
+```powershell
+K:\bin\musicbee-tagger-register-playlist.cmd
 ```
-Playlist entries are resolved relative to the playlist's folder. Remote URLs and unsupported file types are reported as skipped; absolute paths are never returned.
+They enter the local `.m3u` or `.m3u8` path at the prompt, then paste the resulting tokens here. Never ask them to paste the path into chat or call a tool with it. The local command resolves relative entries against the playlist folder and reports remote URLs, unsupported formats, or missing files without exposing paths. Registration mappings persist in the private data directory so tokens remain usable across MCP restarts and logins on the same machine.
 
 ### Step 2: Batch Brief
 Retrieve technical specs, existing tags, and filename patterns for all tokens in a single call:
