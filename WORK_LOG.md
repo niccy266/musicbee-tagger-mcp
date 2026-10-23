@@ -185,3 +185,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Split read-only preview from physical tag writes: `tag_writer.py` remains a compatibility facade for preview only, while `tag_applier.py` dispatches to format-specific write helpers. MCP tool modules do not import the audio write implementation.
 - Removed an unreachable duplicate block in metadata tag extraction found while checking module boundaries.
 - Updated regression coverage for registration tool module locations, the exact MCP tool surface, and CLI-only application. Validation: full suite passes (32 tests); MCP smoke check confirms all 11 tools register and write modules are not imported by the server; HTML parser and `git diff --check` pass. No audio files were modified.
+
+### 2026-10-24 — Local desktop release handoff plan
+- Created `docs/LOCAL_DESKTOP_RELEASE_PLAN.md` as a fresh-agent handoff covering local Python package installation, user-level Claude Code configuration, a `K:\bin` launcher, configurable private state folders, path-free logging, retryable search manifests, confidence routing, explicit CLI-only audio writes, phased delivery, acceptance checks, and open implementation decisions.
+- Captured user preferences: single-user Windows desktop; Python package; user-level Claude Code-style configuration; install root under `K:\tools\mcp-servers\musicbee-tags\`; launcher under `K:\bin\`; configurable private state root with that requested default; path concealment; and path-free applied/search logs.
+- Documented confidence bands as initial heuristic routing proposals, not probabilities. Auto-stage never means write audio. Physical edits remain user-controlled via the CLI unless separately redesigned and explicitly approved.
+- No runtime code or audio files changed.
