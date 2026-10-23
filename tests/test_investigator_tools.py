@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch
 
 from musicbee_tagger_mcp.filename_parser import extract_clues_from_filename, clean_stem
-from musicbee_tagger_mcp.musicbrainz_client import verify_recording_mbid, string_similarity
+from musicbee_tagger_mcp.musicbrainz_client import classify_release, verify_recording_mbid, string_similarity
 
 
 def test_filename_clean_stem():
@@ -34,6 +34,10 @@ def test_string_similarity():
     assert string_similarity("Different", "Completely") < 0.3
 
 
+def test_classify_release_without_type_metadata():
+    assert classify_release({"title": "Great Movie Sounds of John Barry"})["category"] == "Unknown"
+
+
 def test_verify_mbid_mocked_success():
     mock_mb_data = {
         "recording": {
@@ -55,7 +59,7 @@ def test_verify_mbid_mocked_success():
         }
     }
 
-    with patch("musicbrainzngs.get_recording_by_id", return_value=mock_mb_data):
+    with patch("musicbrainzngs.get_recording_by_id", return_value=mock_mb_data) as get_recording:
         res = verify_recording_mbid(
             recording_id="rec-uuid-123",
             expected_artist="John Barry And His Orchestra",
@@ -68,6 +72,10 @@ def test_verify_mbid_mocked_success():
         assert res["duration_diff_seconds"] <= 0.5
         assert res["top_release"]["album_title"] == "The Knack ...and How to Get It"
         assert len(res["mismatches"]) == 0
+        get_recording.assert_called_once_with(
+            "rec-uuid-123",
+            includes=["artists", "releases"],
+        )
 
 
 def test_verify_mbid_mocked_mismatch():

@@ -25,13 +25,15 @@ def classify_release(release: Dict[str, Any]) -> Dict[str, Any]:
     is_compilation = "Compilation" in secondary_types or "compilation" in title.lower()
     is_single = primary_type in ("Single", "EP")
 
-    category = "Studio Album"
+    category = "Unknown"
     if is_live:
         category = "Live Release"
     elif is_compilation:
         category = "Compilation"
     elif is_single:
         category = "Single / EP"
+    elif primary_type == "Album":
+        category = "Studio Album"
 
     return {
         "category": category,
@@ -175,7 +177,7 @@ def verify_recording_mbid(
     try:
         data = musicbrainzngs.get_recording_by_id(
             recording_id,
-            includes=["artists", "releases", "release-groups"]
+            includes=["artists", "releases"]
         )
     except Exception as e:
         return {
