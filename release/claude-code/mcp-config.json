@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "musicbee-tagger": {
+      "type": "stdio",
+      "command": "cmd.exe",
+      "args": [
+        "/d",
+        "/c",
+        "K:\\bin\\musicbee-tagger-mcp.cmd"
+      ],
+      "env": {
+        "MUSICBEE_TAGGER_DATA_DIR": "K:\\tools\\mcp-servers\\musicbee-tags\\data"
+      }
+    }
+  }
+}
