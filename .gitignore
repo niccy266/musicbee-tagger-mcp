@@ -1,4 +1,7 @@
+# Python virtual environments & bytecode
 .venv/
+env/
+venv/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -9,3 +12,50 @@ tests/sample_audio/
 dist/
 build/
 *.egg-info/
+
+# ----------------------------------------------------
+# 🔒 Secrets, Credentials & Sensitive Environment Files
+# ----------------------------------------------------
+# Environment variables
+.env
+.env.*
+*.env
+!.env.example
+!.env.template
+
+# API Keys, Tokens & Credentials
+credentials.json
+client_secret*.json
+service_account*.json
+token.json
+tokens.json
+auth.json
+oauth*.json
+secret*.json
+secrets.*
+secret.*
+
+# Private Keys, Certificates & Keystores
+*.pem
+*.key
+*.pkcs12
+*.pfx
+*.p12
+*.crt
+*.der
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.kdbx
+
+# Authentication & Cloud Provider Tokens
+.netrc
+_netrc
+.aws/
+.azure/
+.gcloud/
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
