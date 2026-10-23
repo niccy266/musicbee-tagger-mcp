@@ -133,3 +133,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Sanitized registration failures: missing files return `File not found`; other filesystem `OSError`s return `Unable to access file`. Error responses no longer include submitted paths.
 - Added regression tests for both parser orders, the handoff's “The Knack” filename, and path-free missing/permission error responses.
 - Validation: full test suite passes (26 tests). The first run used pytest's default temp root and encountered Windows `PermissionError` under the user's temp directory; rerunning with a new repository-local `--basetemp .pytest-basetemp` passed. `git diff --check` also passes. No sample audio was changed.
+
+### 2026-10-23 — Investigator-agent MCP simulation
+- Delegated a bounded simulation using only the local MCP server's `register_files`, `get_batch_brief`, and `extract_filename_clues` tools; prohibited direct file inspection, external search, and staging.
+- The first MCP stdio attempt failed because the filename containing an invisible U+200E mark could not be encoded using the default Windows console encoding. Retrying with UTF-8 stdio succeeded.
+- The agent received all three metadata briefs and ambiguous filename candidate pairs. Tag values and durations matched the prior MCP batch call; album/year/track/disc/MusicBrainz ID fields were empty, and all genres were `Другое`. No search, preview, staging, or apply tool was called; no audio was modified.
+- Observed parser limitations from the MCP interaction: `_1` is not reported as a track number, and the invisible U+200E remains in the third file's artist tag. These are logged for future consideration; no code change was made as part of this simulation.
