@@ -16,16 +16,35 @@ def test_filename_clean_stem():
 def test_filename_parser_standard():
     res = extract_clues_from_filename("01 - Jimmy Takeuchi - Drum Drum Drum (1970).mp3")
     assert res["track_number_guess"] == 1
-    assert res["artist_guess"] == "Jimmy Takeuchi"
-    assert res["title_guess"] == "Drum Drum Drum"
+    assert res["artist_guess"] is None
+    assert res["title_guess"] is None
+    assert res["artist_title_candidates"] == [
+        {"artist": "Jimmy Takeuchi", "title": "Drum Drum Drum"},
+        {"artist": "Drum Drum Drum", "title": "Jimmy Takeuchi"},
+    ]
     assert res["year_guess"] == "1970"
 
 
 def test_filename_parser_regional_brackets():
     res = extract_clues_from_filename("ちゃっきり節 (静岡) - ジミー竹内.ogg")
     assert "静岡" in res["bracket_clues"]
-    assert res["artist_guess"] == "ちゃっきり節"
-    assert res["title_guess"] == "ジミー竹内"
+    assert res["artist_title_candidates"] == [
+        {"artist": "ちゃっきり節", "title": "ジミー竹内"},
+        {"artist": "ジミー竹内", "title": "ちゃっきり節"},
+    ]
+
+
+def test_filename_parser_does_not_assume_sample_order():
+    res = extract_clues_from_filename(
+        "The Knack (Main Theme) - John Barry And His Orchestra_1.ogg"
+    )
+    assert res["artist_guess"] is None
+    assert res["title_guess"] is None
+    assert res["artist_title_candidates"] == [
+        {"artist": "The Knack", "title": "John Barry And His Orchestra"},
+        {"artist": "John Barry And His Orchestra", "title": "The Knack"},
+    ]
+    assert res["bracket_clues"] == ["Main Theme"]
 
 
 def test_string_similarity():

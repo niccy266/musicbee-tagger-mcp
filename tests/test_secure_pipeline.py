@@ -63,6 +63,32 @@ def test_register_display_name_is_filename_only(registry, tmp_audio):
     assert result["display_name"] == tmp_audio.name
 
 
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (FileNotFoundError, "File not found"),
+        (PermissionError, "Unable to access file"),
+    ],
+)
+def test_register_files_error_does_not_expose_path(
+    tmp_path, monkeypatch, error, expected
+):
+    import musicbee_tagger_mcp.server as server
+
+    missing_path = str(tmp_path / "private" / "missing.mp3")
+
+    class MissingFileRegistry:
+        def register(self, path):
+            raise error(f"File operation failed: {path}")
+
+    monkeypatch.setattr(server, "get_registry", lambda: MissingFileRegistry())
+
+    result = server.register_files([missing_path])
+
+    assert result == [{"error": expected}]
+    assert missing_path not in json.dumps(result)
+
+
 def test_resolve_returns_path_internally(registry, tmp_audio):
     result = registry.register(str(tmp_audio))
     resolved = registry.resolve(result["token"])

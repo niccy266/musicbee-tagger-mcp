@@ -43,6 +43,7 @@ Retrieve technical specs, existing tags, and filename patterns for all tokens in
 get_batch_brief(tokens=[...])
 ```
 *Pay close attention to exact track duration in seconds (e.g. 174.68s) — this is your strongest forensic fingerprint.*
+*Filename parsing returns both artist/title interpretations for separated names because filename order is ambiguous. Treat these as candidates, not facts; prefer embedded tags or corroborating evidence.*
 
 ### Step 3: Encoding & Sanity Check
 * Check for Soviet/Cyrillic CP1251 misread as Latin-1 or Japanese Shift-JIS with `repair_mojibake(text)`.

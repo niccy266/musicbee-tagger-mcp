@@ -42,8 +42,10 @@ def register_files(paths: List[str]) -> List[Dict[str, str]]:
     for path in paths:
         try:
             results.append(registry.register(path))
-        except FileNotFoundError as e:
-            results.append({"error": str(e)})
+        except FileNotFoundError:
+            results.append({"error": "File not found"})
+        except OSError:
+            results.append({"error": "Unable to access file"})
     return results
 
 

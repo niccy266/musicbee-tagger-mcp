@@ -62,10 +62,15 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
     parts = re.split(r"\s+[\-\–\—\_]\s+", cleaned_stem)
     artist_guess: Optional[str] = None
     title_guess: Optional[str] = None
+    artist_title_candidates: List[Dict[str, str]] = []
 
     if len(parts) >= 2:
-        artist_guess = parts[0].strip()
-        title_guess = parts[1].strip()
+        first = parts[0].strip()
+        second = " - ".join(part.strip() for part in parts[1:])
+        artist_title_candidates = [
+            {"artist": first, "title": second},
+            {"artist": second, "title": first},
+        ]
     elif len(parts) == 1 and cleaned_stem:
         title_guess = cleaned_stem
 
@@ -88,6 +93,7 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
         "track_number_guess": track_num,
         "artist_guess": artist_guess,
         "title_guess": title_guess,
+        "artist_title_candidates": artist_title_candidates,
         "year_guess": detected_year,
         "bracket_clues": context_clues,
     }
