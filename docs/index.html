@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Human and MCP guide for safely investigating MusicBee audio metadata.">
+  <title>MusicBee Tagger MCP — User Guide</title>
+  <style>
+    :root { color-scheme: light dark; font: 16px/1.6 system-ui, sans-serif; }
+    body { max-width: 920px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    header, section { margin-bottom: 2.5rem; }
+    h1, h2 { line-height: 1.2; }
+    nav { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+    a { color: #2875c7; }
+    code, pre { font-family: ui-monospace, Consolas, monospace; }
+    code { overflow-wrap: anywhere; }
+    pre { overflow-x: auto; padding: 1rem; border-radius: .5rem; background: color-mix(in srgb, CanvasText 8%, Canvas); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid color-mix(in srgb, CanvasText 25%, Canvas); padding: .5rem; text-align: left; vertical-align: top; }
+    .notice { padding: .8rem 1rem; border-left: .3rem solid #d98b00; background: color-mix(in srgb, #d98b00 12%, Canvas); }
+    @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MusicBee Tagger MCP</h1>
+    <p>A practical guide for investigating audio metadata safely. Human operators use the CLI to review and apply changes; MCP agents use tokens to inspect, verify, and stage proposals.</p>
+    <nav aria-label="Guide sections">
+      <a href="#safety">Safety model</a>
+      <a href="#cli">CLI setup and review</a>
+      <a href="#agent">MCP investigator workflow</a>
+      <a href="#tools">Tool reference</a>
+      <a href="#layout">Project layout</a>
+      <a href="#matching">Matching guidance</a>
+      <a href="#limits">Current limits</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="safety">
+      <h2>Safety model</h2>
+      <ul>
+        <li>Paths are accepted only during <code>register_files</code> or <code>register_playlist</code>. The server replaces them with opaque tokens; use tokens for every later MCP call.</li>
+        <li>Never echo, log, or send absolute audio or playlist paths to an agent. Registration responses expose only display names, tokens, and (for playlists) entry line numbers.</li>
+        <li>MCP tools do not write audio. A successful stage creates a pending manifest, not a tag edit.</li>
+        <li>Only the user-controlled CLI applies staged edits. Review the diff before answering yes to its prompt.</li>
+      </ul>
+      <p class="notice"><strong>Agent boundary:</strong> Do not run the apply CLI or otherwise modify audio files. Staging is allowed only after candidate verification passes.</p>
+    </section>
+
+    <section id="cli">
+      <h2>Human operator: setup, review, apply</h2>
+      <p>From the repository root in PowerShell, create the environment and install this checkout:</p>
+      <pre><code>py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .</code></pre>
+      <p>Configure your MCP client to launch the installed stdio server. For a VS Code workspace, add a server entry to <code>.vscode\mcp.json</code> and replace the placeholders with your local checkout path:</p>
+      <pre><code>{
+  "servers": {
+    "musicbee-tagger": {
+      "type": "stdio",
+      "command": "&lt;checkout&gt;\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "musicbee_tagger_mcp.server"],
+      "cwd": "&lt;checkout&gt;"
+    }
+  }
+}</code></pre>
+      <p>For playlist investigation, give the playlist path only to <code>register_playlist</code>. For individual files, use <code>register_files</code>. After the agent reports staged proposals, inspect them in the terminal:</p>
+      <pre><code>.\.venv\Scripts\python.exe -m musicbee_tagger_mcp.apply_staged --list
+.\.venv\Scripts\python.exe -m musicbee_tagger_mcp.apply_staged --all --dry-run</code></pre>
+      <p>Apply one proposal interactively, or all pending proposals interactively:</p>
+      <pre><code>.\.venv\Scripts\python.exe -m musicbee_tagger_mcp.apply_staged --stage-id &lt;UUID&gt;
+.\.venv\Scripts\python.exe -m musicbee_tagger_mcp.apply_staged --all</code></pre>
+      <p>The CLI asks before each write and creates a backup by default. Do not use <code>--no-backup</code> unless you have an intentional reason to skip backups. <code>--dry-run</code> previews without writing.</p>
+      <p>To run tests after local changes:</p>
+      <pre><code>$env:PYTHONPATH='src'
+.\.venv\Scripts\python.exe -m pytest -q</code></pre>
+      <p>To preview this guide locally from the repository root, run <code>py -m http.server 8000 --directory docs</code> and open <code>http://localhost:8000</code> in a browser.</p>
+    </section>
+
+    <section id="agent">
+      <h2>MCP agent: investigation procedure</h2>
+      <ol>
+        <li><strong>Register once.</strong> Call <code>register_files(paths)</code> or <code>register_playlist(playlist_path)</code>. Keep paths confined to that call; retain the returned tokens.</li>
+        <li><strong>Read one batch brief.</strong> Call <code>get_batch_brief(tokens)</code>. Use embedded tags, duration, and filename clues. Filename artist/title order is ambiguous.</li>
+        <li><strong>Repair text carefully.</strong> Use <code>repair_mojibake</code> when encoding appears corrupted. Treat filename clues as hypotheses, not facts.</li>
+        <li><strong>Search and corroborate.</strong> Call <code>search_canonical_release</code> with a plausible artist, title, duration, and useful clues. Use web research for weak, conflicting, or incomplete matches. Record reliable source links when they affect a decision.</li>
+        <li><strong>Verify every candidate.</strong> Call <code>verify_mbid</code> with the candidate recording ID and expected title, artist, and duration. Require <code>verified: true</code>, confidence at least 75, duration difference no more than 6 seconds, and no important mismatch. A passing recording check does not establish the correct album/release.</li>
+        <li><strong>Preview, then stage.</strong> Call <code>preview_tags</code>; propose only supported fields corroborated by evidence. Stage only a non-empty, reviewed diff using <code>stage_tag_changes</code>.</li>
+        <li><strong>Report and stop.</strong> Confirm staged names, fields, confidence, and duration difference using <code>list_staged_changes</code>. Explain unresolved tracks and why. Tell the user to review/apply in the CLI; do not apply changes yourself.</li>
+      </ol>
+      <p>Reuse the same MCP server process for a batch where possible: tokens are process-local and may not survive a restart. Return concise per-track results instead of full raw responses. Respect the MusicBrainz limit of one request per second; never parallelize requests to evade it.</p>
+      <p>For delegated investigation, keep playlist/audio paths in the parent session. Confirm the subagent has access to the same MCP process before asking it to use tokens. If not, delegate only sanitized metadata analysis and let the parent perform token-dependent verification and staging.</p>
+      <p>The detailed agent workflow is also available in <a href="../.agents/skills/musicbee-investigator/SKILL.md">the investigator skill</a>.</p>
+    </section>
+
+    <section id="tools">
+      <h2>MCP tool reference</h2>
+      <table>
+        <thead><tr><th scope="col">Tool</th><th scope="col">Purpose</th><th scope="col">Path handling</th></tr></thead>
+        <tbody>
+          <tr><td><code>register_files</code></td><td>Register local audio files; returns tokens and bare display names.</td><td>Accepts paths.</td></tr>
+          <tr><td><code>register_playlist</code></td><td>Register supported local entries from M3U/M3U8, resolving relative entries against the playlist folder.</td><td>Accepts playlist path; returns no paths.</td></tr>
+          <tr><td><code>read_track_metadata</code></td><td>Read tags, format, and audio properties for one token.</td><td>Token only.</td></tr>
+          <tr><td><code>extract_filename_clues</code></td><td>Extract filename clues for one token.</td><td>Token only.</td></tr>
+          <tr><td><code>get_batch_brief</code></td><td>Read tags, duration, format, and clues for multiple tokens.</td><td>Tokens only.</td></tr>
+          <tr><td><code>repair_mojibake</code></td><td>Suggest repairs for corrupted text.</td><td>No file input.</td></tr>
+          <tr><td><code>search_canonical_release</code></td><td>Search and rank MusicBrainz recording candidates.</td><td>No file input.</td></tr>
+          <tr><td><code>verify_mbid</code></td><td>Check recording title, artist, duration, and release context.</td><td>No file input.</td></tr>
+          <tr><td><code>preview_tags</code></td><td>Preview field-level changes without writing audio.</td><td>Token only.</td></tr>
+          <tr><td><code>stage_tag_changes</code></td><td>Save a pending manifest for user review; does not write audio.</td><td>Token only.</td></tr>
+          <tr><td><code>list_staged_changes</code></td><td>List pending path-free stage summaries.</td><td>No file input.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="layout">
+      <h2>Project layout</h2>
+      <ul>
+        <li><code>src/musicbee_tagger_mcp/server.py</code> — MCP tool definitions and server entrypoint.</li>
+        <li><code>src/musicbee_tagger_mcp/musicbrainz_client.py</code> — MusicBrainz search, candidate ranking, and recording verification.</li>
+        <li><code>src/musicbee_tagger_mcp/file_registry.py</code> and <code>playlist.py</code> — tokenized file registration and M3U/M3U8 parsing.</li>
+        <li><code>src/musicbee_tagger_mcp/metadata_reader.py</code> and <code>filename_parser.py</code> — embedded metadata and filename clues.</li>
+        <li><code>src/musicbee_tagger_mcp/staging.py</code>, <code>tag_writer.py</code>, and <code>apply_staged.py</code> — safe previews, pending manifests, and user-controlled writes.</li>
+        <li><code>tests/</code> — regression tests; <code>.agents/skills/musicbee-investigator/SKILL.md</code> — detailed agent procedure; <code>docs/index.html</code> — this human/agent web guide.</li>
+      </ul>
+      <p>The Python package is currently a small flat module set rather than nested subsystems. Several files exceed the preferred ~100-line guideline; split by cohesive responsibility when those areas next change, rather than refactoring everything only to meet a number.</p>
+    </section>
+
+    <section id="matching">
+      <h2>Matching and release guidance</h2>
+      <ul>
+        <li>A MusicBrainz recording is the performance/version candidate; a release is a particular edition; a release group groups related editions. Do not infer a release from recording verification alone.</li>
+        <li>Duration is useful evidence, not proof. Compare title and artist credit, release context, embedded tags, and reliable web sources; treat ambiguous artist/title order and filenames as clues.</li>
+        <li>Keep canonical script and spelling, including Cyrillic and Japanese text, when supported by reliable evidence. Do not strip meaningful live, demo, regional, or version details.</li>
+        <li>When evidence conflicts or a candidate fails verification, leave it unstaged and explain the uncertainty.</li>
+      </ul>
+    </section>
+
+    <section id="limits">
+      <h2>Current limits and possible batch search</h2>
+      <p>The current MCP surface has one MusicBrainz search tool per candidate query; there is no batch-search tool yet. MusicBrainz's Search API accepts one Lucene query per request. Combining unrelated titles into one Lucene expression does not provide independent per-track ranking, so it is not a safe substitute for separate searches.</p>
+      <p>A future <code>search_canonical_releases_batch</code> MCP wrapper is a small-to-moderate change: it can accept a list of per-track query objects, deduplicate identical inputs, search sequentially at the service's rate limit, and return compact per-track results. A bounded in-memory cache can avoid duplicate work within the process. This reduces agent/MCP call overhead, but it cannot reduce the number of distinct MusicBrainz HTTP requests or their rate-limit time floor.</p>
+      <p>Proposed safeguards for that wrapper: validate and cap batch size, deduplicate normalized queries, keep sequential rate limiting, isolate per-track errors, avoid caching transient failures, and test cache keys/expiration and privacy-safe output. A minimal version is a few hours of focused work; production-ready retry and cache tests could make it roughly a half-day to a day, depending on how much resilience is desired.</p>
+      <p>Several Python modules currently exceed the preferred 100-line guideline. Treat that number as a refactoring signal, not a hard limit: split cohesive responsibilities when editing those modules, keep tests aligned, and avoid splitting merely to hit a line count.</p>
+    </section>
+  </main>
+</body>
+</html>

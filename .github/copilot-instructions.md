@@ -19,7 +19,9 @@
 
 ## Implementation and Verification
 
+- Keep the human/MCP reference guide in `docs/index.html` aligned with CLI commands and the registered MCP tools when their interfaces change.
 - Follow existing Python patterns and make focused changes. Add tests for behavior and privacy guarantees, and update directly related skill or project documentation.
+- Treat roughly 100 lines per Python module as a maintainability guideline, not a strict cap. Prefer cohesive modules and split by responsibility when a file grows; avoid arbitrary fragmentation or unrelated refactors.
 - Run the smallest relevant tests first; run the full suite for cross-cutting changes. Typical command:
   `$env:PYTHONPATH='src'; .\\.venv\\Scripts\\python.exe -m pytest -q`
 - If Windows denies pytest's default temporary directory, use a repository-local `--basetemp`, inspect and remove that test-only directory afterward.
