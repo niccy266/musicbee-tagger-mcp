@@ -1,0 +1,24 @@
+[project]
+name = "musicbee-tagger-mcp"
+version = "0.1.0"
+description = "MCP bridge for MusicBee audio metadata, forensic album resolution, and scrobble optimization"
+readme = "WORK_LOG.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+    "mutagen>=1.47.0",
+    "musicbrainzngs>=0.7.1",
+    "ftfy>=6.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+musicbee-tagger-mcp = "musicbee_tagger_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
