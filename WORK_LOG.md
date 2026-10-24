@@ -290,3 +290,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Inspected Claude Desktop's local startup log for the v0.4.1 extension attempt. `uv sync` fails before server launch while persisting its interpreter cache (`os error 17`); the follow-on "No MCP config found" warning is because extension setup did not complete. The MCPB's `mcp_config.env` is applied after this setup phase and cannot fix the initial sync environment.
 - Documented a process-scoped PowerShell workaround to set `TEMP`, `TMP`, and `UV_CACHE_DIR` to the same `%LOCALAPPDATA%\uv\cache` directory before launching Claude Desktop, then reinstalling the failed extension. No persistent Windows environment variables were changed.
 - Validation: the PowerShell workaround block parses successfully; release/version tests passed (9), and `git diff --check` passed. Confirmed the diagnosed `uv sync` failure in Claude's local log occurs before MCP config environment is applied.
+
+### 2026-10-25 — Playlist MCP tool recursion fix
+- Fixed registered `next_batch`, `complete_batch`, and `job_status` handlers: their local function names shadowed module helpers and recursively called themselves instead of dispatching to the job store.
+- Added a registered-callback regression test covering a 25-track claim, duplicate claim prevention, status, completion, and actionable unknown-job errors. No audio files are touched.
+- Validation: full suite passed (104 passed, 4 skipped, 1 ffmpeg-dependent test deselected); Pylint `--errors-only` and `git diff --check` passed.

@@ -40,14 +40,14 @@ def register_playlist_tools(app) -> None:
     @app.tool()
     def next_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
         """Get the next batch (default 10) of unprocessed tokens for a job."""
-        return next_batch(job_id, size=size)
+        return get_job_store().next_batch(job_id, size=size)
 
     @app.tool()
     def complete_batch(job_id: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Report outcomes: [{token, success, error?}] for a claimed batch."""
-        return complete_batch(job_id, results)
+        return get_job_store().complete_batch(job_id, results)
 
     @app.tool()
     def job_status(job_id: str) -> Dict[str, Any]:
         """Get progress counts and any failed tracks for a playlist job."""
-        return job_status(job_id)
+        return get_job_store().job_status(job_id)

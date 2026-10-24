@@ -17,6 +17,7 @@ from musicbee_tagger_mcp.tools.playlists import (
     job_status,
     list_jobs,
     next_batch,
+    register_playlist_tools,
 )
 
 
@@ -198,3 +199,50 @@ def test_unknown_job_handled_safely():
     assert "error" in bad and "batch" not in bad
     assert "error" in complete_batch("no-such-job", [])
     assert job_status("no-such-job") == {"error": "Unknown job id"}
+
+
+def test_registered_playlist_tools_dispatch_to_job_store(tmp_path, monkeypatch):
+    class FakeApp:
+        def __init__(self):
+            self.tools = {}
+
+        def tool(self):
+            def register(function):
+                self.tools[function.__name__] = function
+                return function
+
+            return register
+
+    jobs = JobStore(directory=tmp_path / "jobs")
+    (tmp_path / "jobs").mkdir()
+    monkeypatch.setattr(
+        "musicbee_tagger_mcp.tools.playlists.get_job_store", lambda: jobs
+    )
+    entries = [
+        {"token": f"opaque-token-{index}", "display_name": f"track-{index}.mp3"}
+        for index in range(25)
+    ]
+    job = jobs.create_job(entries, playlist_name="private-playlist.m3u")
+    app = FakeApp()
+    register_playlist_tools(app)
+
+    batch = app.tools["next_batch"](job["job_id"], size=25)
+    assert len(batch["batch"]) == 25
+    assert batch["remaining"] == 0
+    assert app.tools["next_batch"](job["job_id"], size=25)["batch"] == []
+    assert jobs.job_status(job["job_id"])["counts"]["in_progress"] == 25
+
+    status = app.tools["job_status"](job["job_id"])
+    assert status["counts"]["in_progress"] == 25
+    completed = app.tools["complete_batch"](
+        job["job_id"],
+        [{"token": item["token"], "success": True} for item in batch["batch"]],
+    )
+    assert completed["updated"] == 25
+    assert app.tools["job_status"](job["job_id"])["counts"]["done"] == 25
+    assert app.tools["next_batch"]("not-a-valid-job-id", size=25) == {
+        "error": "Unknown job id"
+    }
+    assert app.tools["job_status"]("not-a-valid-job-id") == {
+        "error": "Unknown job id"
+    }
