@@ -44,4 +44,9 @@ def register_playlist(
             skipped.append({"line": line_number, "error": "Unable to access file"})
         except (RuntimeError, ValueError):
             skipped.append({"line": line_number, "error": "Unable to resolve file"})
-    return {"registered": registered, "skipped": skipped}
+    playlist_name = playlist_path.replace("\\", "/").rsplit("/", 1)[-1]
+    return {
+        "registered": registered,
+        "skipped": skipped,
+        "playlist_name": playlist_name,
+    }
