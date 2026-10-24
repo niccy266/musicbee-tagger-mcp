@@ -25,6 +25,13 @@ SAMPLE_TAGS = {
     "track_number": "7",
     "disc_number": "2",
     "musicbrainz_release_id": "9f8a2b1c-1111-2222-3333-444455556666",
+    "artist_sort": "Roundtrip Artist Sort",
+    "title_sort": "Roundtrip Title Sort",
+    "album_sort": "Roundtrip Album Sort",
+    "album_artist_sort": "Roundtrip Album Artist Sort",
+    "lastfm_title": "Roundtrip Last.fm Title",
+    "lastfm_artist": "Roundtrip Last.fm Artist",
+    "lastfm_url": "https://www.last.fm/music/roundtrip",
 }
 
 
