@@ -243,6 +243,7 @@ def test_apply_staged_not_in_mcp_server():
         "next_batch",
         "complete_batch",
         "job_status",
+        "list_jobs",
         "read_track_metadata",
         "extract_filename_clues",
         "get_batch_brief",

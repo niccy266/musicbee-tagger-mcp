@@ -11,7 +11,13 @@ import pytest
 from musicbee_tagger_mcp.file_registry import FileRegistry
 from musicbee_tagger_mcp.job_store import JobStore
 from musicbee_tagger_mcp.register_playlist_cli import run as cli_run
-from musicbee_tagger_mcp.tools.playlists import complete_batch, job_status, next_batch
+from scripts.openrouter_agent_loop import select_job_id
+from musicbee_tagger_mcp.tools.playlists import (
+    complete_batch,
+    job_status,
+    list_jobs,
+    next_batch,
+)
 
 
 @pytest.fixture
@@ -114,6 +120,77 @@ def test_job_status_never_leaks_paths_or_tokens(env):
     assert str(tmp_path) not in dumped
     assert ".mp3" not in dumped
     assert "token" not in dumped
+
+
+def test_list_jobs_returns_path_free_available_summaries(env):
+    reg, jobs, tmp_path = env
+    playlist = _playlist(tmp_path, count=3)
+    import io
+    stream = io.StringIO()
+    cli_run(input_stream=io.StringIO(f'"{playlist}"\n'), output_stream=stream)
+    (job_id,) = [
+        line.split()[-1].rstrip(".")
+        for line in stream.getvalue().splitlines()
+        if "playlist job" in line
+    ]
+
+    result = list_jobs()
+    assert len(result["jobs"]) == 1
+    assert result["jobs"][0]["job_id"] == job_id
+    assert result["jobs"][0]["playlist_name"] == "evening.m3u"
+    assert result["jobs"][0]["counts"]["pending"] == 3
+    serialized = json.dumps(result)
+    assert str(tmp_path) not in serialized
+    assert ".mp3" not in serialized
+    assert "token" not in serialized
+
+
+def test_list_jobs_excludes_jobs_without_pending_work(env):
+    reg, jobs, tmp_path = env
+    created = jobs.create_job([], "finished.m3u")
+
+    assert list_jobs() == {"jobs": []}
+    assert jobs.job_status(created["job_id"])["counts"]["pending"] == 0
+
+
+def test_agent_loop_selects_the_only_available_job(env, capsys):
+    _, jobs, tmp_path = env
+    created = jobs.create_job(
+        [{"token": "opaque-token", "display_name": "Track"}],
+        "available.m3u",
+    )
+
+    selected = select_job_id(None, jobs)
+
+    assert selected == created["job_id"]
+    assert created["job_id"] in capsys.readouterr().out
+
+
+def test_agent_loop_requires_an_id_when_multiple_jobs_are_available(env, capsys):
+    _, jobs, _ = env
+    first = jobs.create_job([{"token": "token-a", "display_name": "A"}], "first.m3u")
+    second = jobs.create_job([{"token": "token-b", "display_name": "B"}], "second.m3u")
+
+    with pytest.raises(SystemExit, match="Choose a job"):
+        select_job_id(None, jobs)
+
+    output = capsys.readouterr().out
+    assert first["job_id"] in output
+    assert second["job_id"] in output
+
+
+def test_agent_loop_requires_registration_when_no_jobs_are_available(env):
+    _, jobs, _ = env
+
+    with pytest.raises(SystemExit, match="Register a playlist"):
+        select_job_id(None, jobs)
+
+
+def test_agent_loop_uses_requested_job_id(env):
+    _, jobs, _ = env
+    created = jobs.create_job([], "requested.m3u")
+
+    assert select_job_id(created["job_id"], jobs) == created["job_id"]
 
 
 def test_unknown_job_handled_safely():
