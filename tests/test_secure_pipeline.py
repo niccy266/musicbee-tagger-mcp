@@ -240,6 +240,10 @@ def test_apply_staged_not_in_mcp_server():
     assert "apply_tags_to_file" not in tool_names
     assert "apply_tags_to_file" not in registered_tool_names
     assert registered_tool_names == {
+        "register_playlist",
+        "next_batch",
+        "complete_batch",
+        "job_status",
         "read_track_metadata",
         "extract_filename_clues",
         "get_batch_brief",
@@ -250,4 +254,7 @@ def test_apply_staged_not_in_mcp_server():
         "stage_tag_changes",
         "list_staged_changes",
     }
-    assert not {"register_files", "register_playlist"} & registered_tool_names
+    # register_files must stay CLI-only. register_playlist IS an MCP tool by
+    # explicit design: it takes a playlist location server-side and returns a
+    # job id only — see tests/test_path_leak_hardening.py.
+    assert "register_files" not in registered_tool_names
