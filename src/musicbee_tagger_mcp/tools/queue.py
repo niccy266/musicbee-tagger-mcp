@@ -1,6 +1,6 @@
 """MCP tools for shared, persistent batch-operation tracking."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from ..queue_store import OperationQueue
 

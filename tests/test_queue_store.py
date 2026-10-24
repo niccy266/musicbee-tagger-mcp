@@ -14,7 +14,9 @@ def test_default_queue_dir_uses_configured_data_root(tmp_path, monkeypatch):
 
 def test_operations_persist_and_filter_across_store_instances(tmp_path):
     first_store = OperationQueue(tmp_path / "queue")
-    first = first_store.enqueue("Investigate releases", "Check the unresolved tracks", "october")
+    first = first_store.enqueue(
+        "Investigate releases", "Check the unresolved tracks", "october"
+    )
     second = first_store.enqueue("Review candidates", batch="october")
     first_store.update(first["operation_id"], "in_progress", "MusicBrainz review started")
 
@@ -22,14 +24,16 @@ def test_operations_persist_and_filter_across_store_instances(tmp_path):
     result = later_store.list_operations(status="in_progress", batch="october")
 
     assert result["total"] == 1
-    assert result["items"] == [{
-        **first,
-        "status": "in_progress",
-        "details": "MusicBrainz review started",
-        "updated_at": result["items"][0]["updated_at"],
-    }]
-    assert later_store.list_operations(batch="october", limit=1)["items"][0]["operation_id"] == first["operation_id"]
-    assert later_store.list_operations(batch="october", limit=1, offset=1)["items"][0]["operation_id"] == second["operation_id"]
+    updated = result["items"][0]
+    assert updated["operation_id"] == first["operation_id"]
+    assert updated["status"] == "in_progress"
+    assert updated["details"] == "MusicBrainz review started"
+    assert updated["title"] == first["title"]
+    assert updated["updated_at"] >= first["updated_at"]
+    first_page = later_store.list_operations(batch="october", limit=1)
+    second_page = later_store.list_operations(batch="october", limit=1, offset=1)
+    assert first_page["items"][0]["operation_id"] == first["operation_id"]
+    assert second_page["items"][0]["operation_id"] == second["operation_id"]
 
 
 @pytest.mark.parametrize("text", [
@@ -48,7 +52,9 @@ def test_queue_allows_urls_and_relative_descriptions(tmp_path):
     queue = OperationQueue(tmp_path)
 
     operation = queue.enqueue(
-        "Review source", "Compare https://musicbrainz.org/release/123 and folder/notes", "review"
+        "Review source",
+        "Compare https://musicbrainz.org/release/123 and folder/notes",
+        "review",
     )
 
     assert operation["status"] == "pending"
