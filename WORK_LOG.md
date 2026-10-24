@@ -285,3 +285,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added a root `install.ps1` that builds a wheel from the current checkout in a temporary directory and invokes the existing Windows installer, so users can install without downloading or extracting a release archive.
 - Documented direct source installation, Python/launcher requirements, and install-root overrides; added a regression test for wheel building and installer argument forwarding.
 - Validation: full suite passed (103 passed, 4 skipped, 1 ffmpeg-dependent test deselected); PowerShell syntax parsed; local wheel build succeeded; end-to-end install into a disposable directory created all four expected launchers; `git diff --check` passed.
+
+### 2026-10-25 — Claude Desktop uv cross-volume setup diagnosis
+- Inspected Claude Desktop's local startup log for the v0.4.1 extension attempt. `uv sync` fails before server launch while persisting its interpreter cache (`os error 17`); the follow-on "No MCP config found" warning is because extension setup did not complete. The MCPB's `mcp_config.env` is applied after this setup phase and cannot fix the initial sync environment.
+- Documented a process-scoped PowerShell workaround to set `TEMP`, `TMP`, and `UV_CACHE_DIR` to the same `%LOCALAPPDATA%\uv\cache` directory before launching Claude Desktop, then reinstalling the failed extension. No persistent Windows environment variables were changed.
+- Validation: the PowerShell workaround block parses successfully; release/version tests passed (9), and `git diff --check` passed. Confirmed the diagnosed `uv sync` failure in Claude's local log occurs before MCP config environment is applied.
