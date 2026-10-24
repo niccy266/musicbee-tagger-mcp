@@ -40,8 +40,24 @@ operation queue. Use `enqueue_operation` and `list_operations` to create and
 query path-free work, and `claim_operations` / `complete_operation` to process
 it in coordinated batches across sessions and server restarts.
 
-1. Download the Windows release bundle and extract it.
-2. In PowerShell, run the included installer, supplying the downloaded wheel:
+To install directly from a source checkout without downloading or extracting a
+release bundle, run this from the repository root:
+
+```powershell
+.\install.ps1
+```
+
+This builds a wheel from the checkout in a temporary directory and passes it
+to the same installer used by the release bundle. Python 3 and the Windows
+`py` launcher are required. Override the default application and launcher
+directories if needed:
+
+```powershell
+.\install.ps1 -InstallRoot "D:\Apps\MusicBeeTagger" -BinRoot "D:\Tools\bin"
+```
+
+Alternatively, download and extract a Windows release bundle, then run its
+installer while supplying the included wheel:
 
    ```powershell
    .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.1-py3-none-any.whl

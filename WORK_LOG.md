@@ -280,3 +280,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated the local registration CLI to accept an optional quoted playlist path argument while preserving its interactive prompt when no argument is supplied; the Windows launcher already forwards arguments.
 - Documented argument usage and reiterated that playlist paths remain local. Added coverage for argument-based registration and launcher forwarding.
 - Validation: 28 focused playlist, job, and release tests passed; investigator skill copies are synchronized and `git diff --check` passed.
+
+### 2026-10-25 — Install directly from source checkout
+- Added a root `install.ps1` that builds a wheel from the current checkout in a temporary directory and invokes the existing Windows installer, so users can install without downloading or extracting a release archive.
+- Documented direct source installation, Python/launcher requirements, and install-root overrides; added a regression test for wheel building and installer argument forwarding.
+- Validation: full suite passed (103 passed, 4 skipped, 1 ffmpeg-dependent test deselected); PowerShell syntax parsed; local wheel build succeeded; end-to-end install into a disposable directory created all four expected launchers; `git diff --check` passed.

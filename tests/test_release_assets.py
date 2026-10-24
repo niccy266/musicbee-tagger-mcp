@@ -161,6 +161,19 @@ def test_human_playlist_registration_command_is_packaged():
     assert "Close MCP clients using this server" in installer
 
 
+def test_source_checkout_installer_builds_and_installs_local_wheel():
+    """Allow installing directly from the repository without extracting a release."""
+    installer = (ROOT / "install.ps1").read_text(encoding="utf-8")
+
+    assert "pip wheel --no-deps" in installer
+    assert "$repositoryRoot" in installer
+    assert "release\\windows\\install.ps1" in installer
+    assert "-WheelPath $wheels[0].FullName" in installer
+    assert "-InstallRoot $InstallRoot" in installer
+    assert "-BinRoot $BinRoot" in installer
+    assert "musicbee-tagger-wheel-" in installer
+
+
 def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
     """Keep the Claude Desktop extension manifest aligned with the package."""
     project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
