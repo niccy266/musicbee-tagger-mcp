@@ -240,6 +240,9 @@ def test_apply_staged_not_in_mcp_server():
     assert "apply_tags_to_file" not in tool_names
     assert "apply_tags_to_file" not in registered_tool_names
     assert registered_tool_names == {
+        "next_batch",
+        "complete_batch",
+        "job_status",
         "read_track_metadata",
         "extract_filename_clues",
         "get_batch_brief",
@@ -253,4 +256,6 @@ def test_apply_staged_not_in_mcp_server():
         "stage_tag_changes",
         "list_staged_changes",
     }
-    assert not {"register_files", "register_playlist"} & registered_tool_names
+    # Registration is CLI-only (musicbee-tagger-register-playlist creates the
+    # job locally). No MCP tool accepts a path or location of any kind.
+    assert "register_files" not in registered_tool_names

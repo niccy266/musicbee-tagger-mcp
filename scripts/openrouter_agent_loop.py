@@ -9,10 +9,11 @@ batch is done or the iteration cap is hit.
 Requires: OPENROUTER_API_KEY environment variable.
 Usage:
     export OPENROUTER_API_KEY=sk-or-...
-    python scripts/openrouter_agent_loop.py /path/to/music --model openai/gpt-4o-mini --apply
+    python scripts/openrouter_agent_loop.py <job_id> --model openai/gpt-4o-mini
 
 Notes:
-    - Files are registered locally; only opaque tokens reach the model.
+    - Playlists are registered by the MCP server; only opaque tokens reach
+      the model, in batches of 10 from the playlist job.
     - Staging is safe (manifest only). Tag writes still go through
       apply_staged.py after human review, unless --apply is passed.
 """
@@ -29,7 +30,7 @@ from pathlib import Path
 # Allow running from a source checkout without installing.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from musicbee_tagger_mcp.file_registry import get_registry  # noqa: E402
+  # noqa: E402
 from musicbee_tagger_mcp.tools.inspection import (  # noqa: E402
     extract_filename_clues,
     get_batch_brief,
@@ -44,9 +45,10 @@ from musicbee_tagger_mcp.tools.tags import (  # noqa: E402
     stage_tag_changes,
 )
 from musicbee_tagger_mcp.tools.text import repair_mojibake  # noqa: E402
+from musicbee_tagger_mcp.job_store import JobStore  # noqa: E402
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-AUDIO_SUFFIXES = {".mp3", ".flac", ".m4a", ".wav", ".ogg", ".opus", ".wma"}
+OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+RETRYABLE_STATUS = {429, 500, 502, 503}
 BATCH_SIZE = 10
 
 SYSTEM_PROMPT = """\
@@ -190,43 +192,38 @@ LOCAL_TOOLS = {
 
 
 def call_openrouter(messages, model, api_key, temperature=0.2, retries=3):
-    """One chat completion with tool support, via stdlib urllib."""
-    import urllib.error
-    import urllib.request
+    """One chat completion with tool support, via the openai SDK pointed at
+    OpenRouter (https://openrouter.ai/docs/quickstart#using-the-client-sdks).
+    Returns the raw OpenAI-shaped dict the batch loop expects."""
+    from openai import APIStatusError, APITimeoutError, OpenAI
 
-    body = {
-        "model": model,
-        "messages": messages,
-        "tools": TOOLS,
-        "temperature": temperature,
-    }
-    request = urllib.request.Request(
-        OPENROUTER_URL,
-        data=json.dumps(body).encode(),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
+    client = OpenAI(
+        api_key=api_key,
+        base_url=OPENROUTER_BASE,
+        timeout=120,
+        default_headers={
             "HTTP-Referer": "https://github.com/niccy266/musicbee-tagger-mcp",
             "X-Title": "musicbee-tagger-agent",
         },
     )
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                return json.loads(response.read())
-        except urllib.error.HTTPError as error:
-            if error.code in (429, 500, 502, 503) and attempt < retries - 1:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=TOOLS,
+                temperature=temperature,
+            )
+            return response.model_dump(mode="json")
+        except (APITimeoutError, APIStatusError) as error:
+            status = getattr(error, "status_code", None)
+            retryable = status in RETRYABLE_STATUS or status is None
+            if retryable and attempt < retries - 1:
                 time.sleep(2 ** attempt)
                 continue
-            raise RuntimeError(f"OpenRouter error {error.code}: {error.read()[:300]}")
+            detail = str(error)[:300]
+            raise RuntimeError(f"OpenRouter error {status or 'timeout'}: {detail}")
     raise RuntimeError("OpenRouter unreachable")
-
-
-def collect_audio_files(root: Path):
-    return sorted(
-        p for p in root.rglob("*")
-        if p.is_file() and p.suffix.lower() in AUDIO_SUFFIXES
-    )
 
 
 def run_batch(tokens, model, api_key, max_turns, state, state_path):
@@ -319,7 +316,7 @@ def save_state(path, state):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("folder", type=Path, help="Folder of audio files")
+    parser.add_argument("job_id", help="Playlist job id from the register_playlist MCP tool")
     parser.add_argument("--model", default="openai/gpt-4o-mini")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     parser.add_argument("--max-turns", type=int, default=15)
@@ -332,41 +329,60 @@ def main():
     if not api_key:
         sys.exit("Set OPENROUTER_API_KEY (create one at https://openrouter.ai/keys)")
 
-    files = collect_audio_files(args.folder)
-    if not files:
-        sys.exit(f"No audio files found under {args.folder}")
+    jobs = JobStore()
+    try:
+        status = jobs.job_status(args.job_id)
+    except (ValueError, RuntimeError):
+        sys.exit("Unknown job id")
+    if "error" in status:
+        sys.exit(status["error"])
+    print(f"Job {args.job_id} ({status['playlist_name']!r}): "
+          f"{status['counts']['pending']} pending")
 
     state = json.loads(args.state.read_text()) if args.state.exists() else {}
     done = set(state.get("staged_by_file", [])) if args.resume else set()
 
-    print(f"{len(files)} audio files found")
-    for start in range(0, len(files), args.batch_size):
-        batch_paths = [p for p in files[start:start + args.batch_size] if p not in done]
-        if not batch_paths:
-            continue
-        registry = get_registry()
-        registered = registry.register_many([str(p) for p in batch_paths])
-        tokens = [r["token"] for r in registered]
-        names = [r["display_name"] for r in registered]
+    batch_number = 0
+    while True:
+        claim = jobs.next_batch(args.job_id, size=args.batch_size)
+        if "error" in claim:
+            sys.exit(claim["error"])
+        if not claim["batch"]:
+            break
+        batch_number += 1
+        tokens = [entry["token"] for entry in claim["batch"]]
+        names = [entry["display_name"] for entry in claim["batch"]]
 
         batch_state = {
-            "batch": start // args.batch_size + 1,
+            "batch": batch_number,
             "files": names,
             "tokens": tokens,
             "staged": [],
             "unresolved": [],
             "finished": False,
         }
-        print(f"Batch {batch_state['batch']}: {', '.join(names)}")
+        print(f"Batch {batch_number} ({claim['remaining']} after): {', '.join(names)}")
         run_batch(tokens, args.model, api_key, args.max_turns, batch_state, args.state)
+
+        results = [
+            {"token": token, "success": token in batch_state["staged"]}
+            for token in tokens
+        ]
+        jobs.complete_batch(args.job_id, results)
 
         staged_names = {
             names[i] for i, tok in enumerate(tokens) if tok in batch_state["staged"]
         }
-        state.setdefault("staged_by_file", []).extend(sorted(staged_names))
+        state.setdefault("staged_by_file", []).extend(sorted(staged_names - done))
         save_state(args.state, state)
 
-    print(f"Done. Review staged manifests, then run apply_staged to write tags.")
+    status = jobs.job_status(args.job_id)
+    counts = status["counts"]
+    print(
+        f"Done. {counts['done']} done, {counts['failed']} failed, "
+        f"{counts['in_progress']} in progress. "
+        "Review staged manifests, then run apply_staged to write tags."
+    )
 
 
 if __name__ == "__main__":

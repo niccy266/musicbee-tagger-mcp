@@ -9,6 +9,7 @@ dependencies = [
     "mutagen>=1.47.0",
     "musicbrainzngs>=0.7.1",
     "ftfy>=6.2.0",
+    "openai>=1.40.0",
 ]
 
 [project.optional-dependencies]

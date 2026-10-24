@@ -4,6 +4,7 @@ from .inspection import register_inspection_tools
 from .musicbrainz import register_musicbrainz_tools
 from .queue import register_queue_tools
 from .tags import register_tag_tools
+from .playlists import register_playlist_tools
 from .text import register_text_tools
 
 
@@ -12,4 +13,5 @@ def register_tools(app) -> None:
     register_musicbrainz_tools(app)
     register_queue_tools(app)
     register_tag_tools(app)
+    register_playlist_tools(app)
     register_text_tools(app)
