@@ -236,12 +236,6 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated the human/MCP guide, README, and investigator skill to document the queue tools and storage behavior.
 - Validation: 23 focused queue, privacy, and skill-sync tests passed; Pylint `--errors-only` and `git diff --check` passed. Full suite: 78 passed, 4 skipped, with two unrelated failures (missing external probe executable for an M4A fixture and the existing package/plugin version mismatch).
 
-### 2026-10-25 — Claude Desktop MCP Bundle
-- Added a Claude Desktop `.mcpb` package using the MCPB `uv` runtime and versioned manifest; the bundle includes the Python project metadata and runtime source only.
-- Extended the release builder to emit the standalone bundle and include it in the Windows release archive. Documented installation, the default private data directory, and the separate human-only playlist registration workflow.
-- Removed the superseded operation-queue tool registration retained during the upstream merge so the active MCP surface matches the current SQLite-backed queue.
-- Validation: release/privacy tests passed (22); the full suite passed (94 passed, 4 skipped) with the M4A conversion test deselected because `ffmpeg` is unavailable. Built and inspected `musicbee-tagger-mcp-0.3.0.mcpb` and the Windows release archive; the MCPB is a valid ZIP with the expected manifest and runtime files.
-
 ### 2026-10-24 — v0.2.0 field map, OpenAI SDK, and playlist jobs
 - Field-map refactor: one canonical `FieldSpec` table driving ID3/Vorbis/MP4 read+write; 12 canonical fields over 53 format-native keys. Added sort fields (artist/title/album/album_artist → TSO2/TSOT/TSOA/TSOP, Vorbis, MP4 atoms) and Last.fm passthrough fields (lastfm_title/artist/url as TXXX/Vorbis/freeform). Documented in docs/field-map.md (#19).
 - Real-file test suite (19 tests) covering read parity, Unicode/Cyrillic round-trips, corrupted tags, and fingerprint reconciliation on synthetic MP3/FLAC/M4A fixtures (#17).
@@ -251,3 +245,15 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Release v0.2.0: tagged and published; release assets (Claude marketplace/plugin, Windows bundle, wheel, sdist) built with scripts/build_release.py and uploaded. `release-ready-mcp` branch fast-forwarded to v0.2.0.
 - Repo health: version-alignment test caught stale 0.1.2 in plugin manifest, `__init__.__version__`, README, and launchers — all aligned to 0.2.0; merged via PR #21. CI green on master.
 - Validation: 82 tests pass (1 skipped), pylint errors-only clean, CI success on master.
+
+### 2026-10-25 — Shared queue schema consolidation
+- Consolidated the historical agent-operation and batch-operation stores onto the same SQLite table to prevent incompatible schemas from making the queue depend on which MCP tool initialized it first.
+- Added an in-place migration that preserves queued work from either prior schema, plus regression coverage for cross-API visibility, status updates, claiming, and completion.
+- Updated the human/agent guide to describe only the registered batch-queue MCP tools and the shared persistent store.
+- Validation: 14 focused queue tests passed; full suite excluding the unavailable ffmpeg-dependent test passed (94 passed, 3 skipped, 2 deselected).
+
+### 2026-10-25 — Claude Desktop MCP Bundle
+- Added a Claude Desktop `.mcpb` package using the MCPB `uv` runtime and versioned manifest; the bundle includes the Python project metadata and runtime source only.
+- Extended the release builder to emit the standalone bundle and include it in the Windows release archive. Documented installation, the default private data directory, and the separate human-only playlist registration workflow.
+- Removed the superseded operation-queue tool registration retained during the upstream merge so the active MCP surface matches the current SQLite-backed queue.
+- Validation: release/privacy tests passed (22); the full suite passed (94 passed, 4 skipped) with the M4A conversion test deselected because `ffmpeg` is unavailable. Built and inspected `musicbee-tagger-mcp-0.3.0.mcpb` and the Windows release archive; the MCPB is a valid ZIP with the expected manifest and runtime files.
