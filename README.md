@@ -38,7 +38,7 @@ after investigations.
 2. In PowerShell, run the included installer, supplying the downloaded wheel:
 
    ```powershell
-   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.1.2-py3-none-any.whl
+   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.2.0-py3-none-any.whl
    ```
 
    Before upgrading an existing installation, close MCP clients using the

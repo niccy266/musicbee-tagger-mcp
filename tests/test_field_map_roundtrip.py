@@ -47,7 +47,10 @@ def _assert_field_roundtrip(field, written, read):
 def _media_file(tmp_path, ext: str):
     """Generate a tiny real audio file with ffmpeg (bare container headers
     are not enough for mutagen to open)."""
+    import shutil
     import subprocess
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg not available")
     p = tmp_path / f"t.{ext}"
     subprocess.run(
         ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
