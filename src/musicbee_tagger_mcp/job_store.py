@@ -30,9 +30,10 @@ class JobStore:
         return self.directory or default_jobs_dir()
 
     def create_job(
-        self, entries: List[Dict[str, Any]], playlist_name: str
+        self, entries: List[Dict[str, Any]], playlist_name: str,
+        skipped: int = 0,
     ) -> Dict[str, Any]:
-        """Persist a job from registered token entries (plus skipped lines)."""
+        """Persist a job from registered token entries (plus skipped count)."""
         job_id = str(uuid.uuid4())
         job = {
             "job_id": job_id,
@@ -46,6 +47,7 @@ class JobStore:
                 }
                 for entry in entries
             ],
+            "skipped": skipped,
         }
         path = self._dir() / f"{job_id}.json"
         try:
@@ -57,7 +59,7 @@ class JobStore:
         return {
             "job_id": job_id,
             "registered": len(job["tracks"]),
-            "skipped": len(entries) - len(job["tracks"]),
+            "skipped": skipped,
         }
 
     def load_job(self, job_id: str) -> Dict[str, Any]:
@@ -155,6 +157,7 @@ class JobStore:
             "job_id": job_id,
             "playlist_name": job["playlist_name"],
             "counts": counts,
+            "skipped": job.get("skipped", 0),
             "failed": failed,
         }
 
