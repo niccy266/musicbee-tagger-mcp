@@ -59,3 +59,61 @@ def test_plugin_version_matches_project_version():
     )
 
     assert plugin["version"] == project_version
+
+
+def test_plugin_bundles_the_investigator_skill():
+    """Keep Claude's plugin skill discoverable and synchronized with its source."""
+    source_skill = (
+        ROOT / ".agents" / "skills" / "musicbee-investigator" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    plugin_skill = (
+        ROOT
+        / "release"
+        / "claude-marketplace"
+        / "plugins"
+        / "musicbee-tagger"
+        / "skills"
+        / "musicbee-investigator"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    assert plugin_skill == source_skill
+    assert "name: musicbee-investigator" in plugin_skill
+    assert "description:" in plugin_skill
+
+
+def test_repository_marketplace_tracks_plugin_in_release_tree():
+    """Expose the release plugin through a repository-hosted marketplace."""
+    marketplace = json.loads(
+        (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
+    )
+
+    assert marketplace["name"] == "musicbee-tagger"
+    assert marketplace["plugins"][0]["name"] == "musicbee-tagger"
+    assert (
+        marketplace["plugins"][0]["source"]
+        == "./release/claude-marketplace/plugins/musicbee-tagger"
+    )
+
+
+def test_human_playlist_registration_command_is_packaged():
+    """Ensure the private registration CLI is installed alongside the server."""
+    project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    installer = (ROOT / "release" / "windows" / "install.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        'musicbee-tagger-register-playlist = '
+        '"musicbee_tagger_mcp.register_playlist_cli:main"'
+    ) in project
+    assert (
+        'musicbee-tagger-clear-registrations = '
+        '"musicbee_tagger_mcp.clear_registrations_cli:main"'
+    ) in project
+    assert "musicbee-tagger-register-playlist.exe" in installer
+    assert "musicbee-tagger-register-playlist.cmd" in installer
+    assert "musicbee-tagger-clear-registrations.exe" in installer
+    assert "musicbee-tagger-clear-registrations.cmd" in installer
+    assert "Get-CimInstance Win32_Process" in installer
+    assert "Close MCP clients using this server" in installer

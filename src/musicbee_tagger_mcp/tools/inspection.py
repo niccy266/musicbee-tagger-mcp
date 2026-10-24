@@ -10,7 +10,11 @@ from ..metadata_reader import read_audio_metadata
 def read_track_metadata(token: str) -> Dict[str, Any]:
     """Read metadata for a registered track without returning its path."""
     path = get_registry().resolve(token)
-    metadata = read_audio_metadata(str(path))
+    try:
+        metadata = read_audio_metadata(str(path))
+    except Exception:
+        # File-reader exceptions may include the absolute path.
+        return {"error": "Unable to read track metadata"}
     metadata.pop("file_path", None)
     return metadata
 
@@ -37,8 +41,9 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
                 "tags": metadata.get("tags", {}),
                 "filename_clues": extract_clues_from_filename(path.name),
             })
-        except Exception as error:
-            briefs.append({"token": token, "error": str(error)})
+        except Exception:
+            # File-reader exceptions may include the absolute path.
+            briefs.append({"token": token, "error": "Unable to read track metadata"})
     return briefs
 
 

@@ -41,12 +41,12 @@
     <section id="safety">
       <h2>Safety model</h2>
       <ul>
-        <li>Paths are accepted only during <code>register_files</code> or <code>register_playlist</code>. The server replaces them with opaque tokens; use tokens for every later MCP call.</li>
-        <li>Never echo, log, or send absolute audio or playlist paths to an agent. Registration responses expose only display names, tokens, and (for playlists) entry line numbers.</li>
+        <li>No MCP tool accepts playlist or audio paths. Register playlists yourself in a separate local terminal; only opaque tokens are sent through MCP.</li>
+        <li>Never echo, log, or send absolute audio or playlist paths to an agent. The local registration command outputs only tokens, bare filenames, and path-free skip reasons.</li>
         <li>MCP tools do not write audio. A successful stage creates a pending manifest, not a tag edit.</li>
         <li>Only the user-controlled CLI applies staged edits. Review the diff before answering yes to its prompt.</li>
       </ul>
-      <p class="notice"><strong>Agent boundary:</strong> Do not run the apply CLI or otherwise modify audio files. Staging is allowed only after candidate verification passes.</p>
+      <p class="notice"><strong>Agent boundary:</strong> Do not run the apply CLI or otherwise modify audio files. Staging is allowed only after candidate verification passes. Human-only registration keeps paths out of MCP calls, but it is not a Windows security boundary against an agent with unrestricted shell access as the same user.</p>
     </section>
 
     <section id="cli">
@@ -65,7 +65,9 @@
     }
   }
 }</code></pre>
-      <p>For playlist investigation, give the playlist path only to <code>register_playlist</code>. For individual files, use <code>register_files</code>. After the agent reports staged proposals, inspect them in the terminal:</p>
+      <p>To register a playlist without exposing its path to the agent, open a separate PowerShell window (not the agent-controlled terminal) and run the human-only registration command. Enter the playlist path at its prompt, then paste only the returned tokens into the agent conversation:</p>
+      <pre><code>.\.venv\Scripts\musicbee-tagger-register-playlist.exe</code></pre>
+      <p>For the release installation, run <code>K:\bin\musicbee-tagger-register-playlist.cmd</code> instead. Path-to-token mappings are stored under <code>K:\tools\mcp-servers\musicbee-tags\data\registered\</code> and persist across MCP restarts and logins for the same Windows user. After the agent reports staged proposals, inspect them in the terminal:</p>
       <pre><code>.\.venv\Scripts\python.exe -m musicbee_tagger_mcp.apply_staged --list
 .\.venv\Scripts\python.exe -m musicbee_tagger_mcp.apply_staged --all --dry-run</code></pre>
       <p>Apply one proposal interactively, or all pending proposals interactively:</p>
@@ -81,21 +83,21 @@
     <section id="release">
       <h2>Windows desktop release and Claude Code</h2>
       <p>The release bundle contains a Python wheel, source distribution, Windows installer, standalone Claude Code MCP config, and a Claude Code plugin marketplace. Extract the release bundle, then install the wheel into a dedicated environment:</p>
-      <pre><code>.\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.1.0-py3-none-any.whl</code></pre>
-      <p>The installer defaults to <code>K:\tools\mcp-servers\musicbee-tags\</code>, stores stage data separately under <code>data\staged\</code>, and creates <code>K:\bin\musicbee-tagger-mcp.cmd</code> and <code>K:\bin\musicbee-tagger-apply.cmd</code>. Existing data is preserved during reinstall. Override <code>-InstallRoot</code> or <code>-BinRoot</code> only if the MCP config and plugin launcher paths are updated to match.</p>
+      <pre><code>.\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.1.2-py3-none-any.whl</code></pre>
+      <p>The installer defaults to <code>K:\tools\mcp-servers\musicbee-tags\</code>, stores stage data under <code>data\staged\</code> and private token mappings under <code>data\registered\</code>, and creates <code>K:\bin\musicbee-tagger-mcp.cmd</code>, <code>K:\bin\musicbee-tagger-apply.cmd</code>, <code>K:\bin\musicbee-tagger-register-playlist.cmd</code>, and <code>K:\bin\musicbee-tagger-clear-registrations.cmd</code>. Existing data is preserved during reinstall. Close MCP clients before upgrading; the installer refuses to run while the server process is active. Override <code>-InstallRoot</code> or <code>-BinRoot</code> only if the MCP config and plugin launcher paths are updated to match.</p>
       <p>To install the MCP server into Claude Code's user scope from PowerShell, load the provided <code>release/claude-code/mcp-config.json</code> entry:</p>
       <pre><code>$server = (Get-Content .\mcp-config.json -Raw | ConvertFrom-Json).mcpServers.'musicbee-tagger'
 $json = $server | ConvertTo-Json -Compress -Depth 10
 claude mcp add-json --scope user musicbee-tagger $json
 claude mcp get musicbee-tagger</code></pre>
-      <p>Alternatively, add the extracted <code>claude-marketplace</code> directory with <code>claude plugin marketplace add .\claude-marketplace</code>, then install it with <code>claude plugin install musicbee-tagger@musicbee-tagger</code>. Restart or reload Claude Code after configuration. The MCP process and apply CLI share the private data root through <code>MUSICBEE_TAGGER_DATA_DIR</code>; manually invoking the CLI requires setting the same variable first.</p>
-      <p>Pending stage manifests are the only application state currently persisted. Back up the install's <code>data</code> folder to preserve them. Search logs, applied-record archives, retry queues, and confidence-based auto-staging are not part of this release.</p>
+      <p>Alternatively, add the extracted <code>claude-marketplace</code> directory with <code>claude plugin marketplace add .\claude-marketplace</code>, then install it with <code>claude plugin install musicbee-tagger@musicbee-tagger</code>. The plugin includes the model-invocable <code>musicbee-investigator</code> skill. After extracting a newer release over the existing marketplace directory, run <code>claude plugin marketplace update musicbee-tagger</code> and <code>claude plugin update musicbee-tagger@musicbee-tagger</code>, then restart Claude Code. The MCP process and apply CLI share the private data root through <code>MUSICBEE_TAGGER_DATA_DIR</code>; manually invoking the CLI requires setting the same variable first.</p>
+      <p>Pending stage manifests and token-to-path registrations are persisted in the install's <code>data</code> folder. Back it up to preserve them. Clear registrations after use with <code>K:\bin\musicbee-tagger-clear-registrations.cmd</code>; the command asks for confirmation and does not remove staged proposals. Search logs, applied-record archives, retry queues, and confidence-based auto-staging are not part of this release.</p>
     </section>
 
     <section id="agent">
       <h2>MCP agent: investigation procedure</h2>
       <ol>
-        <li><strong>Register once.</strong> Call <code>register_files(paths)</code> or <code>register_playlist(playlist_path)</code>. Keep paths confined to that call; retain the returned tokens.</li>
+        <li><strong>Receive human-registered tokens.</strong> Never request or pass a playlist/audio path in chat, MCP, or an agent-controlled terminal. Ask the user to run <code>K:\bin\musicbee-tagger-register-playlist.cmd</code> in a separate PowerShell window and paste the returned tokens.</li>
         <li><strong>Read one batch brief.</strong> Call <code>get_batch_brief(tokens)</code>. Use embedded tags, duration, and filename clues. Filename artist/title order is ambiguous.</li>
         <li><strong>Repair text carefully.</strong> Use <code>repair_mojibake</code> when encoding appears corrupted. Treat filename clues as hypotheses, not facts.</li>
         <li><strong>Search and corroborate.</strong> Call <code>search_canonical_release</code> with a plausible artist, title, duration, and useful clues. Use web research for weak, conflicting, or incomplete matches. Record reliable source links when they affect a decision.</li>
@@ -103,8 +105,8 @@ claude mcp get musicbee-tagger</code></pre>
         <li><strong>Preview, then stage.</strong> Call <code>preview_tags</code>; propose only supported fields corroborated by evidence. Stage only a non-empty, reviewed diff using <code>stage_tag_changes</code>.</li>
         <li><strong>Report and stop.</strong> Confirm staged names, fields, confidence, and duration difference using <code>list_staged_changes</code>. Explain unresolved tracks and why. Tell the user to review/apply in the CLI; do not apply changes yourself.</li>
       </ol>
-      <p>Reuse the same MCP server process for a batch where possible: tokens are process-local and may not survive a restart. Return concise per-track results instead of full raw responses. Respect the MusicBrainz limit of one request per second; never parallelize requests to evade it.</p>
-      <p>For delegated investigation, keep playlist/audio paths in the parent session. Confirm the subagent has access to the same MCP process before asking it to use tokens. If not, delegate only sanitized metadata analysis and let the parent perform token-dependent verification and staging.</p>
+      <p>Token mappings persist in the configured data directory and survive MCP restarts and logins for the same user and install. Return concise per-track results instead of full raw responses. Respect the MusicBrainz limit of one request per second; never parallelize requests to evade it.</p>
+      <p>Never request, repeat, or delegate playlist/audio paths. Tokens may be shared with a subagent only if it can access the same MCP server and local registration store; otherwise perform token-dependent verification and staging in the parent.</p>
       <p>The detailed agent workflow is also available in <a href="../.agents/skills/musicbee-investigator/SKILL.md">the investigator skill</a>.</p>
     </section>
 
@@ -113,8 +115,6 @@ claude mcp get musicbee-tagger</code></pre>
       <table>
         <thead><tr><th scope="col">Tool</th><th scope="col">Purpose</th><th scope="col">Path handling</th></tr></thead>
         <tbody>
-          <tr><td><code>register_files</code></td><td>Register local audio files; returns tokens and bare display names.</td><td>Accepts paths.</td></tr>
-          <tr><td><code>register_playlist</code></td><td>Register supported local entries from M3U/M3U8, resolving relative entries against the playlist folder.</td><td>Accepts playlist path; returns no paths.</td></tr>
           <tr><td><code>read_track_metadata</code></td><td>Read tags, format, and audio properties for one token.</td><td>Token only.</td></tr>
           <tr><td><code>extract_filename_clues</code></td><td>Extract filename clues for one token.</td><td>Token only.</td></tr>
           <tr><td><code>get_batch_brief</code></td><td>Read tags, duration, format, and clues for multiple tokens.</td><td>Tokens only.</td></tr>
@@ -133,7 +133,7 @@ claude mcp get musicbee-tagger</code></pre>
       <ul>
         <li><code>src/musicbee_tagger_mcp/server.py</code> — small MCP app assembly and stdio entrypoint; tool implementations live in <code>tools/</code>, grouped by domain.</li>
         <li><code>src/musicbee_tagger_mcp/musicbrainz_client.py</code> — compatibility facade; API setup, shared scoring, search, and verification live in focused sibling modules.</li>
-        <li><code>src/musicbee_tagger_mcp/file_registry.py</code> and <code>playlist.py</code> — tokenized file registration and M3U/M3U8 parsing.</li>
+        <li><code>src/musicbee_tagger_mcp/file_registry.py</code>, <code>register_playlist_cli.py</code>, and <code>playlist.py</code> — persistent token registration, human-only playlist handoff, and M3U/M3U8 parsing.</li>
         <li><code>src/musicbee_tagger_mcp/metadata_reader.py</code> and <code>filename_parser.py</code> — embedded metadata and filename clues.</li>
         <li><code>staging.py</code> and <code>stage_manifest_store.py</code> — pending proposals and manifest persistence; <code>staged_apply.py</code>, <code>tag_applier.py</code>, and <code>tag_format_writers.py</code> — CLI-only physical audio writes. MCP preview uses <code>tag_preview.py</code>.</li>
         <li><code>tests/</code> — regression tests; <code>.agents/skills/musicbee-investigator/SKILL.md</code> — detailed agent procedure; <code>docs/index.html</code> — this human/agent web guide.</li>
@@ -159,7 +159,7 @@ claude mcp get musicbee-tagger</code></pre>
       <p>Proposed safeguards for that wrapper: validate and cap batch size, deduplicate normalized queries, keep sequential rate limiting, isolate per-track errors, avoid caching transient failures, and test cache keys/expiration and privacy-safe output. A minimal version is a few hours of focused work; production-ready retry and cache tests could make it roughly a half-day to a day, depending on how much resilience is desired.</p>
 
       <h3>Persistent state and database evaluation</h3>
-      <p>Consider replacing staged-change JSON manifests with a database only if measured needs justify it, such as durable searchable stage history, concurrent clients, or multi-user operation. The current token-to-path registry is process-local memory, metadata is read from audio files on demand, and small stage manifests are the only routine application persistence. A database is not expected to speed up audio metadata reads or physical tag writes.</p>
+      <p>Consider replacing staged-change JSON manifests with a database only if measured needs justify it, such as durable searchable stage history, concurrent clients, or multi-user operation. Token mappings and stage manifests are persisted as local JSON records; metadata is read from audio files on demand. A database is not expected to speed up audio metadata reads or physical tag writes.</p>
       <p>Before choosing a backend, benchmark registration, metadata reading, MusicBrainz requests, stage creation/listing, and CLI apply separately. For a single-user local stdio server, evaluate SQLite first because it provides transactional durable state without requiring a separate server. Consider PostgreSQL if the product becomes a shared service or needs multi-user concurrency, and account for authentication, per-user ownership, schema migrations, backups, and operations.</p>
       <p>Any persistent backend must preserve the path privacy and user-controlled write model: restrict access to stored paths, never expose them in MCP responses or logs, isolate records by session/user, and keep physical audio writes exclusive to the explicit user-controlled CLI. A remote database does not give a remote MCP host safe access to audio files on a user's computer. Treat this as an evaluation proposal, not a decision to adopt PostgreSQL.</p>
 

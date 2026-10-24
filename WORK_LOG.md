@@ -200,3 +200,29 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added a distributable README, a repeatable release builder for wheel, source distribution, plugin archive, and Windows release bundle, and aligned the human guide.
 - Added regression tests for configured data-root selection and path-sanitized failures. No audio files were modified.
 - Validation: all 36 tests pass; changed Python files score 10/10 in Pylint with the pre-existing broad-exception warning excluded; built the wheel, source distribution, plugin archive, marketplace archive, and Windows bundle; installed the wheel into an isolated test location; confirmed the generated launcher completes MCP initialization and exposes the existing 11 tools without an apply/write tool. The Claude CLI is not installed here, so interactive plugin installation could not be exercised.
+
+### 2026-10-24 — Correct Pylint CI environment and scope
+- Updated the Pylint workflow to install the project and its development dependencies from `pyproject.toml`, eliminating unresolved-import noise caused by installing only Pylint.
+- Limited lint scope to application source rather than mixing test-style diagnostics into the application score.
+- Kept the full Pylint report and score visible as advisory output, while making Pylint errors a separate blocking step. Existing warnings remain visible for gradual cleanup rather than making every push fail on an unconfigured legacy baseline.
+- Validation: the revised report completes with a 9.13/10 application-source score and no unresolved-import findings; the separate `--errors-only` gate passes.
+
+### 2026-10-24 — Bundle investigator skill in Claude plugin
+- Added the `musicbee-investigator` skill at the Claude plugin's root-level `skills/` directory and a regression test that keeps it synchronized with the project skill source.
+- Clarified that the MCP server boundary does not prevent shell-based audio writes, and that unresolved candidates should be reported to the user because no MCP review-flagging tool exists.
+- Bumped package and plugin metadata to `0.1.1`; updated the Windows install examples and documented refreshing an installed local marketplace plugin.
+- Validation: all 37 tests pass, Pylint `--errors-only` passes, Claude Code plugin validation passes with marketplace metadata warnings, and the plugin/marketplace/Windows release archives build with the new skill.
+
+### 2026-10-24 — Add persistent GitHub-hosted Claude marketplace
+- Added a repository-root Claude marketplace catalog pointing to the maintained plugin directory on the `release-ready-mcp` branch.
+- Updated installation guidance to distinguish local release-bundle snapshots from the GitHub-hosted marketplace and document migration/update commands.
+- Added regression coverage for the root marketplace catalog. The local marketplace was confirmed to point into the extracted v0.1.0 bundle; future updates need a Git-backed source to follow repository commits.
+
+### 2026-10-24 — Human-only persistent playlist registration
+- Removed path-taking playlist/file registration from the MCP tool surface. Added a human-run local playlist registration command that reads a path from a separate terminal and outputs only tokens, bare filenames, and path-free skip reasons.
+- Persisted token-to-path records under the configured data directory so MCP tools can resolve tokens across process restarts and logins for the same user/install. Added a confirmation-gated cleanup command for registration records.
+- Sanitized metadata, preview, and staging errors at MCP boundaries to prevent file paths in tool responses. Updated investigator instructions, Windows launchers, release docs, and tests.
+- Privacy boundary: this prevents paths from entering chat and MCP request/response payloads; it does not defend against arbitrary same-user shell access. A separate Windows service account is needed for that stronger threat model.
+- Validation: all 44 tests passed, Pylint `--errors-only` passed, Claude marketplace validation passed with its existing missing-author warning, installer syntax parsed, and `git diff --check` passed. Built and inspected the 0.1.2 wheel, source distribution, Claude plugin/marketplace archives, and Windows bundle; the release-specific tests passed (5 tests).
+- Added an installer preflight that refuses upgrades while this server executable is running, avoiding Windows file-lock failures before pip modifies the installed package. Updated the Windows bundle and upgrade instructions.
+- Installed 0.1.2 locally, verified all four launchers and `pip check`, completed an MCP handshake with exactly nine tools, and smoke-tested the installed registration CLI using a synthetic playlist. Its output contained no test path, and the token resolved from a fresh registry instance; the existing registration-record count remained unchanged (zero).

@@ -1,7 +1,7 @@
 """Tests for the secure token-based pipeline.
 
 Verifies:
-1. register_files returns tokens, never paths.
+1. The local registry returns tokens, never paths, and persists registrations.
 2. Unregistered tokens raise KeyError (not silently pass).
 3. stage_tag_changes returns a stage_id, never a path.
 4. list_staged_changes never exposes paths.
@@ -66,40 +66,89 @@ def test_register_display_name_is_filename_only(registry, tmp_audio):
     assert result["display_name"] == tmp_audio.name
 
 
-@pytest.mark.parametrize(
-    ("error", "expected"),
-    [
-        (FileNotFoundError, "File not found"),
-        (PermissionError, "Unable to access file"),
-    ],
-)
-def test_register_files_error_does_not_expose_path(
-    tmp_path, monkeypatch, error, expected
-):
-    from musicbee_tagger_mcp.tools import files as file_tools
-
-    missing_path = str(tmp_path / "private" / "missing.mp3")
-
-    class MissingFileRegistry:
-        def register(self, path):
-            raise error(f"File operation failed: {path}")
-
-    monkeypatch.setattr(file_tools, "get_registry", lambda: MissingFileRegistry())
-
-    result = file_tools.register_files([missing_path])
-
-    assert result == [{"error": expected}]
-    assert missing_path not in json.dumps(result)
-
-
 def test_resolve_returns_path_internally(registry, tmp_audio):
     result = registry.register(str(tmp_audio))
     resolved = registry.resolve(result["token"])
     assert resolved == tmp_audio.resolve()
 
 
+def test_persistent_registry_resolves_token_after_restart(tmp_path, tmp_audio):
+    data_directory = tmp_path / "registered"
+    first_process_registry = FileRegistry(data_directory)
+
+    result = first_process_registry.register(str(tmp_audio))
+    restarted_process_registry = FileRegistry(data_directory)
+
+    assert restarted_process_registry.resolve(result["token"]) == tmp_audio.resolve()
+    assert restarted_process_registry.list_tokens() == [{
+        "token": result["token"],
+        "display_name": tmp_audio.name,
+    }]
+    assert str(tmp_audio) not in json.dumps(result)
+    assert str(tmp_audio) not in json.dumps(restarted_process_registry.list_tokens())
+
+
+def test_batch_brief_sanitizes_metadata_errors(tmp_path, tmp_audio, monkeypatch):
+    from musicbee_tagger_mcp.tools import inspection
+
+    registry = FileRegistry()
+    token = registry.register(str(tmp_audio))["token"]
+    monkeypatch.setattr(inspection, "get_registry", lambda: registry)
+
+    def fail_read(path):
+        raise RuntimeError(f"failed to read {path}")
+
+    monkeypatch.setattr(
+        inspection, "read_audio_metadata", fail_read
+    )
+
+    result = inspection.get_batch_brief([token])
+
+    assert result == [{"token": token, "error": "Unable to read track metadata"}]
+    assert str(tmp_path) not in json.dumps(result)
+
+
+def test_preview_errors_do_not_expose_registered_paths(tmp_audio, monkeypatch):
+    from musicbee_tagger_mcp.tools import tags
+
+    registry = FileRegistry()
+    token = registry.register(str(tmp_audio))["token"]
+    monkeypatch.setattr(tags, "get_registry", lambda: registry)
+
+    def fail_preview(path, new_tags):
+        raise RuntimeError(f"failed to preview {path}")
+
+    monkeypatch.setattr(tags, "preview_tag_changes", fail_preview)
+
+    result = tags.preview_tags(token, {"title": "New title"})
+
+    assert result == {"error": "Unable to preview tag changes"}
+    assert str(tmp_audio.parent) not in json.dumps(result)
+
+
+def test_stage_errors_do_not_expose_registered_paths(tmp_audio, monkeypatch):
+    from musicbee_tagger_mcp.tools import tags
+
+    registry = FileRegistry()
+    token = registry.register(str(tmp_audio))["token"]
+    monkeypatch.setattr(tags, "get_registry", lambda: registry)
+
+    class FailedStageManager:
+        def stage(self, **kwargs):
+            raise RuntimeError(f"failed to stage {kwargs['absolute_path']}")
+
+    monkeypatch.setattr(
+        tags, "get_staging_manager", lambda: FailedStageManager()
+    )
+
+    result = tags.stage_tag_changes(token, {"title": "New title"})
+
+    assert result == {"error": "Unable to stage tag changes"}
+    assert str(tmp_audio.parent) not in json.dumps(result)
+
+
 def test_unknown_token_raises_key_error(registry):
-    with pytest.raises(KeyError, match="Unknown token"):
+    with pytest.raises(KeyError, match="Unknown file token"):
         registry.resolve("not-a-real-token")
 
 
@@ -191,8 +240,6 @@ def test_apply_staged_not_in_mcp_server():
     assert "apply_tags_to_file" not in tool_names
     assert "apply_tags_to_file" not in registered_tool_names
     assert registered_tool_names == {
-        "register_files",
-        "register_playlist",
         "read_track_metadata",
         "extract_filename_clues",
         "get_batch_brief",
@@ -203,3 +250,4 @@ def test_apply_staged_not_in_mcp_server():
         "stage_tag_changes",
         "list_staged_changes",
     }
+    assert not {"register_files", "register_playlist"} & registered_tool_names
