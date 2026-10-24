@@ -100,6 +100,36 @@ def test_human_registration_cli_outputs_tokens_without_playlist_path(
     assert audio.name not in printed
 
 
+def test_human_registration_cli_accepts_playlist_path_argument(
+    tmp_path, monkeypatch, capsys
+):
+    import sys
+
+    from musicbee_tagger_mcp import register_playlist_cli
+    from musicbee_tagger_mcp.file_registry import FileRegistry
+
+    audio = tmp_path / "secret-folder" / "song.mp3"
+    audio.parent.mkdir()
+    audio.write_bytes(b"audio")
+    playlist = tmp_path / "secret-folder" / "Strange Tags.m3u"
+    playlist.write_text("song.mp3\n", encoding="utf-8")
+    registry = FileRegistry(tmp_path / "registered")
+    monkeypatch.setattr(register_playlist_cli, "get_registry", lambda: registry)
+    monkeypatch.setattr(sys, "argv", ["musicbee-tagger-register-playlist", str(playlist)])
+
+    with pytest.raises(SystemExit) as exit_info:
+        register_playlist_cli.main()
+    printed = capsys.readouterr().out
+
+    assert exit_info.value.code == 0
+    assert "Playlist path (.m3u or .m3u8):" not in printed
+    assert "playlist job" in printed
+    assert str(playlist) not in printed
+    assert str(audio.parent) not in printed
+    assert registry.list_tokens()[0]["token"] not in printed
+    assert audio.name not in printed
+
+
 def test_human_registration_cli_never_echoes_failed_playlist_path(tmp_path):
     from io import StringIO
 

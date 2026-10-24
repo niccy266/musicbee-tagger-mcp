@@ -97,8 +97,15 @@ it in coordinated batches across sessions and server restarts.
    K:\bin\musicbee-tagger-register-playlist.cmd
    ```
 
-   Enter the playlist path at the prompt, then paste only the returned tokens
-   into your agent conversation. The path-to-token mappings stay in
+   Enter the playlist path at the prompt, or pass it as a quoted argument:
+
+   ```powershell
+   K:\bin\musicbee-tagger-register-playlist.cmd "S:\Music\Playlists\Example.m3u"
+   ```
+
+   The path is handled locally by the registration command and is not sent over
+   MCP. Paste only the returned tokens into your agent conversation. The
+   path-to-token mappings stay in
    `K:\tools\mcp-servers\musicbee-tags\data\registered\` and persist across MCP
    restarts and Windows logins for the same user. After the investigation, run
    the cleanup command in a separate terminal and type `YES` when prompted:

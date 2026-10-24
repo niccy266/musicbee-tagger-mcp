@@ -275,3 +275,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Set the MCPB `TMP`, `TEMP`, and `TMPDIR` values to the extension directory, and moved `UV_CACHE_DIR` under that same directory so uv temporary-file persistence and cache operations stay on one volume.
 - Bumped package, protocol user-agent, plugin, MCPB, and release example versions to 0.4.1. This is a release change because v0.4.0 still fails to install for users whose extension/cache/temp locations span Windows volumes.
 - Validation: MCPB schema validation passed; all 101 tests passed (4 skipped, 1 ffmpeg-dependent test deselected); Pylint `--errors-only` and `git diff --check` passed. Rebuilt and checked all six v0.4.1 release artifacts, including MCPB manifest contents and ZIP integrity.
+
+### 2026-10-25 — Playlist registration path argument
+- Updated the local registration CLI to accept an optional quoted playlist path argument while preserving its interactive prompt when no argument is supplied; the Windows launcher already forwards arguments.
+- Documented argument usage and reiterated that playlist paths remain local. Added coverage for argument-based registration and launcher forwarding.
+- Validation: 28 focused playlist, job, and release tests passed; investigator skill copies are synchronized and `git diff --check` passed.

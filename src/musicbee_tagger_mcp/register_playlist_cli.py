@@ -8,8 +8,12 @@ from .job_store import get_job_store
 from .tools.files import register_playlist
 
 
-def run(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) -> int:
-    """Prompt locally for a playlist and print path-free token handoff details."""
+def run(
+    input_stream: TextIO = sys.stdin,
+    output_stream: TextIO = sys.stdout,
+    playlist_path: str = "",
+) -> int:
+    """Register a supplied playlist or prompt locally, then print path-free details."""
     print(
         "This local command registers playlist entries without sending paths to "
         "the MCP agent.",
@@ -19,8 +23,14 @@ def run(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) ->
         "Run this command in a separate terminal, not through the agent.",
         file=output_stream,
     )
-    print("Playlist path (.m3u or .m3u8): ", end="", file=output_stream, flush=True)
-    playlist_path = input_stream.readline().strip().strip('"')
+    if not playlist_path:
+        print(
+            "Playlist path (.m3u or .m3u8): ",
+            end="",
+            file=output_stream,
+            flush=True,
+        )
+        playlist_path = input_stream.readline().strip().strip('"')
     if not playlist_path:
         print("No playlist path was entered.", file=output_stream)
         return 1
@@ -59,8 +69,18 @@ def run(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) ->
 
 
 def main() -> None:
-    """Run the interactive playlist registration command."""
-    raise SystemExit(run())
+    """Run playlist registration with an optional local path argument."""
+    if len(sys.argv) > 2:
+        print("Provide at most one playlist path (.m3u or .m3u8).")
+        raise SystemExit(2)
+    playlist_path = sys.argv[1] if len(sys.argv) == 2 else ""
+    raise SystemExit(
+        run(
+            input_stream=sys.stdin,
+            output_stream=sys.stdout,
+            playlist_path=playlist_path,
+        )
+    )
 
 
 if __name__ == "__main__":

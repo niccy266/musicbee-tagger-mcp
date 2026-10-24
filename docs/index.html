@@ -66,9 +66,11 @@
     }
   }
 }</code></pre>
-      <p>To register a playlist without exposing its path to the agent, open a separate PowerShell window (not the agent-controlled terminal) and run the human-only registration command. Enter the playlist path at its prompt, then paste only the returned tokens into the agent conversation:</p>
+      <p>To register a playlist without exposing its path to the agent, open a separate PowerShell window (not the agent-controlled terminal) and run the human-only registration command. Enter the playlist path at its prompt or pass it as a quoted argument, then paste only the returned tokens into the agent conversation:</p>
       <pre><code>.\.venv\Scripts\musicbee-tagger-register-playlist.exe</code></pre>
-      <p>For the release installation, run <code>K:\bin\musicbee-tagger-register-playlist.cmd</code> instead. Path-to-token mappings are stored under <code>K:\tools\mcp-servers\musicbee-tags\data\registered\</code> and persist across MCP restarts and logins for the same Windows user. After the agent reports staged proposals, inspect them in the terminal:</p>
+      <p>For the release installation, use the installed launcher either interactively or with a quoted path argument. The argument remains local to the CLI and is never sent over MCP:</p>
+      <pre><code>K:\bin\musicbee-tagger-register-playlist.cmd "S:\Music\Playlists\Example.m3u"</code></pre>
+      <p>Path-to-token mappings are stored under <code>K:\tools\mcp-servers\musicbee-tags\data\registered\</code> and persist across MCP restarts and logins for the same Windows user. After the agent reports staged proposals, inspect them in the terminal:</p>
       <pre><code>.\.venv\Scripts\python.exe -m musicbee_tagger_mcp.apply_staged --list
 .\.venv\Scripts\python.exe -m musicbee_tagger_mcp.apply_staged --all --dry-run</code></pre>
       <p>Apply one proposal interactively, or all pending proposals interactively:</p>
@@ -107,7 +109,7 @@ K:\bin\musicbee-tagger-register-playlist.cmd</code></pre>
     <section id="agent">
       <h2>MCP agent: investigation procedure</h2>
       <ol>
-        <li><strong>Receive human-registered tokens.</strong> Never request or pass a playlist/audio path in chat, MCP, or an agent-controlled terminal. Ask the user to run <code>K:\bin\musicbee-tagger-register-playlist.cmd</code> in a separate PowerShell window and paste the returned tokens.</li>
+        <li><strong>Receive human-registered tokens.</strong> Never request or pass a playlist/audio path in chat, MCP, or an agent-controlled terminal. Ask the user to run <code>K:\bin\musicbee-tagger-register-playlist.cmd</code> in a separate PowerShell window, interactively or with a quoted local path argument, and paste only the returned tokens.</li>
         <li><strong>Read one batch brief.</strong> Call <code>get_batch_brief(tokens)</code>. Use embedded tags, duration, and filename clues. Filename artist/title order is ambiguous.</li>
         <li><strong>Repair text carefully.</strong> Use <code>repair_mojibake</code> when encoding appears corrupted. Treat filename clues as hypotheses, not facts.</li>
         <li><strong>Search and corroborate.</strong> Call <code>search_canonical_release</code> with a plausible artist, title, duration, and useful clues. Use web research for weak, conflicting, or incomplete matches. Record reliable source links when they affect a decision.</li>
