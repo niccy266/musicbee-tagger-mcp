@@ -44,7 +44,7 @@ it in coordinated batches across sessions and server restarts.
 2. In PowerShell, run the included installer, supplying the downloaded wheel:
 
    ```powershell
-   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.3.0-py3-none-any.whl
+   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.0-py3-none-any.whl
    ```
 
    Before upgrading an existing installation, close MCP clients using the
@@ -160,20 +160,22 @@ no local audio or playlist paths in titles or details.
 ## Claude Desktop MCP Bundle
 
 The release builder also creates
-`dist\musicbee-tagger-mcp-0.3.0.mcpb` for Claude Desktop. In Claude Desktop,
+`dist\musicbee-tagger-mcp-0.4.0.mcpb` for Claude Desktop. In Claude Desktop,
 open **Settings > Extensions > Advanced settings > Install Extension…** and
 select the `.mcpb` file. The bundle uses Claude Desktop's supported `uv`
 runtime to install and launch the local Python server.
 
-With no `MUSICBEE_TAGGER_DATA_DIR` override, the server stores registrations,
-staged proposals, and its operation queue under
-`%APPDATA%\musicbee-tagger-mcp\` on Windows. The MCP server remains path-free:
-register playlists using the separate human-run CLI, and use the CLI to review
-and apply staged changes. To have the MCPB installation see registrations made
-with the Windows release CLI, run these commands in the separate PowerShell
-window used for registration:
+The MCPB exposes a `MusicBee Tagger data directory` setting and passes it to
+the server as `MUSICBEE_TAGGER_DATA_DIR`. It defaults to
+`K:\tools\mcp-servers\musicbee-tags\data`, matching this project's Windows
+installer. The standalone server, when run without that environment variable,
+uses `%APPDATA%\musicbee-tagger-mcp\` on Windows. The MCP server remains
+path-free: register playlists using the separate human-run CLI, and use the CLI
+to review and apply staged changes. Configure the CLI to use the same directory
+as the extension; if you choose another directory in Claude Desktop, set that
+same path when running the CLI:
 
 ```powershell
-$env:MUSICBEE_TAGGER_DATA_DIR = Join-Path $env:APPDATA "musicbee-tagger-mcp"
+$env:MUSICBEE_TAGGER_DATA_DIR = "K:\tools\mcp-servers\musicbee-tags\data"
 K:\bin\musicbee-tagger-register-playlist.cmd
 ```

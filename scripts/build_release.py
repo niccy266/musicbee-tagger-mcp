@@ -42,6 +42,7 @@ def build_mcpb_archive(output_path: Path, version: str) -> None:
         archive.write(manifest_path, "manifest.json")
         archive.write(ROOT / "release" / "mcpb" / "server.py", "server.py")
         archive.write(ROOT / "pyproject.toml", "pyproject.toml")
+        archive.write(ROOT / "README.md", "README.md")
         package_source = ROOT / "src" / "musicbee_tagger_mcp"
         for path in sorted(package_source.rglob("*.py")):
             archive.write(path, path.relative_to(ROOT).as_posix())
