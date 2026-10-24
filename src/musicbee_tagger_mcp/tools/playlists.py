@@ -1,34 +1,14 @@
-"""Playlist job tools: server-side registration and token batches over MCP.
+"""Playlist job tools served over the MCP protocol.
 
-The playlist path is received and resolved server-side; neither it nor any
-file path is echoed back to the agent. Only opaque tokens and bare display
-names cross the MCP boundary.
+Registration happens on the user's machine through the CLI command
+(musicbee-tagger-register-playlist); the server only serves and updates
+jobs. The same operations are both MCP tools available to the LLM and
+callable directly by any MCP client — the boundary never carries paths.
 """
 
 from typing import Any, Dict, List
 
-from ..file_registry import get_registry
 from ..job_store import get_job_store
-from ..playlist import parse_m3u_playlist
-from ..tools.files import register_playlist
-
-
-def register_playlist_job(playlist_location: str) -> Dict[str, Any]:
-    """Register a playlist server-side and create a processing job.
-
-    Returns the job id and counts only — never tokens, never paths.
-    """
-    registered = register_playlist(playlist_location)
-    if "error" in registered:
-        return registered
-    if not registered["registered"]:
-        return {"error": "No audio files found in playlist"}
-    playlist_name = playlist_location.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
-    result = get_job_store().create_job(
-        registered["registered"], playlist_name=playlist_name
-    )
-    result["skipped_entries"] = len(registered["skipped"])
-    return result
 
 
 def next_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
@@ -47,12 +27,6 @@ def job_status(job_id: str) -> Dict[str, Any]:
 
 
 def register_playlist_tools(app) -> None:
-    @app.tool()
-    def register_playlist(playlist_location: str) -> Dict[str, Any]:
-        """Register a local .m3u/.m3u8 playlist server-side and create a
-        processing job. Returns a job id and counts only — never file paths."""
-        return register_playlist_job(playlist_location)
-
     @app.tool()
     def next_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
         """Get the next batch (default 10) of unprocessed tokens for a job."""
