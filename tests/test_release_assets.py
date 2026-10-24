@@ -181,7 +181,11 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "server.py",
     ]
     assert manifest["server"]["mcp_config"]["env"] == {
-        "MUSICBEE_TAGGER_DATA_DIR": "${user_config.data_directory}"
+        "MUSICBEE_TAGGER_DATA_DIR": "${user_config.data_directory}",
+        "TMP": "${__dirname}",
+        "TEMP": "${__dirname}",
+        "TMPDIR": "${__dirname}",
+        "UV_CACHE_DIR": "${__dirname}${/}.uv-cache",
     }
     assert manifest["user_config"]["data_directory"]["type"] == "directory"
     assert manifest["user_config"]["data_directory"]["default"] == (
