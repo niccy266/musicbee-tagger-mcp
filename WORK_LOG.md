@@ -295,3 +295,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed registered `next_batch`, `complete_batch`, and `job_status` handlers: their local function names shadowed module helpers and recursively called themselves instead of dispatching to the job store.
 - Added a registered-callback regression test covering a 25-track claim, duplicate claim prevention, status, completion, and actionable unknown-job errors. No audio files are touched.
 - Validation: full suite passed (104 passed, 4 skipped, 1 ffmpeg-dependent test deselected); Pylint `--errors-only` and `git diff --check` passed.
+
+### 2026-10-25 — Force local wheel refresh in Windows installer
+- The installed package remained stale after building the same 0.4.1 version: plain `pip install` skipped replacing the installed wheel, while the installer still printed success.
+- Changed the Windows installer to force-reinstall only the supplied wheel without reinstalling dependencies, and added release coverage. This ensures source-checkout installs actually deploy code changes before live MCP testing.
+- Validation: 21 focused installer and playlist job tests passed; Windows installer syntax parsed. Reinstalled the local connector and confirmed the installed package source no longer contains the recursive wrapper.
+- Live test through the installed MCP stdio executable passed tool discovery, 25-track synthetic claim, in-progress status, duplicate-claim prevention, completion, and safe invalid-job response using an isolated temporary data directory. Read-only status checks confirmed the user's two real jobs remained at 896 and 25 pending, with zero in progress. No real playlist tracks were claimed; no audio files were read or modified.
