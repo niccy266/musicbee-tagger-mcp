@@ -4,7 +4,10 @@ Covers the remaining gaps from issue #2/#3:
 - Missing/unreadable registered audio returns path-free MCP errors.
 - Missing/unreadable playlist inputs return path-free errors.
 - Windows-style absolute paths survive registry serialization round-trips.
-- No MCP tool accepts or returns a filesystem path.
+- No MCP tool returns a filesystem path. Exactly one tool (`register_playlist`)
+  *accepts* a playlist path by explicit decision: the server resolves it
+  locally and the agent only ever receives a job id (see the playlist job
+  tools added for the batch workflow).
 """
 
 import json
@@ -106,8 +109,28 @@ def test_no_mcp_tool_takes_a_path_parameter():
     app = FakeApp()
     register_tools(app)
 
-    path_words = ("path", "file", "playlist", "dir", "directory")
+    path_words = ("path", "file", "dir", "directory")
     for fn in app.tools:
         for pname in inspect.signature(fn).parameters:
             assert not any(w in pname.lower() for w in path_words), \
                 f"{fn.__name__} exposes path-like parameter {pname!r}"
+
+
+def test_no_mcp_tool_accepts_a_location():
+    """Registration moved to the CLI; no MCP tool takes a path or location."""
+    import inspect
+
+    import musicbee_tagger_mcp.server as server
+    from musicbee_tagger_mcp.server import app
+
+    assert "register_playlist" not in dir(server)
+    tools = set(app._tool_manager._tools)
+    assert "register_playlist" not in tools
+    assert "register_playlist_job" not in tools
+    for name in tools:
+        fn = getattr(server, name, None)
+        if fn is None:
+            continue
+        for pname in inspect.signature(fn).parameters:
+            assert not any(w in pname.lower() for w in ("path", "file", "dir", "location")), \
+                f"MCP tool {name!r} accepts location-like parameter {pname!r}"

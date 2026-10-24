@@ -4,6 +4,7 @@ import sys
 from typing import TextIO
 
 from .file_registry import get_registry
+from .job_store import get_job_store
 from .tools.files import register_playlist
 
 
@@ -29,17 +30,22 @@ def run(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) ->
         print(f"Unable to register playlist: {result['error']}.", file=output_stream)
         return 1
 
-    registered = result["registered"]
+    job = get_job_store().create_job(
+        result["registered"],
+        playlist_name=result["playlist_name"],
+        skipped=len(result["skipped"]),
+    )
+    job_id = job["job_id"]
     print(
-        f"Registered {len(registered)} audio file(s). Copy these tokens to the "
-        "agent; no playlist path was sent in an MCP request.",
+        f"Registered {job['registered']} audio file(s) as playlist job "
+        f"{job_id}.",
         file=output_stream,
     )
-    for entry in registered:
-        print(
-            f"- {entry['token']} ({entry['display_name']})",
-            file=output_stream,
-        )
+    print(
+        "Pass this job id to the agent loop or ask the agent for the next "
+        "batch; the playlist path was never sent over MCP.",
+        file=output_stream,
+    )
 
     skipped = result["skipped"]
     if skipped:
