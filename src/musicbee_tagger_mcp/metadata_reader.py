@@ -64,11 +64,16 @@ def read_audio_metadata(file_path: str) -> Dict[str, Any]:
     """
     path = Path(file_path)
     if not path.is_file():
-        raise FileNotFoundError(f"Audio file not found: {file_path}")
+        # Path-free: this exception can reach MCP clients via tool wrappers.
+        raise FileNotFoundError("Audio file not found")
 
-    audio = mutagen.File(file_path)
+    try:
+        audio = mutagen.File(file_path)
+    except Exception:
+        # Mutagen parse errors may embed the full path.
+        raise ValueError("Unsupported audio format or corrupt file") from None
     if audio is None:
-        raise ValueError(f"Unsupported audio format or corrupt file: {file_path}")
+        raise ValueError("Unsupported audio format or corrupt file")
 
     # Technical stream info
     info = audio.info
