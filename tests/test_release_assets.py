@@ -64,6 +64,44 @@ def test_plugin_version_matches_project_version():
     assert plugin["version"] == project_version
 
 
+def test_all_release_version_markers_match_project_version():
+    """Keep the package, protocol user agent, docs, plugin, and MCPB aligned."""
+    project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    project_version = re.search(r'(?m)^version\s*=\s*"([^"]+)"', project).group(1)
+    package = (ROOT / "src" / "musicbee_tagger_mcp" / "__init__.py").read_text(
+        encoding="utf-8"
+    )
+    musicbrainz_api = (
+        ROOT / "src" / "musicbee_tagger_mcp" / "musicbrainz_api.py"
+    ).read_text(encoding="utf-8")
+    plugin = json.loads(
+        (
+            ROOT
+            / "release"
+            / "claude-marketplace"
+            / "plugins"
+            / "musicbee-tagger"
+            / ".claude-plugin"
+            / "plugin.json"
+        ).read_text(encoding="utf-8")
+    )
+    mcpb = json.loads(
+        (ROOT / "release" / "mcpb" / "manifest.json").read_text(encoding="utf-8")
+    )
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    guide = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+
+    assert f'__version__ = "{project_version}"' in package
+    assert f'    "{project_version}",' in musicbrainz_api
+    assert plugin["version"] == project_version
+    assert mcpb["version"] == project_version
+    assert "mcp>=2.0.0" in project
+    assert f"musicbee_tagger_mcp-{project_version}-py3-none-any.whl" in readme
+    assert f"musicbee-tagger-mcp-{project_version}.mcpb" in readme
+    assert f"musicbee_tagger_mcp-{project_version}-py3-none-any.whl" in guide
+    assert f"musicbee-tagger-mcp-{project_version}.mcpb" in guide
+
+
 def test_plugin_bundles_the_investigator_skill():
     """Keep Claude's plugin skill discoverable and synchronized with its source."""
     source_skill = (
@@ -142,6 +180,13 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "${__dirname}",
         "server.py",
     ]
+    assert manifest["server"]["mcp_config"]["env"] == {
+        "MUSICBEE_TAGGER_DATA_DIR": "${user_config.data_directory}"
+    }
+    assert manifest["user_config"]["data_directory"]["type"] == "directory"
+    assert manifest["user_config"]["data_directory"]["default"] == (
+        "K:\\tools\\mcp-servers\\musicbee-tags\\data"
+    )
     assert manifest["compatibility"]["platforms"] == ["darwin", "linux", "win32"]
     assert {tool["name"] for tool in manifest["tools"]} == {
         "read_track_metadata",
@@ -177,6 +222,7 @@ def test_mcpb_archive_contains_only_runtime_project_files(tmp_path):
         assert archive.testzip() is None
         assert "manifest.json" in names
         assert "pyproject.toml" in names
+        assert "README.md" in names
         assert "server.py" in names
         assert "src/musicbee_tagger_mcp/server.py" in names
         assert any(name.startswith("src/musicbee_tagger_mcp/tools/") for name in names)
