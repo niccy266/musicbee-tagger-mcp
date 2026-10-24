@@ -4,7 +4,10 @@ Covers the remaining gaps from issue #2/#3:
 - Missing/unreadable registered audio returns path-free MCP errors.
 - Missing/unreadable playlist inputs return path-free errors.
 - Windows-style absolute paths survive registry serialization round-trips.
-- No MCP tool accepts or returns a filesystem path.
+- No MCP tool returns a filesystem path. Exactly one tool (`register_playlist`)
+  *accepts* a playlist path by explicit decision: the server resolves it
+  locally and the agent only ever receives a job id (see the playlist job
+  tools added for the batch workflow).
 """
 
 import json
@@ -106,8 +109,26 @@ def test_no_mcp_tool_takes_a_path_parameter():
     app = FakeApp()
     register_tools(app)
 
-    path_words = ("path", "file", "playlist", "dir", "directory")
+    path_words = ("path", "file", "dir", "directory")
     for fn in app.tools:
         for pname in inspect.signature(fn).parameters:
             assert not any(w in pname.lower() for w in path_words), \
                 f"{fn.__name__} exposes path-like parameter {pname!r}"
+
+
+def test_register_playlist_returns_no_paths_or_tokens(registry, tmp_path):
+    """The one path-accepting tool must leak nothing back to the agent."""
+    from musicbee_tagger_mcp.tools.playlists import register_playlist_job
+
+    audio = tmp_path / "Song.mp3"
+    audio.write_bytes(b"\x00")
+    _m3u(tmp_path, "mix.m3u", ["#EXTM3U", str(audio), "missing.flac"])
+
+    result = register_playlist_job(str(_m3u(tmp_path, "used.m3u",
+        ["#EXTM3U", str(audio)])))
+    text = json.dumps(result)
+    assert "error" not in result
+    assert result["registered"] == 1
+    assert str(tmp_path) not in text
+    assert "mp3" not in text.lower()
+    assert "token" not in result and "tracks" not in result
