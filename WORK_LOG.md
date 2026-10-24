@@ -226,3 +226,11 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Validation: all 44 tests passed, Pylint `--errors-only` passed, Claude marketplace validation passed with its existing missing-author warning, installer syntax parsed, and `git diff --check` passed. Built and inspected the 0.1.2 wheel, source distribution, Claude plugin/marketplace archives, and Windows bundle; the release-specific tests passed (5 tests).
 - Added an installer preflight that refuses upgrades while this server executable is running, avoiding Windows file-lock failures before pip modifies the installed package. Updated the Windows bundle and upgrade instructions.
 - Installed 0.1.2 locally, verified all four launchers and `pip check`, completed an MCP handshake with exactly nine tools, and smoke-tested the installed registration CLI using a synthetic playlist. Its output contained no test path, and the token resolved from a fresh registry instance; the existing registration-record count remained unchanged (zero).
+
+### 2026-10-24 — Read-only Genre inventory pilot
+- Inspected metadata for 25 user-registered tracks via the installed MCP server. Found 18 distinct non-empty Genre strings; examples include semicolon-delimited values, punctuation-heavy source/vendor text, placeholder strings, dates, and NUL-separated values.
+- No genre was normalized or staged, and no audio was applied. The pilot supports defining cleanup rules based on actual Genre field structure before any changes are proposed.
+### 2026-10-24 — Persistent shared operation queue
+- Added a transactional SQLite queue under the configured private data directory. MCP clients sharing that data root can enqueue path-free operations, query by status/batch with pagination, and persist progress updates across restarts.
+- Added validation against local filesystem paths, retained completed entries, and covered persistence, filtering, pagination, status updates, and path rejection with regression tests.
+- Updated the human/MCP guide, README, and investigator skill to document the queue tools and storage behavior.
