@@ -45,7 +45,8 @@ from musicbee_tagger_mcp.tools.tags import (  # noqa: E402
 )
 from musicbee_tagger_mcp.tools.text import repair_mojibake  # noqa: E402
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+RETRYABLE_STATUS = {429, 500, 502, 503}
 AUDIO_SUFFIXES = {".mp3", ".flac", ".m4a", ".wav", ".ogg", ".opus", ".wma"}
 BATCH_SIZE = 10
 
@@ -190,35 +191,37 @@ LOCAL_TOOLS = {
 
 
 def call_openrouter(messages, model, api_key, temperature=0.2, retries=3):
-    """One chat completion with tool support, via stdlib urllib."""
-    import urllib.error
-    import urllib.request
+    """One chat completion with tool support, via the openai SDK pointed at
+    OpenRouter (https://openrouter.ai/docs/quickstart#using-the-client-sdks).
+    Returns the raw OpenAI-shaped dict the batch loop expects."""
+    from openai import APIStatusError, APITimeoutError, OpenAI
 
-    body = {
-        "model": model,
-        "messages": messages,
-        "tools": TOOLS,
-        "temperature": temperature,
-    }
-    request = urllib.request.Request(
-        OPENROUTER_URL,
-        data=json.dumps(body).encode(),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
+    client = OpenAI(
+        api_key=api_key,
+        base_url=OPENROUTER_BASE,
+        timeout=120,
+        default_headers={
             "HTTP-Referer": "https://github.com/niccy266/musicbee-tagger-mcp",
             "X-Title": "musicbee-tagger-agent",
         },
     )
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                return json.loads(response.read())
-        except urllib.error.HTTPError as error:
-            if error.code in (429, 500, 502, 503) and attempt < retries - 1:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=TOOLS,
+                temperature=temperature,
+            )
+            return response.model_dump(mode="json")
+        except (APITimeoutError, APIStatusError) as error:
+            status = getattr(error, "status_code", None)
+            retryable = status in RETRYABLE_STATUS or status is None
+            if retryable and attempt < retries - 1:
                 time.sleep(2 ** attempt)
                 continue
-            raise RuntimeError(f"OpenRouter error {error.code}: {error.read()[:300]}")
+            detail = str(error)[:300]
+            raise RuntimeError(f"OpenRouter error {status or 'timeout'}: {detail}")
     raise RuntimeError("OpenRouter unreachable")
 
 
