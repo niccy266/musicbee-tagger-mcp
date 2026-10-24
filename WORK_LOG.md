@@ -226,3 +226,13 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Validation: all 44 tests passed, Pylint `--errors-only` passed, Claude marketplace validation passed with its existing missing-author warning, installer syntax parsed, and `git diff --check` passed. Built and inspected the 0.1.2 wheel, source distribution, Claude plugin/marketplace archives, and Windows bundle; the release-specific tests passed (5 tests).
 - Added an installer preflight that refuses upgrades while this server executable is running, avoiding Windows file-lock failures before pip modifies the installed package. Updated the Windows bundle and upgrade instructions.
 - Installed 0.1.2 locally, verified all four launchers and `pip check`, completed an MCP handshake with exactly nine tools, and smoke-tested the installed registration CLI using a synthetic playlist. Its output contained no test path, and the token resolved from a fresh registry instance; the existing registration-record count remained unchanged (zero).
+
+### 2026-10-24 — v0.2.0 field map, OpenAI SDK, and playlist jobs
+- Field-map refactor: one canonical `FieldSpec` table driving ID3/Vorbis/MP4 read+write; 12 canonical fields over 53 format-native keys. Added sort fields (artist/title/album/album_artist → TSO2/TSOT/TSOA/TSOP, Vorbis, MP4 atoms) and Last.fm passthrough fields (lastfm_title/artist/url as TXXX/Vorbis/freeform). Documented in docs/field-map.md (#19).
+- Real-file test suite (19 tests) covering read parity, Unicode/Cyrillic round-trips, corrupted tags, and fingerprint reconciliation on synthetic MP3/FLAC/M4A fixtures (#17).
+- Security: invisible Unicode format characters stripped from string tags; ACRcloud pre-match decision recorded as issue #18 (Last.fm text-search fallback before paid fingerprinting).
+- Switched `scripts/openrouter_agent_loop.py` from hand-rolled urllib to the official `openai` SDK against OpenRouter's endpoint, preserving attribution headers (#22, PR #23).
+- Playlist-job architecture (PR #24, #25): registration is human-run CLI only; the MCP server is a pure token API serving `next_batch` (batches of 10), `complete_batch`, and `job_status` (counts only). No MCP tool accepts a filesystem location. Fixed `create_job` dropping the skipped-entry count.
+- Release v0.2.0: tagged and published; release assets (Claude marketplace/plugin, Windows bundle, wheel, sdist) built with scripts/build_release.py and uploaded. `release-ready-mcp` branch fast-forwarded to v0.2.0.
+- Repo health: version-alignment test from another agent caught stale 0.1.2 in plugin manifest, `__init__.__version__`, README, and launchers — all aligned to 0.2.0; merged via PR #21. CI green on master.
+- Validation: 82 tests pass (1 skipped), pylint errors-only clean, CI success on master.
