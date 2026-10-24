@@ -1,6 +1,6 @@
 {
   "name": "musicbee-tagger",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Investigate MusicBee audio metadata and stage verified tag proposals.",
   "mcpServers": "./.mcp.json"
 }

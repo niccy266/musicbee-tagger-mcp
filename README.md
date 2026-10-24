@@ -60,7 +60,7 @@ Alternatively, download and extract a Windows release bundle, then run its
 installer while supplying the included wheel:
 
    ```powershell
-   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.1-py3-none-any.whl
+   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.2-py3-none-any.whl
    ```
 
    Before upgrading an existing installation, close MCP clients using the
@@ -183,34 +183,19 @@ no local audio or playlist paths in titles or details.
 ## Claude Desktop MCP Bundle
 
 The release builder also creates
-`dist\musicbee-tagger-mcp-0.4.1.mcpb` for Claude Desktop. In Claude Desktop,
+`dist\musicbee-tagger-mcp-0.4.2.mcpb` for Claude Desktop. In Claude Desktop,
 open **Settings > Extensions > Advanced settings > Install Extension…** and
 select the `.mcpb` file. The bundle uses Claude Desktop's supported `uv`
-runtime to install and launch the local Python server.
+runtime to install and launch the local Python server. If an older MusicBee
+Tagger extension is present, uninstall it before installing the new bundle.
 
-The MCPB exposes a `MusicBee Tagger data directory` setting and passes it to
-the server as `MUSICBEE_TAGGER_DATA_DIR`. The extension points its temporary
-directory and uv cache at its installation directory for the running server.
-Claude Desktop performs the initial `uv sync` before applying
-`mcp_config.env`, so those settings do not affect dependency installation.
-If Claude logs `os error 17` or "cannot move the file to a different disk
-drive" during extension installation, fully quit Claude Desktop and start it
-from PowerShell with its temporary directory and uv cache set to the same
-location:
-
-```powershell
-$uvCache = Join-Path $env:LOCALAPPDATA "uv\cache"
-New-Item -ItemType Directory -Force -Path $uvCache | Out-Null
-$env:TEMP = $uvCache
-$env:TMP = $uvCache
-$env:UV_CACHE_DIR = $uvCache
-$claudePackage = Get-AppxPackage -Name Claude
-Start-Process -FilePath (Join-Path $claudePackage.InstallLocation "app\Claude.exe")
-```
-
-After Claude opens, uninstall the failed extension and install the `.mcpb`
-again. These overrides apply only to that launched Claude process. The data
-directory defaults to
+The extension runs the MCP server locally; it does not install a separate
+remote server or require an HTTPS proxy. Its data-directory setting passes the
+selected path to the server as `MUSICBEE_TAGGER_DATA_DIR`. The bundle pins
+initial setup to Python 3.11 and puts uv's dependency cache inside the
+extension directory. Keeping interpreter metadata and dependency cache files
+alongside the extension avoids Windows cross-drive rename failures during
+installation. The data directory defaults to
 `K:\tools\mcp-servers\musicbee-tags\data`, matching this project's Windows
 installer. The standalone server, when run without that environment variable,
 uses `%APPDATA%\musicbee-tagger-mcp\` on Windows. The MCP server remains
