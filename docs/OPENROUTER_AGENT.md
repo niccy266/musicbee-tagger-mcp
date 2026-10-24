@@ -8,28 +8,35 @@ chat completions endpoint with function calling.
 
 1. A playlist job is created by the human-run registration CLI — only opaque
    tokens, a job id, and bare filenames ever reach the model (same privacy
-   model as the MCP server). The agent loop takes a job id, not a folder.
+   model as the MCP server). The MCP `list_jobs` tool shows
+   path-free summaries for jobs with pending tracks. If exactly one job is
+   available, the loop selects it automatically; otherwise pass a job id.
 2. The agent claims batches of up to 10 unprocessed tokens via `next_batch`.
 3. The loop sends a batch brief (existing tags, durations, filename clues) to
    the model with a system prompt adapted from the `musicbee-investigator`
    skill.
-3. The model decides which tools to call. The loop executes them locally:
+4. The model decides which tools to call. The loop executes them locally:
    - `read_track_metadata`, `extract_filename_clues`, `repair_mojibake`
    - `search_canonical_release`, `verify_mbid` (the mandatory gate)
    - `stage_tag_changes` (manifest only — no audio writes)
-4. `verify_mbid` failures below the 0.75 threshold are recorded as unresolved.
-5. Each call to `finish_batch` or the `--max-turns` cap ends a batch. Outcomes
+5. `verify_mbid` failures below the 0.75 threshold are recorded as unresolved.
+6. Each call to `finish_batch` or the `--max-turns` cap ends a batch. Outcomes
    are recorded with `complete_batch`; `job_status` reports counts only.
-   persists in a JSON state file, so an interrupted run resumes with `--resume`.
+   A JSON state file records progress for resuming an interrupted run.
 
 ## Usage
 
 ```sh
 pip install musicbee-tagger-mcp  # or run from a source checkout
 export OPENROUTER_API_KEY=sk-or-...
-python scripts/openrouter_agent_loop.py /path/to/music \
+python scripts/openrouter_agent_loop.py [job_id] \
     --model openai/gpt-4o-mini --max-turns 15 --resume
 ```
+
+Omit `job_id` when exactly one job has pending tracks. If multiple jobs are
+available, the script lists their IDs and asks you to specify one. Use the MCP
+`list_jobs` tool to inspect available jobs without exposing paths or track
+tokens.
 
 ## Model choice
 

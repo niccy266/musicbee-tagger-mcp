@@ -155,6 +155,7 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "next_batch",
         "complete_batch",
         "job_status",
+        "list_jobs",
         "enqueue_batch_operation",
         "list_batch_operations",
         "update_batch_operation",

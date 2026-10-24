@@ -72,6 +72,10 @@
       "description": "Get aggregate progress for a playlist job."
     },
     {
+      "name": "list_jobs",
+      "description": "List available playlist jobs with pending work using path-free summaries."
+    },
+    {
       "name": "enqueue_batch_operation",
       "description": "Add a path-free operation to the persistent shared queue."
     },

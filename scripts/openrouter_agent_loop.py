@@ -9,13 +9,13 @@ batch is done or the iteration cap is hit.
 Requires: OPENROUTER_API_KEY environment variable.
 Usage:
     export OPENROUTER_API_KEY=sk-or-...
-    python scripts/openrouter_agent_loop.py <job_id> --model openai/gpt-4o-mini
+    python scripts/openrouter_agent_loop.py [job_id] --model openai/gpt-4o-mini
 
 Notes:
     - Playlists are registered by the MCP server; only opaque tokens reach
       the model, in batches of 10 from the playlist job.
     - Staging is safe (manifest only). Tag writes still go through
-      apply_staged.py after human review, unless --apply is passed.
+      apply_staged.py after human review.
 """
 
 from __future__ import annotations
@@ -314,9 +314,40 @@ def save_state(path, state):
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2))
 
 
+def select_job_id(requested_job_id, jobs):
+    """Resolve an explicit id or automatically select the sole available job."""
+    if requested_job_id:
+        status = jobs.job_status(requested_job_id)
+        if "error" in status:
+            raise SystemExit(status["error"])
+        return requested_job_id
+
+    try:
+        available = jobs.list_jobs()
+    except RuntimeError as error:
+        raise SystemExit(str(error)) from error
+    if not available:
+        raise SystemExit("No available playlist jobs. Register a playlist first.")
+    if len(available) > 1:
+        print("Multiple playlist jobs are available:")
+        for job in available:
+            print(
+                f"  {job['job_id']}  {job['playlist_name']} "
+                f"({job['counts']['pending']} pending)"
+            )
+        raise SystemExit("Choose a job by passing its job id.")
+    job_id = available[0]["job_id"]
+    print(f"Using the only available playlist job: {job_id}")
+    return job_id
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("job_id", help="Playlist job id from the register_playlist MCP tool")
+    parser.add_argument(
+        "job_id",
+        nargs="?",
+        help="Playlist job id; omitted when there is exactly one available job",
+    )
     parser.add_argument("--model", default="openai/gpt-4o-mini")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     parser.add_argument("--max-turns", type=int, default=15)
@@ -325,18 +356,17 @@ def main():
                         help="Skip files recorded as staged in the state file")
     args = parser.parse_args()
 
+    jobs = JobStore()
+    job_id = select_job_id(args.job_id, jobs)
+
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         sys.exit("Set OPENROUTER_API_KEY (create one at https://openrouter.ai/keys)")
 
-    jobs = JobStore()
-    try:
-        status = jobs.job_status(args.job_id)
-    except (ValueError, RuntimeError):
-        sys.exit("Unknown job id")
+    status = jobs.job_status(job_id)
     if "error" in status:
         sys.exit(status["error"])
-    print(f"Job {args.job_id} ({status['playlist_name']!r}): "
+    print(f"Job {job_id} ({status['playlist_name']!r}): "
           f"{status['counts']['pending']} pending")
 
     state = json.loads(args.state.read_text()) if args.state.exists() else {}
@@ -344,7 +374,7 @@ def main():
 
     batch_number = 0
     while True:
-        claim = jobs.next_batch(args.job_id, size=args.batch_size)
+        claim = jobs.next_batch(job_id, size=args.batch_size)
         if "error" in claim:
             sys.exit(claim["error"])
         if not claim["batch"]:
@@ -368,7 +398,7 @@ def main():
             {"token": token, "success": token in batch_state["staged"]}
             for token in tokens
         ]
-        jobs.complete_batch(args.job_id, results)
+        jobs.complete_batch(job_id, results)
 
         staged_names = {
             names[i] for i, tok in enumerate(tokens) if tok in batch_state["staged"]
@@ -376,7 +406,7 @@ def main():
         state.setdefault("staged_by_file", []).extend(sorted(staged_names - done))
         save_state(args.state, state)
 
-    status = jobs.job_status(args.job_id)
+    status = jobs.job_status(job_id)
     counts = status["counts"]
     print(
         f"Done. {counts['done']} done, {counts['failed']} failed, "

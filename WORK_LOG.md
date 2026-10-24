@@ -257,3 +257,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Extended the release builder to emit the standalone bundle and include it in the Windows release archive. Documented installation, the default private data directory, and the separate human-only playlist registration workflow.
 - Removed the superseded operation-queue tool registration retained during the upstream merge so the active MCP surface matches the current SQLite-backed queue.
 - Validation: release/privacy tests passed (22); the full suite passed (94 passed, 4 skipped) with the M4A conversion test deselected because `ffmpeg` is unavailable. Built and inspected `musicbee-tagger-mcp-0.3.0.mcpb` and the Windows release archive; the MCPB is a valid ZIP with the expected manifest and runtime files.
+
+### 2026-10-25 — Discoverable playlist jobs
+- Added a path-free MCP `list_jobs` tool that reports only jobs with pending work, including IDs, playlist display names, progress counts, and skipped-entry counts.
+- Updated the agent loop to accept an optional job ID, auto-select the sole available job, and require an explicit ID when multiple jobs are pending.
+- Updated the agent guide, MCP tool reference, release tool manifest, and regression tests.
+- Validation: 33 focused job, MCP-surface, and release tests passed; the full suite passed (100 passed, 4 skipped) with the M4A conversion test deselected because `ffmpeg` is unavailable. Pylint passed with only the missing `openai` import diagnostic suppressed. A synthetic omitted-ID end-to-end smoke test selected and completed the sole job without an OpenRouter request.
