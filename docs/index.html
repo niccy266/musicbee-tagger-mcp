@@ -91,7 +91,7 @@ $json = $server | ConvertTo-Json -Compress -Depth 10
 claude mcp add-json --scope user musicbee-tagger $json
 claude mcp get musicbee-tagger</code></pre>
       <p>Alternatively, add the extracted <code>claude-marketplace</code> directory with <code>claude plugin marketplace add .\claude-marketplace</code>, then install it with <code>claude plugin install musicbee-tagger@musicbee-tagger</code>. The plugin includes the model-invocable <code>musicbee-investigator</code> skill. After extracting a newer release over the existing marketplace directory, run <code>claude plugin marketplace update musicbee-tagger</code> and <code>claude plugin update musicbee-tagger@musicbee-tagger</code>, then restart Claude Code. The MCP process and apply CLI share the private data root through <code>MUSICBEE_TAGGER_DATA_DIR</code>; manually invoking the CLI requires setting the same variable first.</p>
-      <p>Pending stage manifests and token-to-path registrations are persisted in the install's <code>data</code> folder. Back it up to preserve them. Clear registrations after use with <code>K:\bin\musicbee-tagger-clear-registrations.cmd</code>; the command asks for confirmation and does not remove staged proposals. Search logs, applied-record archives, retry queues, and confidence-based auto-staging are not part of this release.</p>
+      <p>Pending stage manifests, token-to-path registrations, and the shared operation queue are persisted in the install's <code>data</code> folder. Back it up to preserve them. Clear registrations after use with <code>K:\bin\musicbee-tagger-clear-registrations.cmd</code>; the command asks for confirmation and does not remove staged proposals or queue items. Search logs, applied-record archives, retry queues, and confidence-based auto-staging are not part of this release.</p>
     </section>
 
     <section id="agent">
@@ -124,6 +124,9 @@ claude mcp get musicbee-tagger</code></pre>
           <tr><td><code>preview_tags</code></td><td>Preview field-level changes without writing audio.</td><td>Token only.</td></tr>
           <tr><td><code>stage_tag_changes</code></td><td>Save a pending manifest for user review; does not write audio.</td><td>Token only.</td></tr>
           <tr><td><code>list_staged_changes</code></td><td>List pending path-free stage summaries.</td><td>No file input.</td></tr>
+          <tr><td><code>enqueue_batch_operation</code></td><td>Add a durable, path-free operation to the shared queue; optional batch label groups related work.</td><td>Do not include local filesystem paths.</td></tr>
+          <tr><td><code>list_batch_operations</code></td><td>Query queue items by status or batch, with bounded pagination.</td><td>No file input.</td></tr>
+          <tr><td><code>update_batch_operation</code></td><td>Update an operation's status and optional progress details.</td><td>Do not include local filesystem paths.</td></tr>
         </tbody>
       </table>
     </section>
@@ -136,6 +139,7 @@ claude mcp get musicbee-tagger</code></pre>
         <li><code>src/musicbee_tagger_mcp/file_registry.py</code>, <code>register_playlist_cli.py</code>, and <code>playlist.py</code> — persistent token registration, human-only playlist handoff, and M3U/M3U8 parsing.</li>
         <li><code>src/musicbee_tagger_mcp/metadata_reader.py</code> and <code>filename_parser.py</code> — embedded metadata and filename clues.</li>
         <li><code>staging.py</code> and <code>stage_manifest_store.py</code> — pending proposals and manifest persistence; <code>staged_apply.py</code>, <code>tag_applier.py</code>, and <code>tag_format_writers.py</code> — CLI-only physical audio writes. MCP preview uses <code>tag_preview.py</code>.</li>
+        <li><code>queue_store.py</code> and <code>tools/queue.py</code> — transactional, persistent, path-free batch-operation queue shared by MCP clients using the same data directory.</li>
         <li><code>tests/</code> — regression tests; <code>.agents/skills/musicbee-investigator/SKILL.md</code> — detailed agent procedure; <code>docs/index.html</code> — this human/agent web guide.</li>
       </ul>
       <p>The package keeps focused service modules for shared logic and groups MCP tool implementations by domain. Treat ~100 lines as a review signal, not a hard limit; preserve cohesive responsibilities instead of splitting solely to meet a number.</p>

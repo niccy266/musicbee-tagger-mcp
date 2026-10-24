@@ -27,12 +27,13 @@ The installer defaults to:
 - Launchers: `K:\bin\`
 - Private stage data: `K:\tools\mcp-servers\musicbee-tags\data\staged\`
 - Private registration data: `K:\tools\mcp-servers\musicbee-tags\data\registered\`
+- Persistent batch-operation queue: `K:\tools\mcp-servers\musicbee-tags\data\queue\`
 
 The `data` directory is separate from the installed environment so package
-upgrades do not replace pending proposals or local registrations. The installer
-preserves existing data. Back up the data directory to preserve them. There is
-no automatic cleanup; use the confirmation-gated registration cleanup command
-after investigations.
+upgrades do not replace pending proposals, local registrations, or the shared
+batch-operation queue. The installer preserves existing data. Back up the data
+directory to preserve them. Queue items persist until their status is updated;
+there is no automatic cleanup.
 
 1. Download the Windows release bundle and extract it.
 2. In PowerShell, run the included installer, supplying the downloaded wheel:
@@ -141,3 +142,12 @@ The full installation and MCP reference guide is in
 [`docs/index.html`](docs/index.html). The release setup is intentionally local
 and single-user; it does not provide hosted/network access, automatic audio
 writes, investigation archives, or confidence-based auto-staging.
+
+## Shared batch queue
+
+All MCP clients using the same configured data directory share a durable,
+SQLite-backed queue. Agents can add path-free operations with
+`enqueue_batch_operation`, query by batch and status with
+`list_batch_operations`, and record progress with `update_batch_operation`.
+Queue entries are retained across server restarts and package upgrades; include
+no local audio or playlist paths in titles or details.

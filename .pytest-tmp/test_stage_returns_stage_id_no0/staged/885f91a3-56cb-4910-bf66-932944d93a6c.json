@@ -1,0 +1,21 @@
+{
+  "stage_id": "885f91a3-56cb-4910-bf66-932944d93a6c",
+  "created_at": "2026-10-24T06:26:18.820911+00:00",
+  "display_name": "test_track.ogg",
+  "absolute_path": "K:\\dev\\vibe-coding\\musicbee-mcp-server\\.pytest-tmp\\test_stage_returns_stage_id_no0\\test_track.ogg",
+  "proposed_tags": {
+    "title": "Test Title"
+  },
+  "diff": [
+    {
+      "field": "album",
+      "old": null,
+      "new": "Test Album"
+    }
+  ],
+  "mb_recording_id": null,
+  "mb_release_id": null,
+  "forensic_score": null,
+  "notes": "",
+  "applied": false
+}

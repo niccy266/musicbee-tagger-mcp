@@ -1,0 +1,21 @@
+{
+  "stage_id": "0517b629-8e0a-4990-918b-97f9b6c9099a",
+  "created_at": "2026-10-24T06:26:18.831377+00:00",
+  "display_name": "test_track.ogg",
+  "absolute_path": "K:\\dev\\vibe-coding\\musicbee-mcp-server\\.pytest-tmp\\test_list_pending_no_paths0\\test_track.ogg",
+  "proposed_tags": {
+    "year": "1965"
+  },
+  "diff": [
+    {
+      "field": "album",
+      "old": null,
+      "new": "Test Album"
+    }
+  ],
+  "mb_recording_id": null,
+  "mb_release_id": null,
+  "forensic_score": null,
+  "notes": "",
+  "applied": false
+}
