@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "musicbee-tagger-mcp",
   "display_name": "MusicBee Tagger",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Investigate MusicBee metadata and stage verified tag proposals.",
   "long_description": "A local MCP server for reading audio metadata, researching MusicBrainz candidates, and staging metadata proposals for review. The MCP server never writes audio files and accepts only opaque tokens, not playlist or audio paths. A separate human-run CLI registers playlists and applies staged changes after confirmation.",
   "author": {
@@ -115,7 +115,7 @@
       "win32"
     ],
     "runtimes": {
-      "python": ">=3.10"
+      "python": ">=3.11,<3.12"
     }
   },
   "user_config": {

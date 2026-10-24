@@ -207,6 +207,7 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "K:\\tools\\mcp-servers\\musicbee-tags\\data"
     )
     assert manifest["compatibility"]["platforms"] == ["darwin", "linux", "win32"]
+    assert manifest["compatibility"]["runtimes"]["python"] == ">=3.11,<3.12"
     assert {tool["name"] for tool in manifest["tools"]} == {
         "read_track_metadata",
         "extract_filename_clues",
@@ -241,9 +242,13 @@ def test_mcpb_archive_contains_only_runtime_project_files(tmp_path):
         assert archive.testzip() is None
         assert "manifest.json" in names
         assert "pyproject.toml" in names
+        assert ".python-version" in names
         assert "README.md" in names
         assert "server.py" in names
         assert "src/musicbee_tagger_mcp/server.py" in names
         assert any(name.startswith("src/musicbee_tagger_mcp/tools/") for name in names)
         assert not any("__pycache__" in name or name.endswith(".pyc") for name in names)
         assert not any(name.startswith(("tests/", ".git/")) for name in names)
+        assert archive.read(".python-version").decode("utf-8").strip() == "3.11"
+        bundled_pyproject = archive.read("pyproject.toml").decode("utf-8")
+        assert '[tool.uv]\ncache-dir = ".uv-cache"' in bundled_pyproject

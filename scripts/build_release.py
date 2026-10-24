@@ -41,7 +41,10 @@ def build_mcpb_archive(output_path: Path, version: str) -> None:
     with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(manifest_path, "manifest.json")
         archive.write(ROOT / "release" / "mcpb" / "server.py", "server.py")
-        archive.write(ROOT / "pyproject.toml", "pyproject.toml")
+        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        pyproject += '\n[tool.uv]\ncache-dir = ".uv-cache"\n'
+        archive.writestr("pyproject.toml", pyproject)
+        archive.writestr(".python-version", "3.11\n")
         archive.write(ROOT / "README.md", "README.md")
         package_source = ROOT / "src" / "musicbee_tagger_mcp"
         for path in sorted(package_source.rglob("*.py")):

@@ -87,7 +87,7 @@
       <h2>Windows desktop release and Claude Code</h2>
       <p>From a source checkout, install directly without extracting a release bundle by running <code>.\install.ps1</code> in the repository root. It builds a wheel from the checkout in a temporary folder and invokes the same installer used by the release archive. Python 3 and the Windows <code>py</code> launcher are required. You may override installation locations with <code>-InstallRoot</code> and <code>-BinRoot</code>.</p>
       <p>Alternatively, the Windows release bundle contains a Python wheel, source distribution, Windows installer, standalone Claude Code MCP config, Claude Code plugin marketplace, and Claude Desktop <code>.mcpb</code> extension. Extract that bundle and install its wheel into a dedicated environment:</p>
-      <pre><code>.\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.1-py3-none-any.whl</code></pre>
+      <pre><code>.\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.2-py3-none-any.whl</code></pre>
       <p>The installer defaults to <code>K:\tools\mcp-servers\musicbee-tags\</code>, stores stage data under <code>data\staged\</code> and private token mappings under <code>data\registered\</code>, and creates <code>K:\bin\musicbee-tagger-mcp.cmd</code>, <code>K:\bin\musicbee-tagger-apply.cmd</code>, <code>K:\bin\musicbee-tagger-register-playlist.cmd</code>, and <code>K:\bin\musicbee-tagger-clear-registrations.cmd</code>. Existing data is preserved during reinstall. Close MCP clients before upgrading; the installer refuses to run while the server process is active. Override <code>-InstallRoot</code> or <code>-BinRoot</code> only if the MCP config and plugin launcher paths are updated to match.</p>
       <p>To install the MCP server into Claude Code's user scope from PowerShell, load the provided <code>release/claude-code/mcp-config.json</code> entry:</p>
       <pre><code>$server = (Get-Content .\mcp-config.json -Raw | ConvertFrom-Json).mcpServers.'musicbee-tagger'
@@ -100,19 +100,11 @@ claude mcp get musicbee-tagger</code></pre>
 
     <section id="mcpb">
       <h2>Claude Desktop MCP Bundle</h2>
-      <p>The release builder creates <code>dist\musicbee-tagger-mcp-0.4.1.mcpb</code>. In Claude Desktop, open <strong>Settings &gt; Extensions &gt; Advanced settings &gt; Install Extension…</strong> and select the bundle. Claude Desktop launches the packaged stdio server with its supported <code>uv</code> runtime.</p>
+      <p>The release builder creates <code>dist\musicbee-tagger-mcp-0.4.2.mcpb</code>. In Claude Desktop, uninstall any older MusicBee Tagger extension, then open <strong>Settings &gt; Extensions &gt; Advanced settings &gt; Install Extension…</strong> and select the new bundle. Claude Desktop launches the packaged stdio server locally with its supported <code>uv</code> runtime; no separate remote server or HTTPS proxy is needed.</p>
       <p>The MCPB exposes a <strong>MusicBee Tagger data directory</strong> setting and defaults it to <code>K:\tools\mcp-servers\musicbee-tags\data</code>, matching the Windows release installer. The server receives that path as <code>MUSICBEE_TAGGER_DATA_DIR</code>, so registrations, staged proposals, and the shared queue are visible to both the extension and the human-run CLI. If you select another directory in Claude Desktop, set the same path in the PowerShell window used for registration:</p>
       <pre><code>$env:MUSICBEE_TAGGER_DATA_DIR = "K:\tools\mcp-servers\musicbee-tags\data"
 K:\bin\musicbee-tagger-register-playlist.cmd</code></pre>
-      <p>The MCPB sets its temporary directory and <code>uv</code> cache under the extension installation directory for the running server process. Claude Desktop performs the initial <code>uv sync</code> before applying the server's <code>mcp_config.env</code>. If extension setup logs report <code>os error 17</code> or a cross-drive temporary-file error, fully quit Claude Desktop, then launch it from PowerShell with <code>TEMP</code>, <code>TMP</code>, and <code>UV_CACHE_DIR</code> set to the same directory:</p>
-      <pre><code>$uvCache = Join-Path $env:LOCALAPPDATA "uv\cache"
-New-Item -ItemType Directory -Force -Path $uvCache | Out-Null
-$env:TEMP = $uvCache
-$env:TMP = $uvCache
-$env:UV_CACHE_DIR = $uvCache
-$claudePackage = Get-AppxPackage -Name Claude
-Start-Process -FilePath (Join-Path $claudePackage.InstallLocation "app\Claude.exe")</code></pre>
-      <p>After Claude opens, uninstall the failed extension and install the <code>.mcpb</code> again. These overrides apply only to that launched Claude process. The bundle includes the project README referenced by <code>pyproject.toml</code> and pins <code>mcp&gt;=2.0.0</code>, which provides the <code>MCPServer</code> API used by this version. The separate apply CLI remains the only way to write audio tags and always requires human confirmation. See Anthropic's <a href="https://github.com/anthropics/mcpb">MCPB documentation</a> for the bundle format and Claude Desktop's extension settings for installation requirements.</p>
+      <p>To avoid Windows cross-drive temp/cache rename failures during Claude's initial <code>uv sync</code>, the bundle pins setup to Python 3.11 and configures uv's dependency cache inside the extension directory. The bundle includes the project README referenced by <code>pyproject.toml</code> and pins <code>mcp&gt;=2.0.0</code>, which provides the <code>MCPServer</code> API used by this version. The separate apply CLI remains the only way to write audio tags and always requires human confirmation. See Anthropic's <a href="https://github.com/anthropics/mcpb">MCPB documentation</a> for the bundle format and Claude Desktop's extension settings for installation requirements.</p>
     </section>
 
     <section id="agent">
