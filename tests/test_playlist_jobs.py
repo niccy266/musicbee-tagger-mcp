@@ -1,4 +1,8 @@
-"""Tests for the playlist job lifecycle: register → batches → completion."""
+"""Playlist job lifecycle: CLI registration → MCP-served batches → completion.
+
+Registration is a local CLI command. The MCP server only serves unprocessed
+tokens in batches and records outcomes — it never accepts a path.
+"""
 
 import json
 
@@ -6,7 +10,8 @@ import pytest
 
 from musicbee_tagger_mcp.file_registry import FileRegistry
 from musicbee_tagger_mcp.job_store import JobStore
-from musicbee_tagger_mcp.tools.playlists import register_playlist_job
+from musicbee_tagger_mcp.register_playlist_cli import run as cli_run
+from musicbee_tagger_mcp.tools.playlists import complete_batch, job_status, next_batch
 
 
 @pytest.fixture
@@ -14,94 +19,105 @@ def env(tmp_path, monkeypatch):
     reg = FileRegistry(directory=tmp_path / "reg")
     jobs = JobStore(directory=tmp_path / "jobs")
     (tmp_path / "jobs").mkdir()
-    for mod in ("musicbee_tagger_mcp.file_registry",
-                "musicbee_tagger_mcp.tools.files",
-                "musicbee_tagger_mcp.tools.playlists"):
-        monkeypatch.setattr(f"{mod}.get_registry", lambda r=reg: r)
-    monkeypatch.setattr(
-        "musicbee_tagger_mcp.tools.playlists.get_job_store", lambda: jobs
-    )
+    monkeypatch.setattr("musicbee_tagger_mcp.register_playlist_cli.get_registry", lambda: reg)
+    monkeypatch.setattr("musicbee_tagger_mcp.register_playlist_cli.get_job_store", lambda: jobs)
+    monkeypatch.setattr("musicbee_tagger_mcp.tools.playlists.get_job_store", lambda: jobs)
     return reg, jobs, tmp_path
 
 
 def _playlist(tmp_path, count=25, missing=0):
     lines = ["#EXTM3U"]
     for i in range(count):
-        p = tmp_path / f"track_{i:02d}.mp3"
-        p.write_bytes(b"\x00" * 8)
-        lines.append(str(p))
+        (tmp_path / f"track_{i:02d}.mp3").write_bytes(b"\x00" * 8)
+        lines.append(str(tmp_path / f"track_{i:02d}.mp3"))
     for i in range(missing):
-        lines.append(str(tmp_path / f"missing_{i}.mp3"))
-    path = tmp_path / "mix.m3u"
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+        lines.append(str(tmp_path / f"absent_{i}.mp3"))
+    playlist = tmp_path / "evening.m3u"
+    playlist.write_text("\n".join(lines), encoding="utf-8")
+    return playlist
 
 
-def test_full_lifecycle(env):
+def _register_cli(env, playlist, out):
     reg, jobs, tmp_path = env
-    result = register_playlist_job(str(_playlist(tmp_path, count=25, missing=2)))
-    assert result["registered"] == 25
-    assert result["skipped_entries"] == 2
-    assert str(tmp_path) not in json.dumps(result)
+    assert cli_run.__module__
+    import io
+    stream = io.StringIO()
+    code = cli_run(input_stream=io.StringIO(f'"{playlist}"\n'), output_stream=stream)
+    return code, stream.getvalue(), jobs
 
-    # Batches of 10 until exhausted.
+
+def test_cli_creates_job_with_batches_of_ten(env):
+    reg, jobs, tmp_path = env
+    playlist = _playlist(tmp_path, count=25, missing=2)
+    import io
+    stream = io.StringIO()
+    code = cli_run(input_stream=io.StringIO(f'"{playlist}"\n'), output_stream=stream)
+    assert code == 0
+    text = stream.getvalue()
+    assert "job" in text
+    (job_id,) = [line.split()[-1].rstrip(".") for line in text.splitlines() if "playlist job" in line]
+    job_id = job_id.rstrip(".")
+    assert len(job_id) == 36  # uuid
+    status = jobs.job_status(job_id)
+    assert status["counts"] == {"pending": 25, "in_progress": 0, "done": 0, "failed": 0, "skipped": 0}
+    assert status["skipped"] == 2
+    batch = next_batch(job_id, size=10)
+    assert len(batch["batch"]) == 10
+    assert batch["remaining"] == 15
+
+
+def test_batches_and_completion(env):
+    reg, jobs, tmp_path = env
+    playlist = _playlist(tmp_path, count=25)
+    import io
+    stream = io.StringIO()
+    cli_run(input_stream=io.StringIO(f'"{playlist}"\n'), output_stream=stream)
+    (job_id,) = [line.split()[-1].rstrip(".") for line in stream.getvalue().splitlines() if "playlist job" in line]
+
     claimed = []
-    while True:
-        batch = jobs.next_batch(result["job_id"])
-        if not batch["batch"]:
-            break
-        assert len(batch["batch"]) == 10 or batch["remaining"] == 0
-        claimed.extend(batch["batch"])
+    for _ in range(3):
+        batch = next_batch(job_id, size=10)
+        claimed.extend(t["token"] for t in batch["batch"])
+        complete_batch(job_id, [{"token": t["token"], "success": True} for t in batch["batch"]])
     assert len(claimed) == 25
-    assert all(reg.resolve(t["token"]) for t in claimed)
+    # empty pool
+    assert next_batch(job_id)["batch"] == []
+    status = jobs.job_status(job_id)
+    assert status["counts"]["done"] == 25
 
-    results = [
-        {"token": t["token"], "success": i % 5 != 0}
-        for i, t in enumerate(claimed)
-    ]
-    outcome = jobs.complete_batch(result["job_id"], results)
-    assert outcome["updated"] == 25
-    assert outcome["remaining"] == 0
 
-    status = jobs.job_status(result["job_id"])
-    assert status["counts"]["done"] == 20
-    assert status["counts"]["failed"] == 5
-    assert len(status["failed"]) == 5
+def test_failed_tokens_reported_with_display_names(env):
+    reg, jobs, tmp_path = env
+    playlist = _playlist(tmp_path, count=12)
+    import io
+    stream = io.StringIO()
+    cli_run(input_stream=io.StringIO(f'"{playlist}"\n'), output_stream=stream)
+    (job_id,) = [line.split()[-1].rstrip(".") for line in stream.getvalue().splitlines() if "playlist job" in line]
+    batch = next_batch(job_id, size=10)
+    results = [{"token": t["token"], "success": False, "error": "unresolvable"} for t in batch["batch"]]
+    complete_batch(job_id, results)
+    status = job_status(job_id)
+    assert len(status["failed"]) == 10
+    assert all(f["error"] == "unresolvable" for f in status["failed"])
     assert all("token" not in f for f in status["failed"])
+    assert all("path" not in json.dumps(f).lower() for f in status["failed"])
 
 
-def test_duplicate_tokens_not_reclaimed(env):
+def test_job_status_never_leaks_paths_or_tokens(env):
     reg, jobs, tmp_path = env
-    result = register_playlist_job(str(_playlist(tmp_path, count=3)))
-    job_id = result["job_id"]
-    first = jobs.next_batch(job_id)["batch"]
-    assert len(first) == 3
-    assert jobs.next_batch(job_id)["batch"] == []
+    playlist = _playlist(tmp_path, count=5)
+    import io
+    stream = io.StringIO()
+    cli_run(input_stream=io.StringIO(f'"{playlist}"\n'), output_stream=stream)
+    (job_id,) = [line.split()[-1].rstrip(".") for line in stream.getvalue().splitlines() if "playlist job" in line]
+    dumped = json.dumps(job_status(job_id))
+    assert str(tmp_path) not in dumped
+    assert ".mp3" not in dumped
+    assert "token" not in dumped
 
 
-def test_in_progress_cannot_be_recompleted(env):
-    reg, jobs, tmp_path = env
-    job_id = register_playlist_job(str(_playlist(tmp_path, count=2)))["job_id"]
-    batch = jobs.next_batch(job_id)["batch"]
-    outcome = jobs.complete_batch(
-        job_id, [{"token": batch[0]["token"], "success": True}]
-    )
-    assert outcome["updated"] == 1
-    repeat = jobs.complete_batch(
-        job_id, [{"token": batch[0]["token"], "success": True}]
-    )
-    assert repeat["updated"] == 0
-    assert batch[0]["token"] in repeat["unknown"]
-
-
-def test_unknown_job_ids_are_safe(env):
-    reg, jobs, tmp_path = env
-    assert "error" in jobs.next_batch("not-a-uuid")
-    assert "error" in jobs.job_status(str(__import__("uuid").uuid4()))
-    assert "error" in register_playlist_job(str(tmp_path / "nope.m3u"))
-
-
-def test_error_messages_are_path_free(env):
-    reg, jobs, tmp_path = env
-    bad = register_playlist_job(str(tmp_path / "secret_dir" / "hidden.m3u"))
-    assert str(tmp_path) not in json.dumps(bad)
+def test_unknown_job_handled_safely():
+    bad = next_batch("no-such-job")
+    assert "error" in bad and "batch" not in bad
+    assert "error" in complete_batch("no-such-job", [])
+    assert job_status("no-such-job") == {"error": "Unknown job id"}

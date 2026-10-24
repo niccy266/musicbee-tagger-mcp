@@ -116,19 +116,21 @@ def test_no_mcp_tool_takes_a_path_parameter():
                 f"{fn.__name__} exposes path-like parameter {pname!r}"
 
 
-def test_register_playlist_returns_no_paths_or_tokens(registry, tmp_path):
-    """The one path-accepting tool must leak nothing back to the agent."""
-    from musicbee_tagger_mcp.tools.playlists import register_playlist_job
+def test_no_mcp_tool_accepts_a_location():
+    """Registration moved to the CLI; no MCP tool takes a path or location."""
+    import inspect
 
-    audio = tmp_path / "Song.mp3"
-    audio.write_bytes(b"\x00")
-    _m3u(tmp_path, "mix.m3u", ["#EXTM3U", str(audio), "missing.flac"])
+    import musicbee_tagger_mcp.server as server
+    from musicbee_tagger_mcp.server import app
 
-    result = register_playlist_job(str(_m3u(tmp_path, "used.m3u",
-        ["#EXTM3U", str(audio)])))
-    text = json.dumps(result)
-    assert "error" not in result
-    assert result["registered"] == 1
-    assert str(tmp_path) not in text
-    assert "mp3" not in text.lower()
-    assert "token" not in result and "tracks" not in result
+    assert "register_playlist" not in dir(server)
+    tools = set(app._tool_manager._tools)
+    assert "register_playlist" not in tools
+    assert "register_playlist_job" not in tools
+    for name in tools:
+        fn = getattr(server, name, None)
+        if fn is None:
+            continue
+        for pname in inspect.signature(fn).parameters:
+            assert not any(w in pname.lower() for w in ("path", "file", "dir", "location")), \
+                f"MCP tool {name!r} accepts location-like parameter {pname!r}"
