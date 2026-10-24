@@ -230,6 +230,7 @@ python -m musicbee_tagger_mcp.apply_staged --all
 ### 2026-10-24 — Read-only Genre inventory pilot
 - Inspected metadata for 25 user-registered tracks via the installed MCP server. Found 18 distinct non-empty Genre strings; examples include semicolon-delimited values, punctuation-heavy source/vendor text, placeholder strings, dates, and NUL-separated values.
 - No genre was normalized or staged, and no audio was applied. The pilot supports defining cleanup rules based on actual Genre field structure before any changes are proposed.
+
 ### 2026-10-24 — Persistent shared operation queue
 - Added a transactional SQLite queue under the configured private data directory. MCP clients sharing that data root can enqueue path-free operations, query by status/batch with pagination, and persist progress updates across restarts.
 - Added validation against local filesystem paths, retained completed entries, and covered persistence, filtering, pagination, status updates, and path rejection with regression tests.

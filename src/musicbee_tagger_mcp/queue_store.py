@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator, Optional
-from urllib.parse import urlsplit
 
 from .data_paths import ensure_data_subdirectory
 
@@ -38,6 +37,12 @@ class OperationQueue:
 
     def __init__(self, directory: Optional[Path] = None) -> None:
         self.directory = directory or default_queue_dir()
+        try:
+            self.directory.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            raise RuntimeError(
+                "Unable to access the persistent operation queue."
+            ) from None
         self.database = self.directory / "operations.sqlite3"
         with self._connection() as connection:
             connection.execute(
@@ -66,13 +71,17 @@ class OperationQueue:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA busy_timeout = 5000")
         except (OSError, sqlite3.Error):
-            raise RuntimeError("Unable to access the persistent operation queue.") from None
+            raise RuntimeError(
+                "Unable to access the persistent operation queue."
+            ) from None
         try:
             yield connection
             connection.commit()
         except sqlite3.Error:
             connection.rollback()
-            raise RuntimeError("Unable to access the persistent operation queue.") from None
+            raise RuntimeError(
+                "Unable to access the persistent operation queue."
+            ) from None
         finally:
             connection.close()
 
@@ -175,7 +184,9 @@ class OperationQueue:
                     (status, details, now, operation_id),
                 )
             if cursor.rowcount == 0:
-                raise ValueError(f"No queued operation found for operation_id: {operation_id}")
+                raise ValueError(
+                    f"No queued operation found for operation_id: {operation_id}"
+                )
             row = connection.execute(
                 "SELECT * FROM operations WHERE operation_id = ?", (operation_id,)
             ).fetchone()
