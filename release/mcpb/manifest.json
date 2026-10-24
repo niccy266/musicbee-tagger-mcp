@@ -1,0 +1,110 @@
+{
+  "manifest_version": "0.4",
+  "name": "musicbee-tagger-mcp",
+  "display_name": "MusicBee Tagger",
+  "version": "0.3.0",
+  "description": "Investigate MusicBee metadata and stage verified tag proposals.",
+  "long_description": "A local MCP server for reading audio metadata, researching MusicBrainz candidates, and staging metadata proposals for review. The MCP server never writes audio files and accepts only opaque tokens, not playlist or audio paths. A separate human-run CLI registers playlists and applies staged changes after confirmation.",
+  "author": {
+    "name": "MusicBee Tagger MCP contributors",
+    "url": "https://github.com/niccy266/musicbee-tagger-mcp"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/niccy266/musicbee-tagger-mcp"
+  },
+  "server": {
+    "type": "uv",
+    "entry_point": "server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "server.py"
+      ]
+    }
+  },
+  "tools": [
+    {
+      "name": "read_track_metadata",
+      "description": "Read embedded metadata for a registered track token."
+    },
+    {
+      "name": "extract_filename_clues",
+      "description": "Extract possible artist and title clues from a registered filename."
+    },
+    {
+      "name": "get_batch_brief",
+      "description": "Summarize metadata for a batch of registered track tokens."
+    },
+    {
+      "name": "search_canonical_release",
+      "description": "Search MusicBrainz for candidate releases."
+    },
+    {
+      "name": "verify_mbid",
+      "description": "Verify a MusicBrainz recording or release candidate."
+    },
+    {
+      "name": "preview_tags",
+      "description": "Preview proposed metadata changes without writing audio."
+    },
+    {
+      "name": "stage_tag_changes",
+      "description": "Stage verified metadata changes for human review."
+    },
+    {
+      "name": "list_staged_changes",
+      "description": "List pending metadata proposals without applying them."
+    },
+    {
+      "name": "next_batch",
+      "description": "Claim the next batch of work from a locally registered playlist job."
+    },
+    {
+      "name": "complete_batch",
+      "description": "Record path-free results for a claimed playlist batch."
+    },
+    {
+      "name": "job_status",
+      "description": "Get aggregate progress for a playlist job."
+    },
+    {
+      "name": "enqueue_batch_operation",
+      "description": "Add a path-free operation to the persistent shared queue."
+    },
+    {
+      "name": "list_batch_operations",
+      "description": "Query shared operations by status or batch."
+    },
+    {
+      "name": "update_batch_operation",
+      "description": "Update a queued operation's status and progress details."
+    },
+    {
+      "name": "repair_mojibake",
+      "description": "Suggest repairs for text corrupted by common encoding errors."
+    }
+  ],
+  "keywords": [
+    "musicbee",
+    "music",
+    "metadata",
+    "musicbrainz",
+    "tagging"
+  ],
+  "license": "MIT",
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": [
+      "darwin",
+      "linux",
+      "win32"
+    ],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  }
+}

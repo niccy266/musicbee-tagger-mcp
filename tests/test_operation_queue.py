@@ -53,7 +53,7 @@ def test_queue_rejects_paths_and_invalid_filters(tmp_path):
     assert claimed["operation_id"] == operation["operation_id"]
 
 
-def test_mcp_tools_include_shared_operation_queue(tmp_path, monkeypatch):
+def test_mcp_tools_include_shared_batch_queue(tmp_path, monkeypatch):
     import inspect
 
     class FakeApp:
@@ -66,22 +66,21 @@ def test_mcp_tools_include_shared_operation_queue(tmp_path, monkeypatch):
                 return function
             return decorate
 
+    from musicbee_tagger_mcp.queue_store import OperationQueue
     from musicbee_tagger_mcp.tools import register_tools
-    from musicbee_tagger_mcp.operation_queue import OperationQueue
 
     app = FakeApp()
-    queue = OperationQueue(tmp_path / "tools.sqlite3")
+    queue = OperationQueue(tmp_path)
     monkeypatch.setattr(
-        "musicbee_tagger_mcp.tools.operations.get_operation_queue", lambda: queue
+        "musicbee_tagger_mcp.tools.queue._get_queue", lambda: queue
     )
     register_tools(app)
     tools = {tool.__name__: tool for tool in app.tools}
     names = set(tools)
     assert {
-        "enqueue_operation",
-        "list_operations",
-        "claim_operations",
-        "complete_operation",
+        "enqueue_batch_operation",
+        "list_batch_operations",
+        "update_batch_operation",
     } <= names
     for tool in app.tools:
         assert not any(
@@ -89,11 +88,9 @@ def test_mcp_tools_include_shared_operation_queue(tmp_path, monkeypatch):
             for parameter in inspect.signature(tool).parameters
             for word in ("path", "file", "directory")
         )
-    queued = tools["enqueue_operation"]("Queued", "Process a token batch")
-    assert tools["list_operations"]()["operations"][0]["operation_id"] == queued[
+    queued = tools["enqueue_batch_operation"]("Queued", "Process a token batch")
+    assert tools["list_batch_operations"]()["items"][0]["operation_id"] == queued[
         "operation_id"
     ]
-    claimed = tools["claim_operations"]("test-agent")["operations"][0]
-    assert tools["complete_operation"](
-        claimed["operation_id"], "test-agent", True
-    )["status"] == "done"
+    updated = tools["update_batch_operation"](queued["operation_id"], "in_progress")
+    assert updated["status"] == "in_progress"
