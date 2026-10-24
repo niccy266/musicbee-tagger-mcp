@@ -23,7 +23,8 @@ Make the MCP server easy to install and connect to Claude Code on the user's des
 - Put launchers or aliases in:
   `K:\bin\`
 - Prefer a **Python package** installation.
-- The server may access paths supplied during file or playlist registration.
+- A human-run local command accepts playlist paths; the MCP server accepts only
+  opaque file tokens.
 - Neither the agent nor ordinary MCP responses/logs should expose absolute paths.
 - Use a configurable private state/log root, set in the user-level MCP config. The requested default is:
   `K:\tools\mcp-servers\musicbee-tags\`
@@ -49,8 +50,8 @@ The repository already has:
 - An MCP server using **stdio** transport.
 - A Python console entry point: `musicbee-tagger-mcp`.
 - A separate user CLI: `musicbee-tagger-apply`.
-- Eleven MCP tools for registration, metadata inspection, MusicBrainz investigation, preview, staging, and mojibake repair.
-- Opaque, process-local file tokens. The token-to-path registry is in memory and is lost when the server exits.
+- Nine MCP tools for metadata inspection, MusicBrainz investigation, preview, staging, and mojibake repair; path-taking registration tools are not exposed.
+- Opaque tokens backed by a persistent, local token-to-path registry in the configured private data directory. A human-run CLI registers playlists and a separate confirmation-gated CLI clears registrations.
 - Metadata reads directly from audio files; metadata is not currently cached in a database.
 - Pending change manifests stored as JSON files.
 - A user CLI that prompts before writing tags and creates backups by default.
@@ -113,10 +114,11 @@ This is a proposed organization, not a settled on-disk schema. Confirm that the 
 
 ### Paths
 
-- Accept paths only in `register_files` or `register_playlist`.
+- Accept playlist paths only through a human-run local CLI, never through an MCP tool.
 - Resolve playlist-relative entries inside the server.
 - Use opaque tokens after registration.
-- Keep actual paths in process memory for token resolution and in private pending manifests only when needed by the apply CLI.
+- Store token-to-path mappings in the configured private registration directory for token resolution across MCP restarts; the registration cleanup CLI removes these mappings after explicit confirmation.
+- This boundary keeps paths out of chat and MCP payloads, but is not protection from unrestricted same-user shell access.
 - Never include absolute paths in:
   - MCP tool responses
   - agent-facing notes

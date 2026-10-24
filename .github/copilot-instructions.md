@@ -12,7 +12,7 @@
 
 ## Privacy and Audio Safety
 
-- Preserve the token-based design: accept paths only at `register_files` or `register_playlist`, then use opaque tokens. Never return or log absolute audio or playlist paths; sanitize failures as well as successful results.
+- Preserve the privacy boundary: never accept playlist/audio paths through MCP tools. A human-run local CLI registers playlists into the persistent private token registry; MCP tools accept only opaque tokens. Never return or log absolute audio or playlist paths; sanitize failures as well as successful results.
 - Treat filenames and parser output as clues, not facts. Artist/title order is ambiguous; use both candidates and corroborate with embedded tags, duration, and reliable sources.
 - Keep the MCP server read-only with respect to audio files. Only stage proposed metadata after the MusicBrainz verification gate passes; never apply physical audio changes. The user reviews and applies staged changes through the CLI.
 - Playlist import must resolve relative local entries against the playlist's directory, skip remote URLs and unsupported formats safely, and return useful path-free per-entry errors.

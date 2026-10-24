@@ -1,29 +1,15 @@
-"""MCP registration tools. Paths enter here and leave only as tokens."""
+"""Path-safe playlist registration used only by the local human CLI."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from ..file_registry import get_registry
+from ..file_registry import FileRegistry, get_registry
 from ..playlist import parse_m3u_playlist
 
 
-def register_files(paths: List[str]) -> List[Dict[str, str]]:
-    """Register paths and return opaque tokens with filename-only labels."""
-    registry = get_registry()
-    results = []
-    for path in paths:
-        try:
-            results.append(registry.register(path))
-        except FileNotFoundError:
-            results.append({"error": "File not found"})
-        except OSError:
-            results.append({"error": "Unable to access file"})
-        except (RuntimeError, ValueError):
-            results.append({"error": "Unable to resolve file"})
-    return results
-
-
-def register_playlist(playlist_path: str) -> Dict[str, Any]:
-    """Register supported local playlist entries without returning their paths."""
+def register_playlist(
+    playlist_path: str, registry: Optional[FileRegistry] = None
+) -> Dict[str, Any]:
+    """Register playlist entries locally and return tokens without paths."""
     try:
         entries = parse_m3u_playlist(playlist_path)
     except FileNotFoundError:
@@ -41,6 +27,7 @@ def register_playlist(playlist_path: str) -> Dict[str, Any]:
 
     registered: List[Dict[str, Any]] = []
     skipped: List[Dict[str, Any]] = []
+    registry = registry or get_registry()
     for line_number, entry_path, skip_reason in entries:
         if skip_reason:
             skipped.append({"line": line_number, "error": skip_reason})
@@ -49,7 +36,7 @@ def register_playlist(playlist_path: str) -> Dict[str, Any]:
             skipped.append({"line": line_number, "error": "Invalid playlist entry"})
             continue
         try:
-            result = get_registry().register(str(entry_path))
+            result = registry.register(str(entry_path))
             registered.append({"line": line_number, **result})
         except FileNotFoundError:
             skipped.append({"line": line_number, "error": "File not found"})
@@ -58,8 +45,3 @@ def register_playlist(playlist_path: str) -> Dict[str, Any]:
         except (RuntimeError, ValueError):
             skipped.append({"line": line_number, "error": "Unable to resolve file"})
     return {"registered": registered, "skipped": skipped}
-
-
-def register_file_tools(app) -> None:
-    app.tool()(register_files)
-    app.tool()(register_playlist)

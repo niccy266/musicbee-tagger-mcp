@@ -1,29 +1,15 @@
 """Filesystem persistence for pending tag-change manifests."""
 
 import json
-import os
 from pathlib import Path
 from typing import List, Optional
+
+from .data_paths import ensure_data_subdirectory
 
 
 def default_staging_dir() -> Path:
     """Return the user's persistent staging directory."""
-    configured_root = os.environ.get("MUSICBEE_TAGGER_DATA_DIR")
-    if configured_root:
-        directory = Path(configured_root).expanduser() / "staged"
-    else:
-        appdata = os.environ.get("APPDATA")
-        base = Path(appdata) if appdata else Path.home()
-        directory = base / "musicbee-tagger-mcp" / "staged"
-
-    try:
-        directory.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        raise RuntimeError(
-            "Unable to access the MusicBee Tagger MCP data directory; "
-            "check MUSICBEE_TAGGER_DATA_DIR and local permissions."
-        ) from None
-    return directory
+    return ensure_data_subdirectory("staged")
 
 
 class StageManifestStore:

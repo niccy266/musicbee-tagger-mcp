@@ -23,14 +23,30 @@ if (-not (Test-Path -LiteralPath $pythonPath)) {
     }
 }
 
+$serverExe = Join-Path $venvPath "Scripts\musicbee-tagger-mcp.exe"
+$applyExe = Join-Path $venvPath "Scripts\musicbee-tagger-apply.exe"
+$registerPlaylistExe = Join-Path $venvPath "Scripts\musicbee-tagger-register-playlist.exe"
+$clearRegistrationsExe = Join-Path $venvPath "Scripts\musicbee-tagger-clear-registrations.exe"
+$runningServers = @(
+    Get-CimInstance Win32_Process -Filter "Name = 'musicbee-tagger-mcp.exe'" |
+        Where-Object { $_.ExecutablePath -eq $serverExe }
+)
+if ($runningServers.Count -gt 0) {
+    $processIds = ($runningServers.ProcessId -join ", ")
+    throw "Cannot upgrade while MusicBee Tagger MCP is running (PID(s): $processIds). Close MCP clients using this server, then rerun the installer."
+}
+
 & $pythonPath -m pip install $resolvedWheel
 if ($LASTEXITCODE -ne 0) {
     throw "Could not install the release wheel into the dedicated virtual environment."
 }
 
-$serverExe = Join-Path $venvPath "Scripts\musicbee-tagger-mcp.exe"
-$applyExe = Join-Path $venvPath "Scripts\musicbee-tagger-apply.exe"
-if (-not (Test-Path -LiteralPath $serverExe) -or -not (Test-Path -LiteralPath $applyExe)) {
+if (
+    -not (Test-Path -LiteralPath $serverExe) -or
+    -not (Test-Path -LiteralPath $applyExe) -or
+    -not (Test-Path -LiteralPath $registerPlaylistExe) -or
+    -not (Test-Path -LiteralPath $clearRegistrationsExe)
+) {
     throw "The installed wheel is missing one or more expected command entry points."
 }
 
@@ -47,6 +63,18 @@ setlocal
 if not defined MUSICBEE_TAGGER_DATA_DIR set "MUSICBEE_TAGGER_DATA_DIR=$dataPath"
 "$applyExe" %*
 "@
+$registerPlaylistLauncher = @"
+@echo off
+setlocal
+if not defined MUSICBEE_TAGGER_DATA_DIR set "MUSICBEE_TAGGER_DATA_DIR=$dataPath"
+"$registerPlaylistExe" %*
+"@
+$clearRegistrationsLauncher = @"
+@echo off
+setlocal
+if not defined MUSICBEE_TAGGER_DATA_DIR set "MUSICBEE_TAGGER_DATA_DIR=$dataPath"
+"$clearRegistrationsExe" %*
+"@
 
 [System.IO.File]::WriteAllText(
     (Join-Path $binPath "musicbee-tagger-mcp.cmd"),
@@ -56,6 +84,16 @@ if not defined MUSICBEE_TAGGER_DATA_DIR set "MUSICBEE_TAGGER_DATA_DIR=$dataPath"
 [System.IO.File]::WriteAllText(
     (Join-Path $binPath "musicbee-tagger-apply.cmd"),
     $applyLauncher,
+    $encoding
+)
+[System.IO.File]::WriteAllText(
+    (Join-Path $binPath "musicbee-tagger-register-playlist.cmd"),
+    $registerPlaylistLauncher,
+    $encoding
+)
+[System.IO.File]::WriteAllText(
+    (Join-Path $binPath "musicbee-tagger-clear-registrations.cmd"),
+    $clearRegistrationsLauncher,
     $encoding
 )
 
