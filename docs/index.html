@@ -91,7 +91,7 @@ $json = $server | ConvertTo-Json -Compress -Depth 10
 claude mcp add-json --scope user musicbee-tagger $json
 claude mcp get musicbee-tagger</code></pre>
       <p>Alternatively, add the extracted <code>claude-marketplace</code> directory with <code>claude plugin marketplace add .\claude-marketplace</code>, then install it with <code>claude plugin install musicbee-tagger@musicbee-tagger</code>. The plugin includes the model-invocable <code>musicbee-investigator</code> skill. After extracting a newer release over the existing marketplace directory, run <code>claude plugin marketplace update musicbee-tagger</code> and <code>claude plugin update musicbee-tagger@musicbee-tagger</code>, then restart Claude Code. The MCP process and apply CLI share the private data root through <code>MUSICBEE_TAGGER_DATA_DIR</code>; manually invoking the CLI requires setting the same variable first.</p>
-      <p>Pending stage manifests and token-to-path registrations are persisted in the install's <code>data</code> folder. Back it up to preserve them. Clear registrations after use with <code>K:\bin\musicbee-tagger-clear-registrations.cmd</code>; the command asks for confirmation and does not remove staged proposals. Search logs, applied-record archives, retry queues, and confidence-based auto-staging are not part of this release.</p>
+      <p>Pending stage manifests, token-to-path registrations, playlist jobs, and the shared operation queue are persisted in the install's <code>data</code> folder. Back it up to preserve them. Clear registrations after use with <code>K:\bin\musicbee-tagger-clear-registrations.cmd</code>; the command asks for confirmation and does not remove staged proposals or queued operations.</p>
     </section>
 
     <section id="agent">
@@ -106,6 +106,7 @@ claude mcp get musicbee-tagger</code></pre>
         <li><strong>Report and stop.</strong> Confirm staged names, fields, confidence, and duration difference using <code>list_staged_changes</code>. Explain unresolved tracks and why. Tell the user to review/apply in the CLI; do not apply changes yourself.</li>
       </ol>
       <p>Token mappings persist in the configured data directory and survive MCP restarts and logins for the same user and install. Return concise per-track results instead of full raw responses. Respect the MusicBrainz limit of one request per second; never parallelize requests to evade it.</p>
+      <p>For work that spans sessions or agents, use <code>enqueue_operation</code> to add a path-free task, <code>list_operations</code> to inspect the shared persistent queue, <code>claim_operations</code> to atomically take a batch, and <code>complete_operation</code> to record each outcome. All agents connected to the same server data directory see the same queue. Queue text and results must not contain filesystem paths.</p>
       <p>Never request, repeat, or delegate playlist/audio paths. Tokens may be shared with a subagent only if it can access the same MCP server and local registration store; otherwise perform token-dependent verification and staging in the parent.</p>
       <p>The detailed agent workflow is also available in <a href="../.agents/skills/musicbee-investigator/SKILL.md">the investigator skill</a>.</p>
     </section>
@@ -124,6 +125,10 @@ claude mcp get musicbee-tagger</code></pre>
           <tr><td><code>preview_tags</code></td><td>Preview field-level changes without writing audio.</td><td>Token only.</td></tr>
           <tr><td><code>stage_tag_changes</code></td><td>Save a pending manifest for user review; does not write audio.</td><td>Token only.</td></tr>
           <tr><td><code>list_staged_changes</code></td><td>List pending path-free stage summaries.</td><td>No file input.</td></tr>
+          <tr><td><code>enqueue_operation</code></td><td>Add a path-free task to the persistent shared queue.</td><td>Paths are rejected.</td></tr>
+          <tr><td><code>list_operations</code></td><td>Query queued tasks by status with a bounded result count.</td><td>Path-free summaries.</td></tr>
+          <tr><td><code>claim_operations</code></td><td>Atomically claim a batch for one agent.</td><td>Path-free task data.</td></tr>
+          <tr><td><code>complete_operation</code></td><td>Record the claiming agent's result.</td><td>Paths are rejected.</td></tr>
         </tbody>
       </table>
     </section>

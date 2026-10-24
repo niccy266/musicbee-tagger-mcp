@@ -27,12 +27,18 @@ The installer defaults to:
 - Launchers: `K:\bin\`
 - Private stage data: `K:\tools\mcp-servers\musicbee-tags\data\staged\`
 - Private registration data: `K:\tools\mcp-servers\musicbee-tags\data\registered\`
+- Shared operation queue: `K:\tools\mcp-servers\musicbee-tags\data\queue\operations.sqlite3`
 
 The `data` directory is separate from the installed environment so package
 upgrades do not replace pending proposals or local registrations. The installer
 preserves existing data. Back up the data directory to preserve them. There is
 no automatic cleanup; use the confirmation-gated registration cleanup command
 after investigations.
+
+MCP agents connected to the same configured data directory share the durable
+operation queue. Use `enqueue_operation` and `list_operations` to create and
+query path-free work, and `claim_operations` / `complete_operation` to process
+it in coordinated batches across sessions and server restarts.
 
 1. Download the Windows release bundle and extract it.
 2. In PowerShell, run the included installer, supplying the downloaded wheel:
