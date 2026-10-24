@@ -19,6 +19,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install ffmpeg (test fixtures)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
       - name: Install project and development dependencies
         run: |
           python -m pip install --upgrade pip
