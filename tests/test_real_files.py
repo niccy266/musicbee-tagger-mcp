@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import mutagen
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
@@ -208,3 +209,40 @@ def test_garbled_copy_can_be_corrected(path, tmp_path):
     assert fixed["title"] == truth["title"]
     assert fixed["artist"] == truth["artist"]
     assert fixed["genre"] == GARBLED["genre"], "untouched fields must be preserved"
+
+
+# --- Issue #19: sort fields and Last.fm passthrough on real files ---
+
+SORT_AND_LASTFM = {
+    "artist_sort": "Качмарик Дэвид",
+    "title_sort": "Другое Название",
+    "album_sort": "Другое Альбом",
+    "album_artist_sort": "Качмарик Дэвид",
+    "lastfm_title": "Another Title",
+    "lastfm_artist": "David Kachmarik",
+    "lastfm_url": "https://www.last.fm/music/david+kachmarik",
+}
+
+
+@pytest.mark.parametrize("ext", ["mp3", "ogg", "m4a"])
+def test_sort_and_lastfm_fields_roundtrip_on_real_files(tmp_path, ext):
+    """Write Cyrillic sort names + Last.fm passthrough into a real audio
+    file and read them back byte-identical."""
+    src = {"mp3": MP3, "ogg": OGG_KNACK, "m4a": OGG_KNACK}[ext]
+    work = tmp_path / f"sort-test.{ext}"
+    if ext == "m4a":
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src),
+             "-c:a", "aac", str(work)], check=True)
+    else:
+        work.write_bytes(src.read_bytes())
+
+    audio = mutagen.File(str(work))
+    writer = {"mp3": write_id3, "ogg": write_vorbis, "m4a": write_mp4}[ext]
+    writer(audio, SORT_AND_LASTFM)
+    audio.save()
+
+    tags = read_audio_metadata(str(work))["tags"]
+    for field, expected in SORT_AND_LASTFM.items():
+        assert tags.get(field) == expected, \
+            f"{ext} {field}: wrote {expected!r}, read back {tags.get(field)!r}"
