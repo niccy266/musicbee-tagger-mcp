@@ -226,3 +226,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Validation: all 44 tests passed, Pylint `--errors-only` passed, Claude marketplace validation passed with its existing missing-author warning, installer syntax parsed, and `git diff --check` passed. Built and inspected the 0.1.2 wheel, source distribution, Claude plugin/marketplace archives, and Windows bundle; the release-specific tests passed (5 tests).
 - Added an installer preflight that refuses upgrades while this server executable is running, avoiding Windows file-lock failures before pip modifies the installed package. Updated the Windows bundle and upgrade instructions.
 - Installed 0.1.2 locally, verified all four launchers and `pip check`, completed an MCP handshake with exactly nine tools, and smoke-tested the installed registration CLI using a synthetic playlist. Its output contained no test path, and the token resolved from a fresh registry instance; the existing registration-record count remained unchanged (zero).
+
+### 2026-10-24 — Add persistent shared operation queue
+- Added a SQLite-backed operation queue under the configured private data directory, shared by every MCP agent using that server installation.
+- Added MCP tools to enqueue, query, atomically claim batches, and record results. Queue text is bounded, path-free, and agents may only complete their own claimed work.
+- Documented the shared queue and tool workflow in the human/MCP guide and README.
+- Validation: 82 tests passed and 4 were skipped; the unrelated M4A conversion case was deselected because `ffmpeg` is unavailable in the environment. The queue/MCP surface tests passed independently (19 passed), Pylint `--errors-only` passed, and `git diff --check` passed.

@@ -253,6 +253,10 @@ def test_apply_staged_not_in_mcp_server():
         "preview_tags",
         "stage_tag_changes",
         "list_staged_changes",
+        "enqueue_operation",
+        "list_operations",
+        "claim_operations",
+        "complete_operation",
     }
     # register_files must stay CLI-only. register_playlist IS an MCP tool by
     # explicit design: it takes a playlist location server-side and returns a
