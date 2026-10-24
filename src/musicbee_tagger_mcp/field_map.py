@@ -15,6 +15,8 @@ Vorbis-comment style keys, ID3 frame ids, MP4 atom names.
 """
 
 from dataclasses import dataclass
+import re
+
 from typing import Any, Dict, Optional
 
 
@@ -110,11 +112,18 @@ def id3_frame_class(frame_id: str) -> Any:
     return _ID3_FRAME_CLASSES[frame_id]
 
 
+# Invisible Unicode format characters (bidi marks, zero-width) that carry
+# no visible content and break Last.fm/MusicBrainz matching.
+_INVISIBLE_RE = re.compile(
+    "[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]"
+)
+
+
 def _tag_str(value: Any) -> Optional[str]:
     """Stringify a tag value, decoding MP4 freeform bytes."""
     if type(value).__name__ == "MP4FreeForm":
         value = bytes(value).decode("utf-8", errors="replace")
-    return str(value).strip()
+    return _INVISIBLE_RE.sub("", str(value)).strip()
 
 
 def get_first_tag(tags: Any, keys) -> Optional[str]:
@@ -129,6 +138,9 @@ def get_first_tag(tags: Any, keys) -> Optional[str]:
         try:
             if key in tags:
                 value = tags[key]
+                # ID3 UFID frames are objects; the payload bytes are the ID
+                if type(value).__name__ == "UFID":
+                    return _tag_str(value.data.decode("utf-8", errors="replace"))
                 if isinstance(value, (list, tuple)) and len(value) > 0:
                     if isinstance(value[0], tuple):
                         return value[0]  # MP4 (track, total) pairs stay structured
