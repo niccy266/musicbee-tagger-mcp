@@ -14,7 +14,13 @@ tokens:
 K:\bin\musicbee-tagger-register-playlist.cmd
 ```
 
-Enter the playlist path at the local prompt; do not paste it into the agent
+You can also pass the path as a quoted argument:
+
+```powershell
+K:\bin\musicbee-tagger-register-playlist.cmd "S:\Music\Playlists\Example.m3u"
+```
+
+The path is handled only by the local command; do not paste it into the agent
 conversation or run this command through an agent-controlled terminal.
 Registrations persist in the configured private data directory across MCP
 restarts. To delete saved playlist-to-file mappings after an investigation,

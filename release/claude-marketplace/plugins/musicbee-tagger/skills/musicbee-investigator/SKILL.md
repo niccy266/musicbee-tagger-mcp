@@ -46,7 +46,11 @@ The MCP server intentionally has no path-taking registration tools. If the user 
 ```powershell
 K:\bin\musicbee-tagger-register-playlist.cmd
 ```
-They enter the local `.m3u` or `.m3u8` path at the prompt, then paste the resulting tokens here. Never ask them to paste the path into chat or call a tool with it. The local command resolves relative entries against the playlist folder and reports remote URLs, unsupported formats, or missing files without exposing paths. Registration mappings persist in the private data directory so tokens remain usable across MCP restarts and logins on the same machine.
+They can enter the local `.m3u` or `.m3u8` path at the prompt or pass it as a quoted command-line argument, for example:
+```powershell
+K:\bin\musicbee-tagger-register-playlist.cmd "S:\Music\Playlists\Example.m3u"
+```
+The path is handled locally; paste only the resulting tokens here. Never ask them to paste the path into chat or call a tool with it. The local command resolves relative entries against the playlist folder and reports remote URLs, unsupported formats, or missing files without exposing paths. Registration mappings persist in the private data directory so tokens remain usable across MCP restarts and logins on the same machine.
 
 ### Step 2: Batch Brief
 Retrieve technical specs, existing tags, and filename patterns for all tokens in a single call:
