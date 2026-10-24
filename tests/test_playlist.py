@@ -91,11 +91,13 @@ def test_human_registration_cli_outputs_tokens_without_playlist_path(
     printed = output.getvalue()
 
     assert result == 0
-    assert audio.name in printed
-    assert "no playlist path was sent in an MCP request" in printed
+    assert "playlist job" in printed  # prints a job id to hand to the agent
+    assert "job id" in printed
     assert str(playlist) not in printed
     assert str(audio.parent) not in printed
-    assert registry.list_tokens()[0]["token"] in printed
+    # Tokens stay in the private data dir — never printed, never sent over MCP.
+    assert registry.list_tokens()[0]["token"] not in printed
+    assert audio.name not in printed
 
 
 def test_human_registration_cli_never_echoes_failed_playlist_path(tmp_path):

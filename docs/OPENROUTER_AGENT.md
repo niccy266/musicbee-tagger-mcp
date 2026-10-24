@@ -6,10 +6,11 @@ chat completions endpoint with function calling.
 
 ## How it works
 
-1. Files are collected from a folder and **registered locally** — only opaque
-   tokens and bare filenames ever reach the model (same privacy model as the
-   MCP server).
-2. The loop sends a batch brief (existing tags, durations, filename clues) to
+1. A playlist job is created by the human-run registration CLI — only opaque
+   tokens, a job id, and bare filenames ever reach the model (same privacy
+   model as the MCP server). The agent loop takes a job id, not a folder.
+2. The agent claims batches of up to 10 unprocessed tokens via `next_batch`.
+3. The loop sends a batch brief (existing tags, durations, filename clues) to
    the model with a system prompt adapted from the `musicbee-investigator`
    skill.
 3. The model decides which tools to call. The loop executes them locally:
@@ -17,7 +18,8 @@ chat completions endpoint with function calling.
    - `search_canonical_release`, `verify_mbid` (the mandatory gate)
    - `stage_tag_changes` (manifest only — no audio writes)
 4. `verify_mbid` failures below the 0.75 threshold are recorded as unresolved.
-5. Each call to `finish_batch` or the `--max-turns` cap ends a batch. Progress
+5. Each call to `finish_batch` or the `--max-turns` cap ends a batch. Outcomes
+   are recorded with `complete_batch`; `job_status` reports counts only.
    persists in a JSON state file, so an interrupted run resumes with `--resume`.
 
 ## Usage
