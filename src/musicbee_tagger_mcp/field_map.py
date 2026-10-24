@@ -70,6 +70,37 @@ FIELD_MAP: Dict[str, FieldSpec] = {
         read_from=("discnumber", "TPOS", "disk", "DISCNUMBER"),
         id3="TPOS", vorbis="DISCNUMBER", mp4="disk", mp4_pair=True,
     ),
+    "artist_sort": FieldSpec(
+        read_from=("artistsort", "artist sort", "TSO2", "soar", "ARTISTSORT"),
+        id3="TSO2", vorbis="ARTISTSORT", mp4="soar",
+    ),
+    "title_sort": FieldSpec(
+        read_from=("titlesort", "title sort", "TSOT", "sonm", "TITLESORT"),
+        id3="TSOT", vorbis="TITLESORT", mp4="sonm",
+    ),
+    "album_sort": FieldSpec(
+        read_from=("albumsort", "album sort", "TSOA", "soal", "ALBUMSORT"),
+        id3="TSOA", vorbis="ALBUMSORT", mp4="soal",
+    ),
+    "album_artist_sort": FieldSpec(
+        read_from=("albumartistsort", "album artist sort", "TSOP", "soaa", "ALBUMARTISTSORT"),
+        id3="TSOP", vorbis="ALBUMARTISTSORT", mp4="soaa",
+    ),
+    "lastfm_title": FieldSpec(
+        read_from=("TXXX:Last.fm Title", "LASTFM_TITLE", "----:com.apple.iTunes:Last.fm Title"),
+        id3_kind="txxx", id3_desc="Last.fm Title", vorbis="LASTFM_TITLE",
+        mp4="----:com.apple.iTunes:Last.fm Title",
+    ),
+    "lastfm_artist": FieldSpec(
+        read_from=("TXXX:Last.fm Artist", "LASTFM_ARTIST", "----:com.apple.iTunes:Last.fm Artist"),
+        id3_kind="txxx", id3_desc="Last.fm Artist", vorbis="LASTFM_ARTIST",
+        mp4="----:com.apple.iTunes:Last.fm Artist",
+    ),
+    "lastfm_url": FieldSpec(
+        read_from=("TXXX:Last.fm URL", "LASTFM_URL", "----:com.apple.iTunes:Last.fm URL"),
+        id3_kind="txxx", id3_desc="Last.fm URL", vorbis="LASTFM_URL",
+        mp4="----:com.apple.iTunes:Last.fm URL",
+    ),
     "musicbrainz_track_id": FieldSpec(
         read_from=(
                    "----:com.apple.iTunes:MusicBrainz Track Id",
@@ -102,12 +133,12 @@ _ID3_FRAME_CLASSES: Dict[str, Any] = {}
 
 def id3_frame_class(frame_id: str) -> Any:
     """Lazily resolve the mutagen frame class for an ID3 frame id."""
-    from mutagen.id3 import TALB, TCON, TDOR, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK
+    from mutagen.id3 import TALB, TCON, TDOR, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TSOA, TSOP, TSOT, TSO2
     if not _ID3_FRAME_CLASSES:
         _ID3_FRAME_CLASSES.update({
             "TIT2": TIT2, "TPE1": TPE1, "TALB": TALB, "TPE2": TPE2,
             "TDRC": TDRC, "TDOR": TDOR, "TCON": TCON, "TRCK": TRCK,
-            "TPOS": TPOS,
+            "TPOS": TPOS, "TSO2": TSO2, "TSOA": TSOA, "TSOP": TSOP, "TSOT": TSOT,
         })
     return _ID3_FRAME_CLASSES[frame_id]
 

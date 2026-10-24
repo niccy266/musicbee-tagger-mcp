@@ -94,6 +94,13 @@ def read_audio_metadata(file_path: str) -> Dict[str, Any]:
             "musicbrainz_track_id": tags_by_field["musicbrainz_track_id"],
             "musicbrainz_release_id": tags_by_field["musicbrainz_release_id"],
             "musicbrainz_artist_id": tags_by_field["musicbrainz_artist_id"],
+            "artist_sort": tags_by_field["artist_sort"],
+            "title_sort": tags_by_field["title_sort"],
+            "album_sort": tags_by_field["album_sort"],
+            "album_artist_sort": tags_by_field["album_artist_sort"],
+            "lastfm_title": tags_by_field["lastfm_title"],
+            "lastfm_artist": tags_by_field["lastfm_artist"],
+            "lastfm_url": tags_by_field["lastfm_url"],
         },
         "raw_tag_keys": list(tags.keys()) if hasattr(tags, "keys") else []
     }
