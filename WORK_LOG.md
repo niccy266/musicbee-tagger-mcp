@@ -270,3 +270,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Validation: all 8 release asset/version tests passed. Verified wheel metadata, plugin and MCPB manifests, MCPB ZIP integrity and all 16 tools, and inclusion of the wheel and MCPB in the Windows archive.
 - Addressed Claude Desktop review findings: made the MCPB data directory configurable (defaulting to the Windows installer’s shared data path), included the root README referenced by project metadata, and raised the MCP SDK minimum to 2.0.0 for the imported `MCPServer` API.
 - Updated the MCPB guide to distinguish the extension’s configured data directory from the standalone server’s Windows default. Rebuilt all six v0.4.0 artifacts; MCPB CLI manifest validation passed, the release tests passed (8), and the full suite passed (101 passed, 4 skipped, 1 ffmpeg-dependent test deselected). Pylint `--errors-only` and `git diff --check` passed.
+
+### 2026-10-25 — v0.4.1 Windows MCPB temp/cache fix
+- Set the MCPB `TMP`, `TEMP`, and `TMPDIR` values to the extension directory, and moved `UV_CACHE_DIR` under that same directory so uv temporary-file persistence and cache operations stay on one volume.
+- Bumped package, protocol user-agent, plugin, MCPB, and release example versions to 0.4.1. This is a release change because v0.4.0 still fails to install for users whose extension/cache/temp locations span Windows volumes.
+- Validation: MCPB schema validation passed; all 101 tests passed (4 skipped, 1 ffmpeg-dependent test deselected); Pylint `--errors-only` and `git diff --check` passed. Rebuilt and checked all six v0.4.1 release artifacts, including MCPB manifest contents and ZIP integrity.

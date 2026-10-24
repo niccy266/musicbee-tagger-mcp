@@ -1,6 +1,6 @@
 [project]
 name = "musicbee-tagger-mcp"
-version = "0.4.0"
+version = "0.4.1"
 description = "MCP bridge for MusicBee audio metadata, forensic album resolution, and scrobble optimization"
 readme = "README.md"
 requires-python = ">=3.10"
