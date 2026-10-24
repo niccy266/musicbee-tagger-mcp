@@ -196,11 +196,7 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "server.py",
     ]
     assert manifest["server"]["mcp_config"]["env"] == {
-        "MUSICBEE_TAGGER_DATA_DIR": "${user_config.data_directory}",
-        "TMP": "${__dirname}",
-        "TEMP": "${__dirname}",
-        "TMPDIR": "${__dirname}",
-        "UV_CACHE_DIR": "${__dirname}${/}.uv-cache",
+        "MUSICBEE_TAGGER_DATA_DIR": "${user_config.data_directory}"
     }
     assert manifest["user_config"]["data_directory"]["type"] == "directory"
     assert manifest["user_config"]["data_directory"]["default"] == (
@@ -251,4 +247,4 @@ def test_mcpb_archive_contains_only_runtime_project_files(tmp_path):
         assert not any(name.startswith(("tests/", ".git/")) for name in names)
         assert archive.read(".python-version").decode("utf-8").strip() == "3.11"
         bundled_pyproject = archive.read("pyproject.toml").decode("utf-8")
-        assert '[tool.uv]\ncache-dir = ".uv-cache"' in bundled_pyproject
+        assert "[tool.uv]" not in bundled_pyproject
