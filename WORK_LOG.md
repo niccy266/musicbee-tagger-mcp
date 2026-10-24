@@ -235,3 +235,4 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added a transactional SQLite queue under the configured private data directory. MCP clients sharing that data root can enqueue path-free operations, query by status/batch with pagination, and persist progress updates across restarts.
 - Added validation against local filesystem paths, retained completed entries, and covered persistence, filtering, pagination, status updates, and path rejection with regression tests.
 - Updated the human/MCP guide, README, and investigator skill to document the queue tools and storage behavior.
+- Validation: 23 focused queue, privacy, and skill-sync tests passed; Pylint `--errors-only` and `git diff --check` passed. Full suite: 78 passed, 4 skipped, with two unrelated failures (missing external probe executable for an M4A fixture and the existing package/plugin version mismatch).
