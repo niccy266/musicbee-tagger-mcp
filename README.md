@@ -156,3 +156,24 @@ SQLite-backed queue. Agents can add path-free operations with
 `list_batch_operations`, and record progress with `update_batch_operation`.
 Queue entries are retained across server restarts and package upgrades; include
 no local audio or playlist paths in titles or details.
+
+## Claude Desktop MCP Bundle
+
+The release builder also creates
+`dist\musicbee-tagger-mcp-0.3.0.mcpb` for Claude Desktop. In Claude Desktop,
+open **Settings > Extensions > Advanced settings > Install Extension…** and
+select the `.mcpb` file. The bundle uses Claude Desktop's supported `uv`
+runtime to install and launch the local Python server.
+
+With no `MUSICBEE_TAGGER_DATA_DIR` override, the server stores registrations,
+staged proposals, and its operation queue under
+`%APPDATA%\musicbee-tagger-mcp\` on Windows. The MCP server remains path-free:
+register playlists using the separate human-run CLI, and use the CLI to review
+and apply staged changes. To have the MCPB installation see registrations made
+with the Windows release CLI, run these commands in the separate PowerShell
+window used for registration:
+
+```powershell
+$env:MUSICBEE_TAGGER_DATA_DIR = Join-Path $env:APPDATA "musicbee-tagger-mcp"
+K:\bin\musicbee-tagger-register-playlist.cmd
+```
