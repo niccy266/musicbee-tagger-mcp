@@ -155,6 +155,7 @@ def test_human_playlist_registration_command_is_packaged():
     assert "musicbee-tagger-register-playlist.exe" in installer
     assert "musicbee-tagger-register-playlist.cmd" in installer
     assert '"$registerPlaylistExe" %*' in installer
+    assert "pip install --force-reinstall --no-deps $resolvedWheel" in installer
     assert "musicbee-tagger-clear-registrations.exe" in installer
     assert "musicbee-tagger-clear-registrations.cmd" in installer
     assert "Get-CimInstance Win32_Process" in installer
