@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -49,6 +50,66 @@ def build_mcpb_archive(output_path: Path, version: str) -> None:
             archive.write(path, path.relative_to(ROOT).as_posix())
 
 
+def build_windows_mcpb_archive(output_path: Path, version: str) -> None:
+    """Build a Windows MCPB that does not need uv or a Python installation."""
+    if sys.platform != "win32":
+        raise RuntimeError("The standalone Windows MCPB must be built on Windows")
+
+    manifest_path = ROOT / "release" / "mcpb" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("version") != version:
+        raise ValueError("MCPB manifest version must match pyproject.toml")
+    manifest["compatibility"]["platforms"] = ["win32"]
+    manifest["compatibility"].pop("runtimes", None)
+    manifest["server"] = {
+        "type": "binary",
+        "entry_point": "server/musicbee-tagger-mcp.exe",
+        "mcp_config": {
+            "command": "${__dirname}/server/musicbee-tagger-mcp.exe",
+            "args": [],
+            "env": {
+                "MUSICBEE_TAGGER_DATA_DIR": "${user_config.data_directory}"
+            },
+        },
+    }
+
+    with tempfile.TemporaryDirectory(prefix="musicbee-mcpb-", dir=ROOT) as temp_dir:
+        temp = Path(temp_dir)
+        binary_dir = temp / "dist"
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "PyInstaller",
+                "--noconfirm",
+                "--clean",
+                "--onefile",
+                "--name",
+                "musicbee-tagger-mcp",
+                "--paths",
+                str(ROOT / "src"),
+                "--distpath",
+                str(binary_dir),
+                "--workpath",
+                str(temp / "build"),
+                "--specpath",
+                str(temp),
+                str(ROOT / "release" / "mcpb" / "server.py"),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+        with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(
+                "manifest.json",
+                json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+            )
+            archive.write(
+                binary_dir / "musicbee-tagger-mcp.exe",
+                "server/musicbee-tagger-mcp.exe",
+            )
+
+
 def main() -> None:
     """Build source packages and Claude client release archives."""
     version = project_version()
@@ -73,6 +134,11 @@ def main() -> None:
     mcpb_archive = DIST / f"musicbee-tagger-mcp-{version}.mcpb"
     build_mcpb_archive(mcpb_archive, version)
 
+    windows_mcpb_archive = None
+    if sys.platform == "win32":
+        windows_mcpb_archive = DIST / f"musicbee-tagger-mcp-{version}-windows.mcpb"
+        build_windows_mcpb_archive(windows_mcpb_archive, version)
+
     bundle = DIST / f"musicbee-tagger-mcp-{version}-windows.zip"
     wheel = next(DIST.glob(f"musicbee_tagger_mcp-{version}-*.whl"))
     source_dist = next(DIST.glob(f"musicbee_tagger_mcp-{version}.tar.gz"))
@@ -82,6 +148,8 @@ def main() -> None:
         archive.write(plugin_archive, plugin_archive.name)
         archive.write(marketplace_archive, marketplace_archive.name)
         archive.write(mcpb_archive, mcpb_archive.name)
+        if windows_mcpb_archive is not None:
+            archive.write(windows_mcpb_archive, windows_mcpb_archive.name)
         add_tree(
             archive,
             ROOT / "release" / "claude-marketplace",
@@ -101,6 +169,8 @@ def main() -> None:
     print(f"Plugin archive: {plugin_archive.name}")
     print(f"Marketplace archive: {marketplace_archive.name}")
     print(f"Claude Desktop MCP Bundle: {mcpb_archive.name}")
+    if windows_mcpb_archive is not None:
+        print(f"Claude Desktop Windows MCP Bundle: {windows_mcpb_archive.name}")
     print(f"Windows bundle: {bundle.name}")
 
 

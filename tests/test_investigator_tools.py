@@ -93,7 +93,7 @@ def test_verify_mbid_mocked_success():
         assert len(res["mismatches"]) == 0
         get_recording.assert_called_once_with(
             "rec-uuid-123",
-            includes=["artists", "releases"],
+            includes=["artists", "releases", "tags"],
         )
 
 

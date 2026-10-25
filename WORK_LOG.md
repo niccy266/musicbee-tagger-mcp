@@ -326,3 +326,16 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated the Windows installer to install the wheel's declared runtime dependencies before force-refreshing the wheel without reinstalling dependencies. This fixes fresh installs while preserving same-version source-checkout updates.
 - Aligned the README queue-tool examples with the current MCP tools and carried forward the agent-loop model example and pytest temporary-directory ignore cleanup.
 - Validation: full suite passed (111 passed, 1 skipped); Pylint `--errors-only`, installer syntax parsing, and `git diff --check` passed. A fresh isolated source install imported all runtime dependencies and launched the apply CLI help successfully. Built all six v0.4.3 release assets.
+
+### 2026-10-26 — Preserve multi-value MusicBrainz genres (#30)
+- Aggregated recording and release genre tags into a semicolon-delimited value in recording search and MBID verification results, deduplicating repeated labels while retaining recording-specific association.
+- Preserved every multi-value genre read from ID3, Vorbis, and MP4 tags; undecodable byte values are decoded with replacement so additional genres are not dropped. ID3's NUL-separated genre form is normalized to the canonical semicolon separator. Genre writes split the canonical semicolon-delimited value back into native multi-value tag entries.
+- Updated the MusicBrainz verification test to expect the genre-tag request used by the new aggregation behavior.
+- Added coverage for MusicBrainz recording/release aggregation, garbled multi-value inputs, and multi-genre cross-format round trips.
+- Validation: targeted tests passed (5 passed, 3 skipped because ffmpeg is unavailable); `git diff --check` passed. Audio files were not modified.
+
+### 2026-10-26 — Windows Claude Desktop MCPB without uv (#31)
+- Bumped package and extension metadata to 0.4.4 and added a Windows-specific MCPB that bundles the stdio server as a self-contained executable. Claude Desktop no longer needs to run uv during extension setup, avoiding the reported cross-drive temporary-file move failure and any dependency on finding Python on PATH.
+- Kept the existing data-directory picker so the extension and local registration/apply tools can share the selected queue and token database. Documented that Claude manages the extension storage location separately.
+- Added a Windows CI smoke test that builds the bundle and verifies MCP initialization and tool discovery from the packaged executable.
+- Validation: release/package tests passed (11 passed, 1 skipped); full suite passed (116 passed, 2 skipped) with `K:\bin` added to the test process PATH. The executable smoke test is configured for Windows CI; it was skipped locally because PyInstaller is not installed in the current virtual environment.
