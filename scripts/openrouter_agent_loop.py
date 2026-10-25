@@ -9,7 +9,7 @@ batch is done or the iteration cap is hit.
 Requires: OPENROUTER_API_KEY environment variable.
 Usage:
     export OPENROUTER_API_KEY=sk-or-...
-    python scripts/openrouter_agent_loop.py [job_id] --model openai/gpt-4o-mini
+    python scripts/openrouter_agent_loop.py [job_id] --model openrouter/free
 
 Notes:
     - Playlists are registered by the MCP server; only opaque tokens reach

@@ -36,9 +36,11 @@ directory to preserve them. Queue items persist until their status is updated;
 there is no automatic cleanup.
 
 MCP agents connected to the same configured data directory share the durable
-operation queue. Use `enqueue_operation` and `list_operations` to create and
-query path-free work, and `claim_operations` / `complete_operation` to process
-it in coordinated batches across sessions and server restarts.
+operation queue across server restarts. Use `enqueue_batch_operation` to add
+path-free work, `list_batch_operations` to query it by status or batch, and
+`update_batch_operation` to record progress. Queue items remain available until
+their status is updated; all agents using the same data directory see the same
+queue.
 
 To install directly from a source checkout without downloading or extracting a
 release bundle, run this from the repository root:

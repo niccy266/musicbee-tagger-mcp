@@ -313,3 +313,16 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Bumped to 0.4.3, retained the Python 3.11 pin, removed the extension-local cache and temp environment overrides, and restored the standard Windows `%LOCALAPPDATA%\uv\cache` location for install-time `uv sync`.
 - Updated release docs to clarify that this is a local stdio connector; HTTPS proxying would not affect the install-time interpreter/cache failure.
 - Validation: release tests passed (9); Pylint `--errors-only` and `git diff --check` passed. Full suite passed with ffmpeg-dependent conversions deselected (104 passed, 3 skipped, 2 deselected). Built all six v0.4.3 release assets and verified MCPB ZIP integrity, version, Python 3.11 pin, absence of extension-local uv cache overrides, and preserved MCP data-directory configuration.
+
+### 2026-10-25 — Align README with shared queue MCP tools
+- Replaced outdated operation-claim API names with the registered batch queue tools (`enqueue_batch_operation`, `list_batch_operations`, and `update_batch_operation`) and clarified cross-restart visibility for agents sharing a data directory.
+- Validation: 14 focused queue tests passed; `git diff --check` passed.
+
+### 2026-10-25 — Update agent-loop model example
+- Changed the documented default model in `scripts/openrouter_agent_loop.py` to `openrouter/free`.
+- Validation: using the project virtual environment with `K:\bin` added to the test process PATH, the full suite passed (108 passed, 1 skipped). Pytest needed a workspace basetemp and `MUSICBEE_TAGGER_DATA_DIR` override for sandbox write access.
+
+### 2026-10-26 — Prepare v0.4.3 release
+- Updated the Windows installer to install the wheel's declared runtime dependencies before force-refreshing the wheel without reinstalling dependencies. This fixes fresh installs while preserving same-version source-checkout updates.
+- Aligned the README queue-tool examples with the current MCP tools and carried forward the agent-loop model example and pytest temporary-directory ignore cleanup.
+- Validation: full suite passed (111 passed, 1 skipped); Pylint `--errors-only`, installer syntax parsing, and `git diff --check` passed. A fresh isolated source install imported all runtime dependencies and launched the apply CLI help successfully. Built all six v0.4.3 release assets.
