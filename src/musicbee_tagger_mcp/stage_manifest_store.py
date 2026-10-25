@@ -76,7 +76,7 @@ class StageManifestStore:
         lock_path = self.directory / ".manifest.lock"
         with _MUTATION_LOCK, lock_path.open("a+b") as lock_file:
             if os.name == "nt":
-                import msvcrt
+                msvcrt = importlib.import_module("msvcrt")
 
                 lock_file.seek(0, os.SEEK_END)
                 if lock_file.tell() == 0:
