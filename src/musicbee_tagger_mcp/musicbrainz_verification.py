@@ -15,7 +15,7 @@ def verify_recording_mbid(
     """Compare an identified recording with expected tags and local duration."""
     try:
         data = musicbrainzngs.get_recording_by_id(
-            recording_id, includes=["artists", "releases"]
+            recording_id, includes=["artists", "releases", "tags"]
         )
     except Exception as error:
         return {
@@ -25,6 +25,11 @@ def verify_recording_mbid(
         }
 
     recording = data.get("recording", {})
+    from .musicbrainz_search import _genres
+
+    release_tags = [tag for release in recording.get("release-list", [])
+                    for tag in release.get("tag-list", [])]
+    genres = _genres(recording.get("tag-list"), release_tags)
     title = recording.get("title", "")
     artist = recording.get("artist-credit-phrase", "")
     length = recording.get("length")
@@ -94,5 +99,6 @@ def verify_recording_mbid(
         "artist_similarity": artist_similarity,
         "top_release": top_release,
         "release_count": len(parsed_releases),
+        "genre": "; ".join(genres),
         "mismatches": mismatches,
     }

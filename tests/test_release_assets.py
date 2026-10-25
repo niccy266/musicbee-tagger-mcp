@@ -5,7 +5,7 @@ import re
 import zipfile
 from pathlib import Path
 
-from scripts.build_release import build_mcpb_archive
+from scripts.build_release import build_mcpb_archive, build_windows_mcpb_archive
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -99,7 +99,7 @@ def test_all_release_version_markers_match_project_version():
     assert f"musicbee_tagger_mcp-{project_version}-py3-none-any.whl" in readme
     assert f"musicbee-tagger-mcp-{project_version}.mcpb" in readme
     assert f"musicbee_tagger_mcp-{project_version}-py3-none-any.whl" in guide
-    assert f"musicbee-tagger-mcp-{project_version}.mcpb" in guide
+    assert f"musicbee-tagger-mcp-{project_version}-windows.mcpb" in guide
 
 
 def test_plugin_bundles_the_investigator_skill():
@@ -155,6 +155,7 @@ def test_human_playlist_registration_command_is_packaged():
     assert "musicbee-tagger-register-playlist.exe" in installer
     assert "musicbee-tagger-register-playlist.cmd" in installer
     assert '"$registerPlaylistExe" %*' in installer
+    assert "pip install $resolvedWheel" in installer
     assert "pip install --force-reinstall --no-deps $resolvedWheel" in installer
     assert "musicbee-tagger-clear-registrations.exe" in installer
     assert "musicbee-tagger-clear-registrations.cmd" in installer
@@ -176,7 +177,7 @@ def test_source_checkout_installer_builds_and_installs_local_wheel():
 
 
 def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
-    """Keep the Claude Desktop extension manifest aligned with the package."""
+    """Keep the portable Claude Desktop extension aligned with the package."""
     project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     project_version = re.search(r'(?m)^version\s*=\s*"([^"]+)"', project).group(1)
     manifest = json.loads(
@@ -248,3 +249,54 @@ def test_mcpb_archive_contains_only_runtime_project_files(tmp_path):
         assert archive.read(".python-version").decode("utf-8").strip() == "3.11"
         bundled_pyproject = archive.read("pyproject.toml").decode("utf-8")
         assert "[tool.uv]" not in bundled_pyproject
+
+
+def test_windows_mcpb_packages_a_self_contained_binary(tmp_path, monkeypatch):
+    """Package Windows MCPB as a binary so extension setup does not invoke uv."""
+    import scripts.build_release as release_builder
+
+    monkeypatch.setattr(release_builder.sys, "platform", "win32")
+
+    def fake_pyinstaller(command, **_kwargs):
+        dist_path = Path(command[command.index("--distpath") + 1])
+        dist_path.mkdir(parents=True)
+        (dist_path / "musicbee-tagger-mcp.exe").write_bytes(b"test executable")
+
+    monkeypatch.setattr(release_builder.subprocess, "run", fake_pyinstaller)
+    version = json.loads(
+        (ROOT / "release" / "mcpb" / "manifest.json").read_text(encoding="utf-8")
+    )["version"]
+    output = tmp_path / "musicbee-tagger-windows.mcpb"
+
+    build_windows_mcpb_archive(output, version)
+
+    with zipfile.ZipFile(output) as archive:
+        assert archive.testzip() is None
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["server"]["type"] == "binary"
+        assert manifest["server"]["entry_point"] == (
+            "server/musicbee-tagger-mcp.exe"
+        )
+        assert manifest["server"]["mcp_config"]["command"] == (
+            "${__dirname}/server/musicbee-tagger-mcp.exe"
+        )
+        assert manifest["server"]["mcp_config"]["env"] == {
+            "MUSICBEE_TAGGER_DATA_DIR": "${user_config.data_directory}"
+        }
+        assert manifest["compatibility"]["platforms"] == ["win32"]
+        assert "runtimes" not in manifest["compatibility"]
+        assert archive.read("server/musicbee-tagger-mcp.exe") == b"test executable"
+
+
+def test_windows_mcpb_must_be_built_on_windows(tmp_path, monkeypatch):
+    """Prevent accidentally shipping a non-Windows PyInstaller executable."""
+    import scripts.build_release as release_builder
+
+    monkeypatch.setattr(release_builder.sys, "platform", "linux")
+
+    try:
+        build_windows_mcpb_archive(tmp_path / "windows.mcpb", "0.4.4")
+    except RuntimeError as error:
+        assert "must be built on Windows" in str(error)
+    else:
+        raise AssertionError("Expected non-Windows build to be rejected")
