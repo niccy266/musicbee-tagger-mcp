@@ -11,45 +11,10 @@ Usage:
 """
 
 import argparse
-import json
-import sys
-from pathlib import Path
 
+from .staged_review import cmd_list, print_review
 from .staged_apply import get_staged_applier
 from .staging import get_staging_manager
-
-
-def _print_diff(diff: list, indent: str = "  ") -> None:
-    if not diff:
-        print(f"{indent}(no changes)")
-        return
-    for change in diff:
-        field = change.get("field", "?")
-        old = change.get("old")
-        new = change.get("new")
-        old_str = repr(old) if old is not None else "(empty)"
-        new_str = repr(new) if new is not None else "(empty)"
-        print(f"{indent}{field}:")
-        print(f"{indent}  - {old_str}")
-        print(f"{indent}  + {new_str}")
-
-
-def cmd_list(staging) -> None:
-    pending = staging.list_pending()
-    if not pending:
-        print("No pending staged changes.")
-        return
-    print(f"{len(pending)} pending staged change(s):\n")
-    for entry in pending:
-        print(f"  stage_id   : {entry['stage_id']}")
-        print(f"  file       : {entry['display_name']}")
-        print(f"  created    : {entry['created_at']}")
-        score = entry.get("forensic_score")
-        if score is not None:
-            print(f"  MB score   : {score:.1f}")
-        print(f"  changes    :")
-        _print_diff(entry.get("diff_summary", []), indent="    ")
-        print()
 
 
 def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> None:
@@ -58,13 +23,8 @@ def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> Non
         print(f"[SKIP] {stage_id} has already been applied.")
         return
 
-    print(f"\nFile    : {manifest['display_name']}")
-    print(f"Stage ID: {stage_id}")
-    score = manifest.get("forensic_score")
-    if score is not None:
-        print(f"MB Score: {score:.1f}")
-    print("\nProposed changes:")
-    _print_diff(manifest.get("diff", []))
+    print()
+    print_review(manifest, stage_id)
 
     if dry_run:
         print("\n[DRY RUN] No changes written.")
