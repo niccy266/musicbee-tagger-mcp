@@ -101,7 +101,10 @@ def _sanitize_log(value):
     if isinstance(value, list):
         return [_sanitize_log(item) for item in value]
     if isinstance(value, str):
-        return _LOCAL_PATH_PATTERN.sub("(local path omitted)", value)
+        value = _LOCAL_PATH_PATTERN.sub("(local path omitted)", value)
+        if len(value) > 1000:
+            value = value[:1000] + "...[truncated]"
+        return value
     return value
 
 
@@ -286,7 +289,8 @@ LOCAL_TOOLS = {
 }
 
 
-def call_openrouter(messages, model, api_key, temperature=0.2, retries=3, run_log=None):
+def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
+                   run_log=None, stream=True):
     """One chat completion with tool support, via the openai SDK pointed at
     OpenRouter (https://openrouter.ai/docs/quickstart#using-the-client-sdks).
     Returns the raw OpenAI-shaped dict the batch loop expects."""
@@ -306,13 +310,96 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3, run_lo
         if run_log:
             run_log.write("model_request_started", model=model, attempt=attempt + 1)
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=TOOLS,
-                temperature=temperature,
-            )
-            payload = response.model_dump(mode="json")
+            if stream:
+                response_stream = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    tools=TOOLS,
+                    temperature=temperature,
+                    stream=True,
+                    stream_options={"include_usage": True},
+                )
+                content_parts = []
+                tool_call_parts = {}
+                finish_reason = None
+                usage = None
+                printed_prefix = False
+                for chunk in response_stream:
+                    if getattr(chunk, "usage", None) is not None:
+                        try:
+                            usage = chunk.usage.model_dump(mode="json")
+                        except Exception:
+                            usage = str(chunk.usage)
+                    for choice in (chunk.choices or []):
+                        finish_reason = choice.finish_reason or finish_reason
+                        delta = choice.delta
+                        if getattr(delta, "content", None):
+                            if not printed_prefix:
+                                print("[assistant] ", end="", flush=True)
+                                printed_prefix = True
+                            content_parts.append(delta.content)
+                            print(delta.content, end="", flush=True)
+                        if getattr(delta, "tool_calls", None):
+                            for tc in delta.tool_calls:
+                                idx = getattr(tc, "index", 0) or 0
+                                entry = tool_call_parts.setdefault(
+                                    idx,
+                                    {
+                                        "id": None,
+                                        "type": "function",
+                                        "function": {"name": "", "arguments": ""},
+                                    },
+                                )
+                                if getattr(tc, "id", None):
+                                    entry["id"] = tc.id
+                                function = getattr(tc, "function", None)
+                                if function is not None:
+                                    if getattr(function, "name", None):
+                                        entry["function"]["name"] += function.name
+                                    if getattr(function, "arguments", None):
+                                        entry["function"]["arguments"] += function.arguments
+                if printed_prefix:
+                    print(flush=True)
+                tool_calls = [tool_call_parts[idx] for idx in sorted(tool_call_parts)]
+                message = {
+                    "role": "assistant",
+                    "content": "".join(content_parts) or None,
+                }
+                if tool_calls:
+                    message["tool_calls"] = tool_calls
+                    print(
+                        "  -> tools: "
+                        + ", ".join(tc["function"]["name"] for tc in tool_calls),
+                        flush=True,
+                    )
+                payload = {
+                    "choices": [{"message": message, "finish_reason": finish_reason}],
+                    "usage": usage,
+                }
+            else:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    tools=TOOLS,
+                    temperature=temperature,
+                )
+                payload = response.model_dump(mode="json")
+                choice = (payload.get("choices") or [{}])[0]
+                message = choice.get("message") or {}
+                visible = (message.get("content") or "").strip()
+                if visible:
+                    print(f"[assistant] {visible}", flush=True)
+                tool_calls = message.get("tool_calls") or []
+                if tool_calls:
+                    print(
+                        "  -> tools: "
+                        + ", ".join(
+                            tc.get("function", {}).get("name", "?")
+                            for tc in tool_calls
+                        ),
+                        flush=True,
+                    )
+
             choice = (payload.get("choices") or [{}])[0]
             message = choice.get("message") or {}
             if run_log:
