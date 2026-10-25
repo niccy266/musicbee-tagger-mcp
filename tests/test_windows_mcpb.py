@@ -57,4 +57,7 @@ def test_windows_mcpb_executable_initializes_and_lists_tools(tmp_path):
     names = {tool.name for tool in tools_response.tools}
     assert "read_track_metadata" in names
     assert "stage_tag_changes" in names
-    assert len(names) == 16
+    assert "get_staged_change" in names
+    assert "amend_staged_changes" in names
+    assert "withdraw_staged_change" in names
+    assert len(names) == 19

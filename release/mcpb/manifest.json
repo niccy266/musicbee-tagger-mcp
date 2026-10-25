@@ -36,7 +36,7 @@
     },
     {
       "name": "extract_filename_clues",
-      "description": "Extract possible artist and title clues from a registered filename."
+      "description": "Extract unverified artist/title research clues from a registered filename. Candidates are ambiguous hypotheses, not authoritative tags."
     },
     {
       "name": "get_batch_brief",
@@ -56,11 +56,23 @@
     },
     {
       "name": "stage_tag_changes",
-      "description": "Stage verified metadata changes for human review."
+      "description": "Stage metadata changes for human review. Filename-derived artist/title candidates are unverified clues and must be corroborated."
     },
     {
       "name": "list_staged_changes",
       "description": "List pending metadata proposals without applying them."
+    },
+    {
+      "name": "get_staged_change",
+      "description": "Read path-free stage notes, proposed values, current tags, diff, and revision."
+    },
+    {
+      "name": "amend_staged_changes",
+      "description": "Revise a pending proposal with a reason and current revision; re-preview without writing audio. Use remove_fields to drop incorrect field proposals."
+    },
+    {
+      "name": "withdraw_staged_change",
+      "description": "Soft-withdraw a pending proposal with a reason; withdrawn stages cannot be applied."
     },
     {
       "name": "next_batch",

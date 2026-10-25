@@ -8,13 +8,67 @@ The USER applies staged changes via the CLI:
     python -m musicbee_tagger_mcp.apply_staged --all --dry-run
 """
 
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .field_map import FIELD_MAP
+from .metadata_reader import read_audio_metadata
 from .stage_manifest_store import StageManifestStore
 from .tag_writer import preview_tag_changes
+
+_LOCAL_PATH = re.compile(
+    r"(?<![\w])(?:[A-Za-z]:[\\/][^\s]*|\\\\[^\s\\]+\\[^\s]*"
+    r"|(?<![:/])/(?:[^/\s]+/)*[^/\s]+)"
+)
+
+
+def _changed_fields(file_path: str, proposed_tags: Dict[str, Any]) -> list[dict]:
+    """Recompute the changed fields without returning or persisting the path."""
+    try:
+        preview_diff = preview_tag_changes(file_path, proposed_tags).get("diff", {})
+    except Exception:
+        raise ValueError(
+            "Unable to re-check the audio file; no stage was changed."
+        ) from None
+    if isinstance(preview_diff, dict):
+        return [
+            {"field": field, "old": change.get("before"), "new": change.get("after")}
+            for field, change in preview_diff.items()
+            if change.get("changed")
+        ]
+    if isinstance(preview_diff, list):
+        return preview_diff
+    raise ValueError("Tag preview returned an invalid diff.")
+
+
+def _validate_reason(reason: str) -> str:
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError("reason must explain the requested stage change.")
+    if len(reason) > 1000:
+        raise ValueError("reason must be at most 1000 characters.")
+    without_urls = re.sub(r"https?://\S+", "", reason)
+    if _LOCAL_PATH.search(without_urls):
+        raise ValueError("reason must not contain local filesystem paths.")
+    return reason.strip()
+
+
+def _path_free(value: Any) -> Any:
+    """Redact accidental local paths in metadata returned to agents."""
+    if isinstance(value, dict):
+        return {key: _path_free(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_path_free(item) for item in value]
+    if isinstance(value, str):
+        parts = re.split(r"(https?://\S+)", value)
+        return "".join(
+            part if part.startswith(("http://", "https://"))
+            else _LOCAL_PATH.sub("(local path omitted)", part)
+            for part in parts
+        )
+    return value
 
 
 class StagingManager:
@@ -42,23 +96,8 @@ class StagingManager:
         Returns:
             {"stage_id": str, "display_name": str, "diff_summary": list, "notes": str}
         """
-        # Generate the field-by-field diff (reads file for current values)
-        diff_result = preview_tag_changes(str(absolute_path), proposed_tags)
-        preview_diff = diff_result.get("diff", {})
-        if isinstance(preview_diff, dict):
-            diff = [
-                {
-                    "field": field,
-                    "old": change.get("before"),
-                    "new": change.get("after"),
-                }
-                for field, change in preview_diff.items()
-                if change.get("changed")
-            ]
-        elif isinstance(preview_diff, list):
-            diff = preview_diff
-        else:
-            raise ValueError("Tag preview returned an invalid diff")
+        # Generate the field-by-field diff (reads file for current values).
+        diff = _changed_fields(str(absolute_path), proposed_tags)
 
         stage_id = str(uuid.uuid4())
         manifest = {
@@ -73,6 +112,9 @@ class StagingManager:
             "forensic_score": forensic_score,
             "notes": notes,
             "applied": False,
+            "withdrawn": False,
+            "revision": 1,
+            "history": [],
         }
 
         self.store.save(manifest)
@@ -81,6 +123,7 @@ class StagingManager:
         return {
             "stage_id": stage_id,
             "display_name": display_name,
+            "revision": 1,
             "diff_summary": diff,
             "notes": notes,
             "message": (
@@ -92,6 +135,229 @@ class StagingManager:
     def list_pending(self) -> List[dict]:
         """List all pending (not yet applied) staged changes — safe fields only."""
         return self.store.list_pending()
+
+    def get(self, stage_id: str) -> dict:
+        """Return review context and current tags without revealing the path or token."""
+        manifest = self.store.load(stage_id)
+        try:
+            current_tags = read_audio_metadata(manifest["absolute_path"]).get("tags", {})
+            current_tags_error = None
+        except Exception:
+            current_tags = None
+            current_tags_error = "Unable to read the audio file's current tags."
+        return _path_free({
+            "stage_id": manifest["stage_id"],
+            "display_name": manifest["display_name"],
+            "created_at": manifest["created_at"],
+            "status": self._status(manifest),
+            "revision": manifest.get("revision", 1),
+            "notes": manifest.get("notes", ""),
+            "proposed_tags": manifest.get("proposed_tags", {}),
+            "diff_summary": manifest.get("diff", []),
+            "mb_recording_id": manifest.get("mb_recording_id"),
+            "mb_release_id": manifest.get("mb_release_id"),
+            "forensic_score": manifest.get("forensic_score"),
+            "current_tags": current_tags,
+            "current_tags_error": current_tags_error,
+            "history": manifest.get("history", []),
+        })
+
+    def amend(
+        self,
+        stage_id: str,
+        expected_revision: int,
+        new_tags: Dict[str, Any],
+        reason: str,
+        remove_fields: Optional[List[str]] = None,
+        mb_recording_id: Optional[str] = None,
+        mb_release_id: Optional[str] = None,
+    ) -> dict:
+        """Revise a pending proposal and recompute its diff; never writes audio."""
+        reason = _validate_reason(reason)
+        if (
+            isinstance(expected_revision, bool)
+            or not isinstance(expected_revision, int)
+            or expected_revision < 1
+        ):
+            raise ValueError("expected_revision must be a positive integer.")
+        if not isinstance(new_tags, dict):
+            raise ValueError("new_tags must be an object of canonical tag fields.")
+        if any(not isinstance(field, str) for field in new_tags):
+            raise ValueError("new_tags keys must be canonical tag field names.")
+        invalid_fields = sorted(set(new_tags) - set(FIELD_MAP))
+        if invalid_fields:
+            raise ValueError("Unsupported tag field(s): " + ", ".join(invalid_fields))
+        if remove_fields is None:
+            remove_fields = []
+        if not isinstance(remove_fields, list) or any(
+            not isinstance(field, str) for field in remove_fields
+        ):
+            raise ValueError("remove_fields must be a list of canonical tag field names.")
+        if len(set(remove_fields)) != len(remove_fields):
+            raise ValueError("remove_fields must not contain duplicates.")
+        invalid_removals = sorted(set(remove_fields) - set(FIELD_MAP))
+        if invalid_removals:
+            raise ValueError(
+                "Unsupported tag field(s): " + ", ".join(invalid_removals)
+            )
+        if set(new_tags) & set(remove_fields):
+            raise ValueError("A field cannot be updated and removed in the same amendment.")
+        for field, value in new_tags.items():
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (str, int, float))
+                or not str(value).strip()
+            ):
+                raise ValueError(
+                    f"{field} must be a non-empty text or numeric value; "
+                    "use remove_fields to drop a field from the proposal."
+                )
+            if isinstance(value, str) and _LOCAL_PATH.search(
+                re.sub(r"https?://\S+", "", value)
+            ):
+                raise ValueError(f"{field} must not contain a local filesystem path.")
+            if field in {
+                "musicbrainz_track_id",
+                "musicbrainz_release_id",
+                "musicbrainz_artist_id",
+            }:
+                self._validate_mbid(field, str(value))
+        for field, value in (
+            ("mb_recording_id", mb_recording_id),
+            ("mb_release_id", mb_release_id),
+        ):
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"{field} must be text or omitted.")
+            if value and len(value) > 100:
+                raise ValueError(f"{field} must be at most 100 characters.")
+            if value and _LOCAL_PATH.search(value):
+                raise ValueError(f"{field} must not contain a local filesystem path.")
+            if value and value.strip():
+                self._validate_mbid(field, value)
+        if (
+            not new_tags
+            and not remove_fields
+            and mb_recording_id is None
+            and mb_release_id is None
+        ):
+            raise ValueError("Provide tag fields, fields to remove, or a MusicBrainz ID to amend.")
+
+        def update(manifest: dict) -> None:
+            self._require_pending(manifest)
+            current_revision = manifest.get("revision", 1)
+            if expected_revision != current_revision:
+                raise ValueError(
+                    "Stage revision changed; read the stage again. "
+                    f"Current revision is {current_revision}."
+                )
+            proposed = dict(manifest.get("proposed_tags", {}))
+            missing_removals = sorted(set(remove_fields) - set(proposed))
+            if missing_removals:
+                raise ValueError(
+                    "Field(s) are not in the staged proposal: "
+                    + ", ".join(missing_removals)
+                )
+            proposed.update(new_tags)
+            for field in remove_fields:
+                proposed.pop(field)
+            diff = _changed_fields(manifest["absolute_path"], proposed)
+            if not diff:
+                raise ValueError(
+                    "Amendment leaves no tag changes to apply; withdraw the stage instead."
+                )
+
+            now = datetime.now(timezone.utc).isoformat()
+            amended_fields = list(new_tags) + [f"removed:{field}" for field in remove_fields]
+            if mb_recording_id is not None:
+                manifest["mb_recording_id"] = mb_recording_id.strip() or None
+                amended_fields.append("mb_recording_id")
+            if mb_release_id is not None:
+                manifest["mb_release_id"] = mb_release_id.strip() or None
+                amended_fields.append("mb_release_id")
+            manifest["proposed_tags"] = proposed
+            manifest["diff"] = diff
+            manifest["revision"] = current_revision + 1
+            manifest["updated_at"] = now
+            manifest.setdefault("history", []).append({
+                "action": "amended",
+                "revision": manifest["revision"],
+                "at": now,
+                "fields": amended_fields,
+                "reason": reason,
+            })
+
+        manifest = self.store.mutate(stage_id, update)
+        return _path_free({
+            "stage_id": manifest["stage_id"],
+            "display_name": manifest["display_name"],
+            "status": self._status(manifest),
+            "revision": manifest["revision"],
+            "diff_summary": manifest["diff"],
+        })
+
+    def withdraw(self, stage_id: str, expected_revision: int, reason: str) -> dict:
+        """Soft-withdraw a pending proposal so it cannot be applied."""
+        reason = _validate_reason(reason)
+        if (
+            isinstance(expected_revision, bool)
+            or not isinstance(expected_revision, int)
+            or expected_revision < 1
+        ):
+            raise ValueError("expected_revision must be a positive integer.")
+
+        def update(manifest: dict) -> None:
+            self._require_pending(manifest)
+            current_revision = manifest.get("revision", 1)
+            if expected_revision != current_revision:
+                raise ValueError(
+                    "Stage revision changed; read the stage again. "
+                    f"Current revision is {current_revision}."
+                )
+            now = datetime.now(timezone.utc).isoformat()
+            manifest["withdrawn"] = True
+            manifest["withdrawn_at"] = now
+            manifest["withdrawal_reason"] = reason
+            manifest["revision"] = current_revision + 1
+            manifest["updated_at"] = now
+            manifest.setdefault("history", []).append({
+                "action": "withdrawn",
+                "revision": manifest["revision"],
+                "at": now,
+                "reason": reason,
+            })
+
+        manifest = self.store.mutate(stage_id, update)
+        return {
+            "stage_id": manifest["stage_id"],
+            "display_name": manifest["display_name"],
+            "status": self._status(manifest),
+            "revision": manifest["revision"],
+        }
+
+    @staticmethod
+    def _validate_mbid(field: str, value: str) -> None:
+        try:
+            uuid.UUID(value.strip())
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError(
+                f"{field} must be a MusicBrainz UUID or empty to clear it."
+            ) from None
+
+    @staticmethod
+    def _status(manifest: dict) -> str:
+        if manifest.get("applied"):
+            return "applied"
+        if manifest.get("withdrawn"):
+            return "withdrawn"
+        return "pending"
+
+    @classmethod
+    def _require_pending(cls, manifest: dict) -> None:
+        status = cls._status(manifest)
+        if status != "pending":
+            raise ValueError(
+                f"Only pending stages can be amended or withdrawn (status: {status})."
+            )
 
 # Module-level singleton — lazily initialised on first access
 _staging_manager: Optional[StagingManager] = None

@@ -256,6 +256,9 @@ def test_apply_staged_not_in_mcp_server():
         "preview_tags",
         "stage_tag_changes",
         "list_staged_changes",
+        "get_staged_change",
+        "amend_staged_changes",
+        "withdraw_staged_change",
     }
     # Registration is CLI-only (musicbee-tagger-register-playlist creates the
     # job locally). No MCP tool accepts a path or location of any kind.

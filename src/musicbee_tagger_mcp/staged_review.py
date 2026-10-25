@@ -3,13 +3,67 @@
 import re
 from urllib.parse import quote
 
-from tabulate import tabulate
+from wcwidth import wcswidth
 
 from .metadata_reader import read_audio_metadata
 
 _CONTROLS = re.compile(
     r"[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]"
 )
+_COLUMN_WIDTHS = (16, 26, 26)
+
+
+def _wrap_cell(value: str, width: int) -> list[str]:
+    """Wrap text by terminal display width, including wide Unicode glyphs."""
+    words = value.split()
+    lines = []
+    current = ""
+    for word in words:
+        word_width = wcswidth(word)
+        current_width = wcswidth(current)
+        if current and current_width + 1 + word_width <= width:
+            current += " " + word
+            continue
+        if current:
+            lines.append(current)
+            current = ""
+        while wcswidth(word) > width:
+            piece = ""
+            for char in word:
+                if piece and wcswidth(piece + char) > width:
+                    break
+                piece += char
+            lines.append(piece)
+            word = word[len(piece):]
+        current = word
+    if current or not lines:
+        lines.append(current)
+    return lines
+
+
+def _render_table(rows: list[tuple[str, str, str]]) -> str:
+    """Render a fixed-width 80-column review table."""
+    widths = _COLUMN_WIDTHS
+    border = "+" + "+".join("-" * (width + 2) for width in widths) + "+"
+    header_border = "+" + "+".join("=" * (width + 2) for width in widths) + "+"
+    output = [border]
+
+    def render_row(values):
+        wrapped = [_wrap_cell(str(value), width) for value, width in zip(values, widths)]
+        height = max(map(len, wrapped))
+        for line_number in range(height):
+            cells = []
+            for column, width in enumerate(widths):
+                value = wrapped[column][line_number] if line_number < len(wrapped[column]) else ""
+                cells.append(" " + value + " " * (width - wcswidth(value)) + " ")
+            output.append("|" + "|".join(cells) + "|")
+
+    render_row(("Field", "Original", "Proposed"))
+    output.append(header_border)
+    for row in rows:
+        render_row(row)
+        output.append(border)
+    return "\n".join(output)
 
 
 def _display_value(value) -> str:
@@ -21,22 +75,32 @@ def _display_value(value) -> str:
 
 
 def _print_diff(diff, original_title=None, proposed_title=None, *,
-                include_title=True, indent="  ") -> None:
-    rows = {"title": (original_title, proposed_title)} if include_title else {}
+                include_title=True, indent="  ", required_fields=(),
+                original_tags=None) -> None:
+    original_tags = original_tags or {}
+    changes = {item.get("field", "?"): item for item in diff}
+    required = set(required_fields)
+    rows = {}
+    for field in required_fields:
+        change = changes.get(field)
+        if change is None:
+            rows[field] = (original_tags.get(field), "(no change)")
+        else:
+            rows[field] = (change.get("old"), change.get("new"))
+    if include_title and "title" not in required:
+        rows["title"] = (original_title, proposed_title)
     rows.update({
         item.get("field", "?"): (item.get("old"), item.get("new"))
         for item in diff
-        if item.get("field") != "title" or not include_title
+        if item.get("field") not in required
+        and (item.get("field") != "title" or not include_title)
     })
     table = [(field, _display_value(old), _display_value(new))
              for field, (old, new) in rows.items()]
     if not table:
         print(f"{indent}(no changes)")
         return
-    rendered = tabulate(
-        table, headers=("Field", "Original", "Proposed"), tablefmt="grid",
-        maxcolwidths=[16, 24, 24], disable_numparse=True,
-    )
+    rendered = _render_table(table)
     print("\n".join(indent + line for line in rendered.splitlines()))
 
 
@@ -51,9 +115,10 @@ def print_review(manifest: dict, stage_id: str) -> None:
         print("MusicBrainz release ID: (not set)")
 
     try:
-        title = read_audio_metadata(manifest["absolute_path"])["tags"].get("title")
+        original_tags = read_audio_metadata(manifest["absolute_path"])["tags"]
     except Exception:
-        title = None
+        original_tags = {}
+    title = original_tags.get("title")
     proposed_title = manifest.get("proposed_tags", {}).get("title", title)
     print(f"Original title: {_display_value(title)}")
     print(f"File           : {manifest['display_name']}")
@@ -62,7 +127,11 @@ def print_review(manifest: dict, stage_id: str) -> None:
     if score is not None:
         print(f"MusicBrainz score: {score:.1f}")
     print("\nProposed changes:")
-    _print_diff(manifest.get("diff", []), title, proposed_title)
+    _print_diff(
+        manifest.get("diff", []), title, proposed_title,
+        required_fields=("artist", "title", "album"),
+        original_tags=original_tags,
+    )
 
 
 def cmd_list(staging) -> None:

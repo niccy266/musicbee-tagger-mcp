@@ -27,13 +27,74 @@ $serverExe = Join-Path $venvPath "Scripts\musicbee-tagger-mcp.exe"
 $applyExe = Join-Path $venvPath "Scripts\musicbee-tagger-apply.exe"
 $registerPlaylistExe = Join-Path $venvPath "Scripts\musicbee-tagger-register-playlist.exe"
 $clearRegistrationsExe = Join-Path $venvPath "Scripts\musicbee-tagger-clear-registrations.exe"
-$runningServers = @(
-    Get-CimInstance Win32_Process -Filter "Name = 'musicbee-tagger-mcp.exe'" |
-        Where-Object { $_.ExecutablePath -eq $serverExe }
+$installedExecutables = @($serverExe, $applyExe, $registerPlaylistExe, $clearRegistrationsExe)
+$runningTools = @(
+    Get-CimInstance Win32_Process |
+        Where-Object { $_.ExecutablePath -and $installedExecutables -contains $_.ExecutablePath }
 )
-if ($runningServers.Count -gt 0) {
-    $processIds = ($runningServers.ProcessId -join ", ")
-    throw "Cannot upgrade while MusicBee Tagger MCP is running (PID(s): $processIds). Close MCP clients using this server, then rerun the installer."
+if ($runningTools.Count -gt 0) {
+    Write-Host "MusicBee Tagger processes are using files that must be upgraded:"
+    $runningTools | ForEach-Object {
+        Write-Host "  $($_.Name) (PID $($_.ProcessId))"
+    }
+    $answer = Read-Host "Ask these processes to close before continuing? [y/N]"
+    if ($answer -notmatch '^(y|yes)$') {
+        throw "Upgrade cancelled. Close the listed MusicBee Tagger processes and rerun the installer."
+    }
+
+    foreach ($process in $runningTools) {
+        try {
+            $liveProcess = Get-Process -Id $process.ProcessId -ErrorAction Stop
+            if (-not $liveProcess.CloseMainWindow()) {
+                Write-Host "  $($process.Name) (PID $($process.ProcessId)) has no closable window."
+            }
+        }
+        catch {
+            # The process may have exited between enumeration and the close request.
+        }
+    }
+    Start-Sleep -Seconds 3
+    $remainingTools = @(
+        Get-CimInstance Win32_Process |
+            Where-Object { $_.ExecutablePath -and $installedExecutables -contains $_.ExecutablePath }
+    )
+    if ($remainingTools.Count -gt 0) {
+        Write-Host "These processes did not close:"
+        $remainingTools | ForEach-Object {
+            Write-Host "  $($_.Name) (PID $($_.ProcessId))"
+        }
+        $forceAnswer = Read-Host "Terminate the remaining processes so installation can continue? [y/N]"
+        if ($forceAnswer -notmatch '^(y|yes)$') {
+            $remainingIds = ($remainingTools.ProcessId -join ", ")
+            throw "Upgrade cancelled. Close the remaining process(es) manually (PID(s): $remainingIds) and rerun the installer."
+        }
+        foreach ($process in $remainingTools) {
+            Stop-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Seconds 1
+        $stillRunning = @(
+            Get-CimInstance Win32_Process |
+                Where-Object { $_.ExecutablePath -and $installedExecutables -contains $_.ExecutablePath }
+        )
+        if ($stillRunning.Count -gt 0) {
+            $remainingIds = ($stillRunning.ProcessId -join ", ")
+            throw "Could not stop remaining process(es) (PID(s): $remainingIds). Close them manually and rerun the installer."
+        }
+    }
+}
+
+# Interrupted pip uninstalls can leave renamed package files behind. Pip treats
+# these as invalid distributions and warns on every later install, so clear only
+# the known MusicBee Tagger leftovers from this environment's site-packages.
+$sitePackages = Join-Path $venvPath "Lib\site-packages"
+if (Test-Path -LiteralPath $sitePackages) {
+    $pipLeftovers = @(Get-ChildItem -LiteralPath $sitePackages -Force | Where-Object {
+        $_.Name -like "~usicbee-tagger-mcp*" -or
+        $_.Name -like "~usicbee_tagger_mcp*"
+    })
+    foreach ($leftover in $pipLeftovers) {
+        Remove-Item -LiteralPath $leftover.FullName -Recurse -Force
+    }
 }
 
 & $pythonPath -m pip install $resolvedWheel

@@ -27,7 +27,12 @@ def stage_tag_changes(
     forensic_score: Optional[float] = None,
     notes: str = "",
 ) -> Dict[str, Any]:
-    """Save a pending manifest for user review; does not write audio."""
+    """Save a pending manifest for user review; does not write audio.
+
+    Filename-derived artist/title candidates are unverified research clues.
+    Corroborate them with track metadata, duration, or release track listings
+    before staging them as tag values.
+    """
     entry = get_registry().resolve(token)
     try:
         return get_staging_manager().stage(
@@ -49,7 +54,75 @@ def list_staged_changes() -> List[Dict[str, Any]]:
     return get_staging_manager().list_pending()
 
 
+def get_staged_change(stage_id: str) -> Dict[str, Any]:
+    """Inspect a stage's notes, proposed values, current tags, and revision.
+
+    The result excludes local file paths and registry tokens. Use the revision
+    when amending or withdrawing so a stale review cannot overwrite newer work.
+    """
+    try:
+        return get_staging_manager().get(stage_id)
+    except (FileNotFoundError, ValueError) as error:
+        return {"error": str(error)}
+    except Exception:
+        return {"error": "Unable to read staged change"}
+
+
+def amend_staged_changes(
+    stage_id: str,
+    expected_revision: int,
+    new_tags: Dict[str, Any],
+    reason: str,
+    remove_fields: Optional[List[str]] = None,
+    mb_recording_id: Optional[str] = None,
+    mb_release_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Amend a pending proposal without writing audio.
+
+    new_tags is merged into the existing proposal and must contain canonical
+    field names with non-empty scalar values. Use remove_fields to drop incorrect
+    field proposals, especially when the original tag is empty. The resulting
+    change is re-previewed against current tags. Supply a path-free reason and
+    the revision from list_staged_changes or get_staged_change; re-read a stale stage.
+    """
+    try:
+        return get_staging_manager().amend(
+            stage_id,
+            expected_revision,
+            new_tags,
+            reason,
+            remove_fields=remove_fields,
+            mb_recording_id=mb_recording_id,
+            mb_release_id=mb_release_id,
+        )
+    except (FileNotFoundError, ValueError) as error:
+        return {"error": str(error)}
+    except Exception:
+        return {"error": "Unable to amend staged change"}
+
+
+def withdraw_staged_change(
+    stage_id: str,
+    expected_revision: int,
+    reason: str,
+) -> Dict[str, Any]:
+    """Soft-withdraw a pending proposal; it remains auditable and cannot apply.
+
+    Supply the current revision and a path-free reason. Withdrawal only changes
+    the local stage manifest and never modifies the audio file.
+    """
+    try:
+        return get_staging_manager().withdraw(stage_id, expected_revision, reason)
+    except (FileNotFoundError, ValueError) as error:
+        return {"error": str(error)}
+    except Exception:
+        return {"error": "Unable to withdraw staged change"}
+
+
 def register_tag_tools(app) -> None:
     app.tool()(preview_tags)
     app.tool()(stage_tag_changes)
     app.tool()(list_staged_changes)
+    app.tool()(get_staged_change)
+    app.tool()(amend_staged_changes)
+    app.tool()(withdraw_staged_change)

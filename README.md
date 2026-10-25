@@ -66,8 +66,11 @@ installer while supplying the included wheel:
    ```
 
    Before upgrading an existing installation, close MCP clients using the
-   server. The installer checks for running server processes and refuses to
-   upgrade while the launcher is in use.
+   server. If installed MusicBee Tagger processes are running, the installer
+   asks to close them. If a process has no closable window or does not exit, it
+   offers to terminate it before continuing. Save any work in those processes
+   first. The installer also removes stale `~usicbee-tagger-mcp*` pip leftovers
+   from the dedicated environment after interrupted upgrades.
 
    The installer creates a dedicated virtual environment, installs the wheel,
    and writes `musicbee-tagger-mcp.cmd`, `musicbee-tagger-apply.cmd`,
@@ -144,6 +147,15 @@ K:\bin\musicbee-tagger-apply.cmd --all
 
 The last command prompts before each write. Review each diff carefully. Do not
 run an apply command unless you intend to modify the corresponding audio file.
+
+Agents can inspect an existing proposal with `get_staged_change`, then amend it
+with `amend_staged_changes` or withdraw it with `withdraw_staged_change`. These
+actions update only the local stage manifest; amendment re-reads the current
+tags and requires the stage revision plus a path-free reason. Withdrawn stages
+remain in local history and are excluded from pending changes. Only the user
+CLI applies audio tags. Filename-derived artist/title pairs are ambiguous
+research clues, not evidence: a separator can split an artist name, a title,
+or unrelated text, so corroborate those values before staging them.
 
 ### Configuration and data
 

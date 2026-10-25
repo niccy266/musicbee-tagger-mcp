@@ -20,13 +20,18 @@ def read_track_metadata(token: str) -> Dict[str, Any]:
 
 
 def extract_filename_clues(token: str) -> Dict[str, Any]:
-    """Extract clues from the registered file's bare filename."""
+    """Extract unverified research clues from the registered file's filename.
+
+    Artist/title candidates are ambiguous hypotheses, not tag evidence. A
+    separator may split an artist, title, or unrelated text. Corroborate them
+    with metadata, duration, or a release track listing before staging tags.
+    """
     entry = get_registry().resolve(token)
     return extract_clues_from_filename(entry.name)
 
 
 def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
-    """Return metadata and filename clues for each registered token."""
+    """Return metadata and unverified filename research clues for each token."""
     registry = get_registry()
     briefs = []
     for token in tokens:
