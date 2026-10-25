@@ -31,10 +31,16 @@ class JobStore:
 
     def create_job(
         self, entries: List[Dict[str, Any]], playlist_name: str,
-        skipped: int = 0,
+        skipped: int = 0, job_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Persist a job from registered token entries (plus skipped count)."""
-        job_id = str(uuid.uuid4())
+        if job_id is None:
+            job_id = str(uuid.uuid4())
+        else:
+            try:
+                job_id = str(uuid.UUID(job_id))
+            except (TypeError, ValueError, AttributeError):
+                raise ValueError("Unknown job id") from None
         job = {
             "job_id": job_id,
             "playlist_name": playlist_name,
@@ -61,6 +67,49 @@ class JobStore:
             "registered": len(job["tracks"]),
             "skipped": skipped,
         }
+
+    def add_track(
+        self, job_id: str, token: str, display_name: str,
+    ) -> Dict[str, Any]:
+        job = self.load_job(job_id)
+        existing = {
+            track["token"] for track in job["tracks"]
+            if isinstance(track, dict) and isinstance(track.get("token"), str)
+        }
+        if token not in existing:
+            job["tracks"].append(
+                {
+                    "token": token,
+                    "display_name": display_name,
+                    "status": "pending",
+                    "error": None,
+                }
+            )
+            try:
+                self._save(job)
+            except RuntimeError:
+                raise
+        return {"job_id": job_id, "registered": len(job["tracks"])}
+
+    def append_track(self, job_id: str, token: str, display_name: str) -> Dict[str, Any]:
+        return self.add_track(job_id, token, display_name)
+
+    def add_registered_entry(
+        self, job_id: str, entry: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self.add_track(job_id, entry["token"], entry["display_name"])
+
+    def set_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
+        job = self.load_job(job_id)
+        job["skipped"] = skipped
+        try:
+            self._save(job)
+        except RuntimeError:
+            raise
+        return {"job_id": job_id, "skipped": skipped}
+
+    def update_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
+        return self.set_skipped(job_id, skipped)
 
     def load_job(self, job_id: str) -> Dict[str, Any]:
         """Load a job by id, raising ValueError for unknown or malformed ids."""
