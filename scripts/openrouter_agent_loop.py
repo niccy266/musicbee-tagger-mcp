@@ -37,7 +37,11 @@ from musicbee_tagger_mcp.tools.inspection import (  # noqa: E402
     read_track_metadata,
 )
 from musicbee_tagger_mcp.tools.musicbrainz import (  # noqa: E402
+    flag_suspicious_artists,
+    propose_artist_split,
     search_canonical_release,
+    search_musicbrainz_artist,
+    verify_artists_on_recording,
     verify_mbid,
 )
 from musicbee_tagger_mcp.tools.tags import (  # noqa: E402
@@ -71,6 +75,23 @@ Rules:
 - When every file in the batch is staged or explicitly marked unresolved in
   your final message, call finish_batch with a one-line summary.
 - Be concise in tool arguments; do not repeat file contents back.
+
+## Artist splits
+When an artist field looks malformed (feat./ft./with/vs./x joins):
+1. Call propose_artist_split for candidates.
+2. For each candidate, search_musicbrainz_artist. Zero hits = treat as
+   suspect, not staged.
+3. Once a canonical recording is verified, confirm candidates with
+   verify_artists_on_recording. A candidate not credited on the canonical
+   release is presumptively a false split (e.g. "Simon & Garfunkel" is one
+   credited name) — reject unless you can argue otherwise from evidence.
+4. Run flag_suspicious_artists; combine its flags with your own judgment
+   for garbled or mojibake text. Repair garbled tags (repair_mojibake,
+   then re-search) BEFORE splitting.
+5. Only stage a split when candidates exist on MusicBrainz and the credit
+   evidence supports it; otherwise leave the original value and note why.
+Staged multi-artist values use "; " as the canonical separator. Decide
+opt-in ampersand/comma splitting yourself, per file, from evidence.
 """
 
 TOOLS = [
@@ -179,6 +200,86 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_artist_split",
+            "description": (
+                "Mechanically split a malformed artist field into candidate "
+                "artists (feat./ft./with/vs./x/semicolon markers)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "artist_field": {"type": "string"},
+                    "split_ampersand": {"type": "boolean"},
+                    "split_comma": {"type": "boolean"},
+                },
+                "required": ["artist_field"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_musicbrainz_artist",
+            "description": (
+                "Confirm a candidate artist exists as a MusicBrainz artist "
+                "entity. An empty result means the name is unknown — treat "
+                "the split as suspect."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "limit": {"type": "integer"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "verify_artists_on_recording",
+            "description": (
+                "Check each candidate artist is actually credited on the "
+                "MusicBrainz recording. Evidence, not proof — weigh partial "
+                "matches against known collaborations."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recording_id": {"type": "string"},
+                    "candidate_artists": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["recording_id", "candidate_artists"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "flag_suspicious_artists",
+            "description": (
+                "Heuristic garble/debris flags (short tokens, mojibake, "
+                "casing anomalies) for candidate artists."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "candidate_artists": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["candidate_artists"],
+            },
+        },
+    },
 ]
 
 LOCAL_TOOLS = {
@@ -188,6 +289,10 @@ LOCAL_TOOLS = {
     "search_canonical_release": search_canonical_release,
     "verify_mbid": verify_mbid,
     "stage_tag_changes": stage_tag_changes,
+    "propose_artist_split": propose_artist_split,
+    "search_musicbrainz_artist": search_musicbrainz_artist,
+    "verify_artists_on_recording": verify_artists_on_recording,
+    "flag_suspicious_artists": flag_suspicious_artists,
 }
 
 

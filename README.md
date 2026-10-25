@@ -210,3 +210,12 @@ same path when running the CLI:
 $env:MUSICBEE_TAGGER_DATA_DIR = "K:\tools\mcp-servers\musicbee-tags\data"
 K:\bin\musicbee-tagger-register-playlist.cmd
 ```
+
+## Artist split validation (agent-assisted)
+
+The agent loop exposes four read-only tools for splitting malformed artist
+fields: `propose_artist_split` (mechanical pass), `search_musicbrainz_artist`
+(existence check), `verify_artists_on_recording` (credit evidence), and
+`flag_suspicious_artists` (garble heuristics). A split is staged only when
+candidates exist on MusicBrainz and the credit evidence supports it;
+verified multi-artist values are staged with `; ` as separator.
