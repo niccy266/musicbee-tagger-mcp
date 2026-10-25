@@ -11,27 +11,83 @@ Usage:
 """
 
 import argparse
-import json
-import sys
-from pathlib import Path
+from urllib.parse import quote
 
+from .metadata_reader import read_audio_metadata
 from .staged_apply import get_staged_applier
 from .staging import get_staging_manager
 
 
-def _print_diff(diff: list, indent: str = "  ") -> None:
-    if not diff:
+def _display_value(value) -> str:
+    if value is None or value == "":
+        return "(empty)"
+    return str(value).replace("\r", " ").replace("\n", " ")
+
+
+def _print_diff(
+    diff: list,
+    original_title=None,
+    proposed_title=None,
+    *,
+    include_title: bool = True,
+    indent: str = "  ",
+) -> None:
+    """Render staged fields as an aligned original/proposed table."""
+    rows = {"title": (original_title, proposed_title)} if include_title else {}
+    rows.update({
+        change.get("field", "?"): (change.get("old"), change.get("new"))
+        for change in diff
+        if change.get("field") != "title" or not include_title
+    })
+    # Keep the source title in every review, including proposals that do not
+    # change it. The title values are read from the file at review time.
+    table = [(field, _display_value(old), _display_value(new))
+             for field, (old, new) in rows.items()]
+    if not table:
         print(f"{indent}(no changes)")
         return
-    for change in diff:
-        field = change.get("field", "?")
-        old = change.get("old")
-        new = change.get("new")
-        old_str = repr(old) if old is not None else "(empty)"
-        new_str = repr(new) if new is not None else "(empty)"
-        print(f"{indent}{field}:")
-        print(f"{indent}  - {old_str}")
-        print(f"{indent}  + {new_str}")
+    headers = ("Field", "Original", "Proposed")
+    widths = [max(len(headers[i]), *(len(row[i]) for row in table))
+              for i in range(3)]
+
+    def line(left, middle, right, fill="-"):
+        return left + middle.join(fill * (width + 2) for width in widths) + right
+
+    print(indent + line("+", "+", "+"))
+    print(indent + "| " + " | ".join(headers[i].ljust(widths[i])
+                                       for i in range(3)) + " |")
+    print(indent + line("+", "+", "+"))
+    for row in table:
+        print(indent + "| " + " | ".join(row[i].ljust(widths[i])
+                                           for i in range(3)) + " |")
+    print(indent + line("+", "+", "+"))
+
+
+def _print_review(manifest: dict, stage_id: str) -> None:
+    release_id = manifest.get("mb_release_id")
+    if release_id:
+        release_id = str(release_id)
+        release_url = f"https://musicbrainz.org/release/{quote(release_id, safe='')}"
+        print(f"MusicBrainz release ID: {release_id}")
+        print(f"MusicBrainz release:    {release_url}")
+    else:
+        print("MusicBrainz release ID: (not set)")
+
+    try:
+        original_title = read_audio_metadata(manifest["absolute_path"])["tags"].get("title")
+    except Exception:
+        original_title = None
+    proposed_tags = manifest.get("proposed_tags", {})
+    proposed_title = proposed_tags.get("title", original_title)
+
+    print(f"Original title: {_display_value(original_title)}")
+    print(f"File           : {manifest['display_name']}")
+    print(f"Stage ID       : {stage_id}")
+    score = manifest.get("forensic_score")
+    if score is not None:
+        print(f"MusicBrainz score: {score:.1f}")
+    print("\nProposed changes:")
+    _print_diff(manifest.get("diff", []), original_title, proposed_title)
 
 
 def cmd_list(staging) -> None:
@@ -48,7 +104,7 @@ def cmd_list(staging) -> None:
         if score is not None:
             print(f"  MB score   : {score:.1f}")
         print(f"  changes    :")
-        _print_diff(entry.get("diff_summary", []), indent="    ")
+        _print_diff(entry.get("diff_summary", []), include_title=False, indent="    ")
         print()
 
 
@@ -58,13 +114,8 @@ def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> Non
         print(f"[SKIP] {stage_id} has already been applied.")
         return
 
-    print(f"\nFile    : {manifest['display_name']}")
-    print(f"Stage ID: {stage_id}")
-    score = manifest.get("forensic_score")
-    if score is not None:
-        print(f"MB Score: {score:.1f}")
-    print("\nProposed changes:")
-    _print_diff(manifest.get("diff", []))
+    print()
+    _print_review(manifest, stage_id)
 
     if dry_run:
         print("\n[DRY RUN] No changes written.")
