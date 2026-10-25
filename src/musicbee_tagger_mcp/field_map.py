@@ -154,6 +154,10 @@ def _tag_str(value: Any) -> Optional[str]:
     """Stringify a tag value, decoding MP4 freeform bytes."""
     if type(value).__name__ == "MP4FreeForm":
         value = bytes(value).decode("utf-8", errors="replace")
+    elif isinstance(value, bytes):
+        # Keep undecodable source content visible so a bad codec guess cannot
+        # erase a genre from a multi-value field.
+        value = value.decode("utf-8", errors="replace")
     return _INVISIBLE_RE.sub("", str(value)).strip()
 
 
@@ -175,6 +179,10 @@ def get_first_tag(tags: Any, keys) -> Optional[str]:
                 if isinstance(value, (list, tuple)) and len(value) > 0:
                     if isinstance(value[0], tuple):
                         return value[0]  # MP4 (track, total) pairs stay structured
+                    if key.lower() in ("genre", "tcon", "\xa9gen"):
+                        return "; ".join(
+                            part for part in (_tag_str(item) for item in value) if part
+                        )
                     return _tag_str(value[0])
                 if value:
                     return _tag_str(value)
@@ -186,6 +194,10 @@ def get_first_tag(tags: Any, keys) -> Optional[str]:
                     if isinstance(value, (list, tuple)) and len(value) > 0:
                         if isinstance(value[0], tuple):
                             return value[0]
+                        if lower == "genre":
+                            return "; ".join(
+                                part for part in (_tag_str(item) for item in value) if part
+                            )
                         return _tag_str(value[0])
                     if value:
                         return _tag_str(value)

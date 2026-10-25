@@ -326,3 +326,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated the Windows installer to install the wheel's declared runtime dependencies before force-refreshing the wheel without reinstalling dependencies. This fixes fresh installs while preserving same-version source-checkout updates.
 - Aligned the README queue-tool examples with the current MCP tools and carried forward the agent-loop model example and pytest temporary-directory ignore cleanup.
 - Validation: full suite passed (111 passed, 1 skipped); Pylint `--errors-only`, installer syntax parsing, and `git diff --check` passed. A fresh isolated source install imported all runtime dependencies and launched the apply CLI help successfully. Built all six v0.4.3 release assets.
+
+### 2026-10-26 — Preserve multi-value MusicBrainz genres (#30)
+- Aggregated recording and release genre tags into a semicolon-delimited value in recording search and MBID verification results, deduplicating repeated labels while retaining recording-specific association.
+- Preserved every multi-value genre read from ID3, Vorbis, and MP4 tags; undecodable byte values are decoded with replacement so additional genres are not dropped. Genre writes split the canonical semicolon-delimited value back into native multi-value tag entries.
+- Added coverage for MusicBrainz recording/release aggregation, garbled multi-value inputs, and multi-genre cross-format round trips.
+- Validation: targeted tests passed (5 passed, 3 skipped because ffmpeg is unavailable); `git diff --check` passed. Audio files were not modified.
