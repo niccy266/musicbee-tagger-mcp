@@ -79,6 +79,13 @@ Filename-derived artist/title values are search clues only. Do not stage them
 without independent corroboration from existing tags, release credits, or a
 verified recording match.
 
+Context and look-ahead:
+- You may receive prior context from earlier batches and a list of upcoming
+  files not in this batch. Use them to recognize albums, series, and consistent
+  release metadata, but only stage values after verifying each file.
+- When several files in the current batch appear to belong to the same release,
+  keep artist/album/release metadata consistent across them.
+
 Rules:
 - Use tokens exactly as given; never invent tokens.
 - One file at a time; do not revisit a file you already staged or marked
@@ -436,11 +443,25 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
 
 
 def run_batch(tokens, model, api_key, max_turns, state, state_path,
-              run_log=None, debug=False):
+              run_log=None, debug=False, prior_context="", lookahead=None):
     """One agent loop over one batch of tokens. Returns the message history."""
     brief = get_batch_brief(tokens)
     if run_log:
         run_log.write("batch_brief", batch=state.get("batch"), files=brief)
+
+    context_sections = []
+    if prior_context and prior_context.strip():
+        context_sections.append(
+            "Prior context from earlier batches (compressed plaintext):\n"
+            + prior_context.strip()
+        )
+    if lookahead:
+        context_sections.append(
+            "Upcoming files not in this batch (look-ahead; use for album/series detection):\n"
+            + "\n".join(f"- {name}" for name in lookahead)
+        )
+    context_block = "\n\n".join(context_sections)
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
@@ -449,6 +470,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                 "Batch of "
                 f"{len(tokens)} files. Here is the batch brief:\n"
                 + json.dumps(brief, ensure_ascii=False, indent=2)
+                + ("\n\n" + context_block if context_block else "")
                 + "\nBegin. Finish every file, then call finish_batch."
             ),
         },
@@ -456,7 +478,8 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
     staged, unresolved = [], []
     verified_by_token = {}
 
-    for turn in range(1, max_turns + 1):
+    turn_cap = max(1, max_turns) * max(1, len(tokens))
+    for turn in range(1, turn_cap + 1):
         if not debug_checkpoint(
             debug, f"Batch {state.get('batch')} model turn {turn}", run_log
         ):
@@ -717,9 +740,14 @@ def main():
     )
     parser.add_argument("--model", default="openrouter/free")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+    parser.add_argument("--lookahead", type=int, default=10,
+                        help="Number of upcoming (unclaimed) files to show for album detection")
+    parser.add_argument("--context-chars", type=int, default=4000,
+                        help="Maximum characters of prior-batch context to retain")
     parser.add_argument("--max-batches", type=int, default=None,
                         help="Stop after this many batches (useful for a trial run)")
-    parser.add_argument("--max-turns", type=int, default=15)
+    parser.add_argument("--max-turns", type=int, default=15,
+                        help="Model turns allowed per file in a batch; batches loop until complete")
     parser.add_argument("--state", type=Path, default=Path("agent_state.json"))
     parser.add_argument(
         "--log", type=Path, default=None,
@@ -779,6 +807,7 @@ def main():
         batch_number += 1
         tokens = [entry["token"] for entry in claim["batch"]]
         names = [entry["display_name"] for entry in claim["batch"]]
+        lookahead_names = jobs.peek_pending(job_id, size=max(0, args.lookahead))
 
         batch_state = {
             "batch": batch_number,
@@ -801,6 +830,8 @@ def main():
                 run_batch(
                     tokens, args.model, api_key, args.max_turns, batch_state,
                     args.state, run_log=run_log, debug=args.debug,
+                    prior_context=state.get("context", ""),
+                    lookahead=lookahead_names,
                 )
             except Exception as error:
                 detail = _sanitize_log(f"{type(error).__name__}: {error}")
@@ -844,10 +875,21 @@ def main():
                       unresolved_count=len(batch_state["unresolved"]),
                       finished=batch_state["finished"])
 
-        staged_names = {
+        staged_names = [
             names[i] for i, tok in enumerate(tokens) if tok in batch_state["staged"]
-        }
-        state.setdefault("staged_by_file", []).extend(sorted(staged_names - done))
+        ]
+        unresolved_names = [
+            names[i] for i, tok in enumerate(tokens) if tok in batch_state.get("unresolved", [])
+        ]
+        context_line = (
+            f"Batch {batch_number}: staged={staged_names}; "
+            f"unresolved={unresolved_names}; "
+            f"summary={batch_state.get('summary', '')}"
+        )
+        state["context"] = (state.get("context", "") + "\n" + context_line).strip()
+        if len(state["context"]) > args.context_chars:
+            state["context"] = state["context"][-args.context_chars:]
+        state.setdefault("staged_by_file", []).extend(sorted(set(staged_names) - done))
         save_state(args.state, state)
 
         print(
