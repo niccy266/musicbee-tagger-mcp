@@ -17,6 +17,7 @@ from musicbee_tagger_mcp.tools.playlists import (
     job_status,
     list_jobs,
     next_batch,
+    release_batch,
     register_playlist_tools,
 )
 
@@ -93,6 +94,29 @@ def test_batches_and_completion(env):
     assert status["counts"]["done"] == 25
 
 
+def test_release_batch_returns_only_active_claims_to_pending(env):
+    _reg, jobs, tmp_path = env
+    playlist = _playlist(tmp_path, count=3)
+    import io
+    stream = io.StringIO()
+    cli_run(input_stream=io.StringIO(f'"{playlist}"\n'), output_stream=stream)
+    (job_id,) = [
+        line.split()[-1].rstrip(".")
+        for line in stream.getvalue().splitlines()
+        if "playlist job" in line
+    ]
+    claimed = next_batch(job_id, size=2)["batch"]
+    first, second = [item["token"] for item in claimed]
+
+    result = release_batch(job_id, [first, "not-claimed"])
+
+    assert result["released"] == [first]
+    assert result["unchanged"] == ["not-claimed"]
+    assert jobs.job_status(job_id)["counts"]["pending"] == 2
+    assert jobs.job_status(job_id)["counts"]["in_progress"] == 1
+    assert jobs.complete_batch(job_id, [{"token": second, "success": True}])["updated"] == 1
+
+
 def test_failed_tokens_reported_with_display_names(env):
     reg, jobs, tmp_path = env
     playlist = _playlist(tmp_path, count=12)
@@ -167,17 +191,16 @@ def test_agent_loop_selects_the_only_available_job(env, capsys):
     assert created["job_id"] in capsys.readouterr().out
 
 
-def test_agent_loop_requires_an_id_when_multiple_jobs_are_available(env, capsys):
+def test_agent_loop_selects_first_available_job_when_multiple_jobs_are_available(env, capsys):
     _, jobs, _ = env
     first = jobs.create_job([{"token": "token-a", "display_name": "A"}], "first.m3u")
     second = jobs.create_job([{"token": "token-b", "display_name": "B"}], "second.m3u")
 
-    with pytest.raises(SystemExit, match="Choose a job"):
-        select_job_id(None, jobs)
+    selected = select_job_id(None, jobs)
 
+    assert selected == jobs.list_jobs()[0]["job_id"]
     output = capsys.readouterr().out
-    assert first["job_id"] in output
-    assert second["job_id"] in output
+    assert selected in output
 
 
 def test_agent_loop_requires_registration_when_no_jobs_are_available(env):
@@ -231,6 +254,11 @@ def test_registered_playlist_tools_dispatch_to_job_store(tmp_path, monkeypatch):
     assert batch["remaining"] == 0
     assert app.tools["next_batch"](job["job_id"], size=25)["batch"] == []
     assert jobs.job_status(job["job_id"])["counts"]["in_progress"] == 25
+    released = app.tools["release_batch"](
+        job["job_id"], [batch["batch"][0]["token"]]
+    )
+    assert released["released"] == [batch["batch"][0]["token"]]
+    assert app.tools["next_batch"](job["job_id"], size=1)["batch"][0]["token"] == batch["batch"][0]["token"]
 
     status = app.tools["job_status"](job["job_id"])
     assert status["counts"]["in_progress"] == 25

@@ -164,6 +164,23 @@ class JobStore:
         remaining = sum(1 for t in job["tracks"] if t["status"] == "pending")
         return {"batch": claimed, "remaining": remaining, "job_id": job_id}
 
+    def peek_pending(self, job_id: str, size: int = 10) -> List[str]:
+        """Return display names of the next pending tracks without claiming them."""
+        if not isinstance(size, int) or size < 1 or size > 100:
+            return []
+        try:
+            job = self.load_job(job_id)
+        except ValueError:
+            return []
+        names = [
+            track["display_name"]
+            for track in job["tracks"]
+            if track.get("status") == "pending"
+            and isinstance(track.get("display_name"), str)
+        ]
+        return names[:size]
+
+
     def complete_batch(
         self, job_id: str, results: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
@@ -191,6 +208,34 @@ class JobStore:
             return {"error": str(error)}
         remaining = sum(1 for t in job["tracks"] if t["status"] == "pending")
         return {"updated": updated, "remaining": remaining, "unknown": unknown}
+
+    def release_batch(self, job_id: str, tokens: List[str]) -> Dict[str, Any]:
+        """Return selected in-progress claims to pending after an interrupted run."""
+        if not isinstance(tokens, list) or any(not isinstance(token, str) for token in tokens):
+            return {"error": "tokens must be a list of opaque token strings"}
+        try:
+            job = self.load_job(job_id)
+        except ValueError as error:
+            return {"error": str(error)}
+
+        by_token = {track["token"]: track for track in job["tracks"]}
+        released, unchanged = [], []
+        for token in dict.fromkeys(tokens):
+            track = by_token.get(token)
+            if track is None or track["status"] != "in_progress":
+                unchanged.append(token)
+                continue
+            track["status"] = "pending"
+            track["error"] = None
+            released.append(token)
+
+        if released:
+            try:
+                self._save(job)
+            except RuntimeError as error:
+                return {"error": str(error)}
+        remaining = sum(1 for track in job["tracks"] if track["status"] == "pending")
+        return {"released": released, "unchanged": unchanged, "remaining": remaining}
 
     def job_status(self, job_id: str) -> Dict[str, Any]:
         """Return counts per status and failed display names (no tokens)."""

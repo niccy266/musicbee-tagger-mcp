@@ -339,3 +339,7 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Kept the existing data-directory picker so the extension and local registration/apply tools can share the selected queue and token database. Documented that Claude manages the extension storage location separately.
 - Added a Windows CI smoke test that builds the bundle and verifies MCP initialization and tool discovery from the packaged executable.
 - Validation: release/package tests passed (11 passed, 1 skipped); full suite passed (116 passed, 2 skipped) with `K:\bin` added to the test process PATH. The executable smoke test is configured for Windows CI; it was skipped locally because PyInstaller is not installed in the current virtual environment.
+### 2026-10-26 — Fix OpenRouter genre auto-inclusion indentation
+- Corrected over-indented MusicBrainz genre auto-inclusion block in `scripts/openrouter_agent_loop.py` so it runs as part of stage verification handling instead of being unreachable inside the release-id assignment.
+- Validation: `py_compile` passed; `tests/test_openrouter_agent_loop.py` passed (4 passed); `git diff --check` passed. No audio files were modified.
+
