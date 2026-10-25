@@ -1,5 +1,10 @@
 # Repository agent guidance
 
+## Validation and pushing changes
+
+- Always run tests relevant to code changes before finishing work, using the project's virtual environment when available.
+- Push completed changes to the current working branch on `origin`; do not push work directly to `main` or `master`.
+
 ## Branches for issue work
 
 - Always create and switch to a new branch before making changes to address a new issue.

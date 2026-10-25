@@ -21,12 +21,25 @@ def _display_value(value) -> str:
 
 
 def _print_diff(diff, original_title=None, proposed_title=None, *,
-                include_title=True, indent="  ") -> None:
-    rows = {"title": (original_title, proposed_title)} if include_title else {}
+                include_title=True, indent="  ", required_fields=(),
+                original_tags=None) -> None:
+    original_tags = original_tags or {}
+    changes = {item.get("field", "?"): item for item in diff}
+    required = set(required_fields)
+    rows = {}
+    for field in required_fields:
+        change = changes.get(field)
+        if change is None:
+            rows[field] = (original_tags.get(field), "(no change)")
+        else:
+            rows[field] = (change.get("old"), change.get("new"))
+    if include_title and "title" not in required:
+        rows["title"] = (original_title, proposed_title)
     rows.update({
         item.get("field", "?"): (item.get("old"), item.get("new"))
         for item in diff
-        if item.get("field") != "title" or not include_title
+        if item.get("field") not in required
+        and (item.get("field") != "title" or not include_title)
     })
     table = [(field, _display_value(old), _display_value(new))
              for field, (old, new) in rows.items()]
@@ -51,9 +64,10 @@ def print_review(manifest: dict, stage_id: str) -> None:
         print("MusicBrainz release ID: (not set)")
 
     try:
-        title = read_audio_metadata(manifest["absolute_path"])["tags"].get("title")
+        original_tags = read_audio_metadata(manifest["absolute_path"])["tags"]
     except Exception:
-        title = None
+        original_tags = {}
+    title = original_tags.get("title")
     proposed_title = manifest.get("proposed_tags", {}).get("title", title)
     print(f"Original title: {_display_value(title)}")
     print(f"File           : {manifest['display_name']}")
@@ -62,7 +76,11 @@ def print_review(manifest: dict, stage_id: str) -> None:
     if score is not None:
         print(f"MusicBrainz score: {score:.1f}")
     print("\nProposed changes:")
-    _print_diff(manifest.get("diff", []), title, proposed_title)
+    _print_diff(
+        manifest.get("diff", []), title, proposed_title,
+        required_fields=("artist", "title", "album"),
+        original_tags=original_tags,
+    )
 
 
 def cmd_list(staging) -> None:

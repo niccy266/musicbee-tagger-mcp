@@ -2,7 +2,7 @@
 
 from wcwidth import wcswidth
 
-from musicbee_tagger_mcp.staged_review import _display_value, _print_diff
+from musicbee_tagger_mcp.staged_review import _display_value, _print_diff, print_review
 
 
 def test_display_value_escapes_terminal_controls():
@@ -35,3 +35,29 @@ def test_print_diff_aligns_wide_metadata(capsys):
     )
     widths = {wcswidth(line) for line in capsys.readouterr().out.splitlines()}
     assert len(widths) == 1
+
+
+def test_print_review_always_shows_primary_fields_and_marks_unchanged(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        "musicbee_tagger_mcp.staged_review.read_audio_metadata",
+        lambda _: {"tags": {"artist": "Old Artist", "title": "Song", "album": "Album"}},
+    )
+    manifest = {
+        "absolute_path": "track.mp3",
+        "display_name": "track.mp3",
+        "proposed_tags": {"artist": "New Artist"},
+        "diff": [{"field": "artist", "old": "Old Artist", "new": "New Artist"}],
+    }
+
+    print_review(manifest, "stage-id")
+
+    output = capsys.readouterr().out
+    artist_row = output.index("| artist")
+    title_row = output.index("| title")
+    album_row = output.index("| album")
+    assert artist_row < title_row < album_row
+    assert "New Artist" in output[artist_row:title_row]
+    assert "(no change)" in output[title_row:album_row]
+    assert "(no change)" in output[album_row:]
