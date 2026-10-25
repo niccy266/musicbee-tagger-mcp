@@ -591,7 +591,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
 
 def save_state(path, state):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, ensure_ascii=False, indent=2))
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def select_job_id(requested_job_id, jobs):
@@ -673,7 +673,7 @@ def main():
         starting_counts=status["counts"],
     )
 
-    state = json.loads(args.state.read_text()) if args.state.exists() else {}
+    state = json.loads(args.state.read_text(encoding="utf-8")) if args.state.exists() else {}
     done = set(state.get("staged_by_file", [])) if args.resume else set()
 
     batch_number = 0
@@ -789,4 +789,8 @@ def main():
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     main()
