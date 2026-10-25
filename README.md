@@ -145,8 +145,11 @@ K:\bin\musicbee-tagger-apply.cmd --all --dry-run
 K:\bin\musicbee-tagger-apply.cmd --all
 ```
 
-The last command prompts before each write. Review each diff carefully. Do not
-run an apply command unless you intend to modify the corresponding audio file.
+The last command shows a fixed-position, color review table. Press Enter to
+apply with a backup, `n` to mark the item failed and continue, `a` to defer it
+to the end of the pending review list, or `q` to quit. Missing source files are
+logged and archived from the pending list automatically. Review each diff
+carefully and apply only changes you intend to write to audio.
 
 Agents can inspect an existing proposal with `get_staged_change`, then amend it
 with `amend_staged_changes` or withdraw it with `withdraw_staged_change`. These

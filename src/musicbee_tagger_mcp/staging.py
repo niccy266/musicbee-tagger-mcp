@@ -349,6 +349,10 @@ class StagingManager:
             return "applied"
         if manifest.get("withdrawn"):
             return "withdrawn"
+        if manifest.get("archived"):
+            return "archived"
+        if manifest.get("failed"):
+            return "failed"
         return "pending"
 
     @classmethod

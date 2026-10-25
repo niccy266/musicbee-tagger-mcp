@@ -124,6 +124,8 @@ class StageManifestStore:
                 if (
                     not manifest.get("applied", False)
                     and not manifest.get("withdrawn", False)
+                    and not manifest.get("failed", False)
+                    and not manifest.get("archived", False)
                 ):
                     pending.append({
                         "stage_id": manifest["stage_id"],
@@ -132,7 +134,16 @@ class StageManifestStore:
                         "revision": manifest.get("revision", 1),
                         "diff_summary": manifest.get("diff", []),
                         "forensic_score": manifest.get("forensic_score"),
+                        "deferred": bool(manifest.get("deferred", False)),
+                        "deferred_at": manifest.get("deferred_at"),
                     })
             except Exception:
                 continue
-        return pending
+        return sorted(
+            pending,
+            key=lambda item: (
+                item["deferred"],
+                item["deferred_at"] or item["created_at"],
+                item["stage_id"],
+            ),
+        )
