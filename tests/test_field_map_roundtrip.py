@@ -21,7 +21,7 @@ SAMPLE_TAGS = {
     "album": "Roundtrip Album",
     "album_artist": "Roundtrip Album Artist",
     "year": "1994",
-    "genre": "Test Rock",
+    "genre": "Test Rock; Indie Pop",
     "track_number": "7",
     "disc_number": "2",
     "musicbrainz_release_id": "9f8a2b1c-1111-2222-3333-444455556666",
@@ -105,3 +105,11 @@ def test_field_map_covers_reader_output():
     }
     assert canonical <= set(FIELD_MAP) | {"total_tracks", "total_discs"}, \
         "reader emits fields the map does not know"
+
+
+def test_genre_reader_preserves_all_values_including_garbled_bytes():
+    from musicbee_tagger_mcp.field_map import get_first_tag
+
+    tags = {"genre": [b"Rock", b"\xffIndie", "J-Pop"]}
+    assert get_first_tag(tags, FIELD_MAP["genre"].read_from) == \
+        "Rock; �Indie; J-Pop"

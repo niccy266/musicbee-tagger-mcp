@@ -54,3 +54,15 @@ jobs:
         run: pip install pip-audit
       - name: Audit dependencies for known vulnerabilities
         run: pip-audit --strict
+
+  windows-mcpb:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Install project and Windows packaging dependencies
+        run: python -m pip install -e ".[dev,release]"
+      - name: Build and smoke-test the Claude Desktop Windows bundle
+        run: python -m pytest tests/test_windows_mcpb.py -q
