@@ -1,6 +1,8 @@
 """Terminal rendering for staged tag reviews."""
 
 import re
+import os
+import sys
 from urllib.parse import quote
 
 from wcwidth import wcswidth
@@ -46,19 +48,37 @@ def _render_table(rows: list[tuple[str, str, str]]) -> str:
     widths = _COLUMN_WIDTHS
     border = "+" + "+".join("-" * (width + 2) for width in widths) + "+"
     header_border = "+" + "+".join("=" * (width + 2) for width in widths) + "+"
+    color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
+
+    def paint(value: str, code: str) -> str:
+        return f"\x1b[{code}m{value}\x1b[0m" if color else value
+
     output = [border]
 
-    def render_row(values):
+    def render_row(values, header=False):
         wrapped = [_wrap_cell(str(value), width) for value, width in zip(values, widths)]
         height = max(map(len, wrapped))
         for line_number in range(height):
             cells = []
             for column, width in enumerate(widths):
                 value = wrapped[column][line_number] if line_number < len(wrapped[column]) else ""
-                cells.append(" " + value + " " * (width - wcswidth(value)) + " ")
+                if header:
+                    value = paint(value, "1;36")
+                elif column == 0:
+                    value = paint(value, "1;33")
+                elif column == 1:
+                    value = paint(value, "31")
+                elif value.strip() == "(no change)":
+                    value = paint(value, "2;37")
+                else:
+                    value = paint(value, "32")
+                cells.append(" " + value + " " * (width - wcswidth(
+                    wrapped[column][line_number]
+                    if line_number < len(wrapped[column]) else ""
+                )) + " ")
             output.append("|" + "|".join(cells) + "|")
 
-    render_row(("Field", "Original", "Proposed"))
+    render_row(("Field", "Original", "Proposed"), header=True)
     output.append(header_border)
     for row in rows:
         render_row(row)
@@ -106,6 +126,24 @@ def _print_diff(diff, original_title=None, proposed_title=None, *,
 
 def print_review(manifest: dict, stage_id: str) -> None:
     release_id = manifest.get("mb_release_id")
+    try:
+        original_tags = read_audio_metadata(manifest["absolute_path"])["tags"]
+    except Exception:
+        original_tags = {}
+    title = original_tags.get("title")
+    proposed_title = manifest.get("proposed_tags", {}).get("title", title)
+    print("Proposed changes:")
+    _print_diff(
+        manifest.get("diff", []), title, proposed_title,
+        required_fields=("artist", "title", "album"),
+        original_tags=original_tags,
+    )
+    print(f"\nOriginal title: {_display_value(title)}")
+    print(f"File           : {manifest['display_name']}")
+    print(f"Stage ID       : {stage_id}")
+    score = manifest.get("forensic_score")
+    if score is not None:
+        print(f"MusicBrainz score: {score:.1f}")
     if release_id:
         release_id = str(release_id)
         release_url = f"https://musicbrainz.org/release/{quote(release_id, safe='')}"
@@ -113,25 +151,6 @@ def print_review(manifest: dict, stage_id: str) -> None:
         print(f"MusicBrainz release:    {release_url}")
     else:
         print("MusicBrainz release ID: (not set)")
-
-    try:
-        original_tags = read_audio_metadata(manifest["absolute_path"])["tags"]
-    except Exception:
-        original_tags = {}
-    title = original_tags.get("title")
-    proposed_title = manifest.get("proposed_tags", {}).get("title", title)
-    print(f"Original title: {_display_value(title)}")
-    print(f"File           : {manifest['display_name']}")
-    print(f"Stage ID       : {stage_id}")
-    score = manifest.get("forensic_score")
-    if score is not None:
-        print(f"MusicBrainz score: {score:.1f}")
-    print("\nProposed changes:")
-    _print_diff(
-        manifest.get("diff", []), title, proposed_title,
-        required_fields=("artist", "title", "album"),
-        original_tags=original_tags,
-    )
 
 
 def cmd_list(staging) -> None:

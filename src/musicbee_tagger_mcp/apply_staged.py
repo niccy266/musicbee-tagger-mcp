@@ -11,45 +11,104 @@ Usage:
 """
 
 import argparse
+import logging
+import os
+from pathlib import Path
+import sys
 
 from .staged_review import cmd_list, print_review
 from .staged_apply import get_staged_applier
 from .staging import get_staging_manager
 
+logger = logging.getLogger(__name__)
 
-def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> None:
-    manifest = applier.load(stage_id)
+
+def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> str:
+    try:
+        manifest = applier.load(stage_id)
+    except FileNotFoundError:
+        logger.error("Staged manifest %s is missing; skipping it.", stage_id)
+        print(f"\n[ERROR] Stage {stage_id} is missing; moving to the next item.")
+        return "missing_stage"
     if manifest.get("applied"):
         print(f"[SKIP] {stage_id} has already been applied.")
-        return
+        return "already_applied"
     if manifest.get("withdrawn"):
         print(f"[SKIP] {stage_id} has been withdrawn.")
-        return
+        return "withdrawn"
+    if manifest.get("failed") or manifest.get("archived"):
+        print(f"[SKIP] {stage_id} is {('failed' if manifest.get('failed') else 'archived')}.")
+        return "failed" if manifest.get("failed") else "archived"
+
+    display_name = manifest.get("display_name", stage_id)
+    if not Path(manifest["absolute_path"]).is_file():
+        applier.archive_missing_file(stage_id)
+        logger.error(
+            "Source audio file is missing; archived stage %s (%s).",
+            stage_id,
+            display_name,
+        )
+        print(f"\n[ARCHIVED] {display_name}: source file not found; moving to the next item.")
+        return "archived"
+
+    if sys.stdout.isatty() and "NO_COLOR" not in os.environ:
+        sys.stdout.write("\x1b[2J\x1b[H")
+        sys.stdout.flush()
 
     print()
     print_review(manifest, stage_id)
 
     if dry_run:
         print("\n[DRY RUN] No changes written.")
-        return
+        return "dry_run"
 
-    answer = input("\nApply these changes? [y/N] ").strip().lower()
-    if answer != "y":
-        print("Skipped.")
-        return
+    answer = input(
+        "\nEnter=apply, n=mark failed and skip, a=defer to end, q=quit [Enter/n/a/q]: "
+    ).strip().lower()
+    if answer in {"n", "no"}:
+        applier.mark_failed(stage_id, "Skipped by user during apply review.")
+        logger.info("Marked stage %s (%s) failed at user request.", stage_id, display_name)
+        print("[FAILED] Stored as failed; moving to the next item.")
+        return "failed"
+    if answer == "a":
+        applier.defer(stage_id)
+        logger.info("Deferred stage %s (%s) to the end of the review queue.", stage_id, display_name)
+        print("[DEFERRED] Moved to the end of the staged review list.")
+        return "deferred"
+    if answer == "q":
+        print("Quitting staged review.")
+        return "quit"
+    if answer not in {"", "y", "yes"}:
+        print("Unrecognized choice; item left pending.")
+        return "pending"
 
-    result = applier.apply(stage_id, create_backup=not no_backup)
+    try:
+        result = applier.apply(stage_id, create_backup=not no_backup)
+    except FileNotFoundError:
+        applier.archive_missing_file(stage_id)
+        logger.error(
+            "Source audio file disappeared during apply; archived stage %s (%s).",
+            stage_id,
+            display_name,
+        )
+        print(f"\n[ARCHIVED] {display_name}: source file not found; moving to the next item.")
+        return "archived"
     if result.get("status") == "withdrawn":
         print(f"\n[SKIP] {stage_id} was withdrawn before it could be applied.")
-        return
+        return "withdrawn"
     fields = result.get("fields_written", [])
     backed_up = result.get("backup_created", False)
     print(f"\n✓ Applied {len(fields)} field(s): {', '.join(fields)}")
     if backed_up:
         print("  Backup created (.bak)")
+    return "applied"
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     parser = argparse.ArgumentParser(
         prog="python -m musicbee_tagger_mcp.apply_staged",
         description="Apply staged tag changes to audio files. "
@@ -83,13 +142,23 @@ def main() -> None:
             print("No pending staged changes.")
             return
         print(f"Found {len(pending)} pending change(s).\n")
+        totals = {"applied": 0, "failed": 0, "deferred": 0, "archived": 0}
         for entry in pending:
-            cmd_apply_one(
+            outcome = cmd_apply_one(
                 applier,
                 entry["stage_id"],
                 dry_run=args.dry_run,
                 no_backup=args.no_backup,
             )
+            if outcome in totals:
+                totals[outcome] += 1
+            if outcome == "quit":
+                break
+        print(
+            "\nReview summary: "
+            f"{totals['applied']} applied, {totals['failed']} failed, "
+            f"{totals['deferred']} deferred, {totals['archived']} archived."
+        )
 
 
 if __name__ == "__main__":

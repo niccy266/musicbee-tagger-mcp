@@ -242,6 +242,7 @@ def test_apply_staged_not_in_mcp_server():
     assert registered_tool_names == {
         "next_batch",
         "complete_batch",
+        "release_batch",
         "job_status",
         "list_jobs",
         "read_track_metadata",

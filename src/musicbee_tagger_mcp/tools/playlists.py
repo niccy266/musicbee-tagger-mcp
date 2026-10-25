@@ -26,6 +26,11 @@ def complete_batch(job_id: str, results: List[Dict[str, Any]]) -> Dict[str, Any]
     return get_job_store().complete_batch(job_id, results)
 
 
+def release_batch(job_id: str, tokens: List[str]) -> Dict[str, Any]:
+    """Return selected claimed tokens to pending after an interrupted batch."""
+    return get_job_store().release_batch(job_id, tokens)
+
+
 def job_status(job_id: str) -> Dict[str, Any]:
     """Return progress counts and failures for a job."""
     return get_job_store().job_status(job_id)
@@ -46,6 +51,11 @@ def register_playlist_tools(app) -> None:
     def complete_batch(job_id: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Report outcomes: [{token, success, error?}] for a claimed batch."""
         return get_job_store().complete_batch(job_id, results)
+
+    @app.tool()
+    def release_batch(job_id: str, tokens: List[str]) -> Dict[str, Any]:
+        """Return selected in-progress tokens to pending after interrupted work."""
+        return get_job_store().release_batch(job_id, tokens)
 
     @app.tool()
     def job_status(job_id: str) -> Dict[str, Any]:

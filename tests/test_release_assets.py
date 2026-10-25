@@ -223,6 +223,7 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "withdraw_staged_change",
         "next_batch",
         "complete_batch",
+        "release_batch",
         "job_status",
         "list_jobs",
         "enqueue_batch_operation",

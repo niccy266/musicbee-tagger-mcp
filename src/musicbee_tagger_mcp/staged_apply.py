@@ -24,6 +24,10 @@ class StagedChangeApplier:
                 return {"status": "already_applied", "stage_id": stage_id}
             if manifest.get("withdrawn"):
                 return {"status": "withdrawn", "stage_id": stage_id}
+            if manifest.get("failed"):
+                return {"status": "failed", "stage_id": stage_id}
+            if manifest.get("archived"):
+                return {"status": "archived", "stage_id": stage_id}
 
             result = apply_tags_to_file(
                 manifest["absolute_path"],
@@ -42,6 +46,70 @@ class StagedChangeApplier:
 
         _, result = self.store.transact(stage_id, apply_locked)
         return result
+
+    def defer(self, stage_id: str) -> dict:
+        """Move a pending stage to the end of the review queue."""
+        def update(manifest: dict) -> None:
+            if manifest.get("applied") or manifest.get("withdrawn") or manifest.get(
+                "failed"
+            ) or manifest.get("archived"):
+                raise ValueError("Only pending stages can be deferred.")
+            now = datetime.now(timezone.utc).isoformat()
+            manifest["deferred"] = True
+            manifest["deferred_at"] = now
+            manifest.setdefault("history", []).append({
+                "action": "deferred",
+                "at": now,
+                "reason": "Moved to the end of the staged review queue.",
+            })
+
+        manifest = self.store.mutate(stage_id, update)
+        return {"status": "deferred", "stage_id": stage_id,
+                "display_name": manifest["display_name"]}
+
+    def mark_failed(self, stage_id: str, reason: str) -> dict:
+        """Record a user-declined or failed stage and remove it from pending."""
+        def update(manifest: dict) -> None:
+            if manifest.get("applied") or manifest.get("withdrawn") or manifest.get(
+                "failed"
+            ) or manifest.get("archived"):
+                raise ValueError("Only pending stages can be marked failed.")
+            now = datetime.now(timezone.utc).isoformat()
+            manifest["failed"] = True
+            manifest["failed_at"] = now
+            manifest["failure_reason"] = reason
+            manifest.setdefault("history", []).append({
+                "action": "failed",
+                "at": now,
+                "reason": reason,
+            })
+
+        manifest = self.store.mutate(stage_id, update)
+        return {"status": "failed", "stage_id": stage_id,
+                "display_name": manifest["display_name"]}
+
+    def archive_missing_file(self, stage_id: str) -> dict:
+        """Archive a pending stage whose source audio file is missing."""
+        reason = "Source audio file is missing; it may have been moved or edited."
+
+        def update(manifest: dict) -> None:
+            if manifest.get("applied") or manifest.get("withdrawn") or manifest.get(
+                "failed"
+            ) or manifest.get("archived"):
+                raise ValueError("Only pending stages can be archived.")
+            now = datetime.now(timezone.utc).isoformat()
+            manifest["archived"] = True
+            manifest["archived_at"] = now
+            manifest["archive_reason"] = reason
+            manifest.setdefault("history", []).append({
+                "action": "archived",
+                "at": now,
+                "reason": reason,
+            })
+
+        manifest = self.store.mutate(stage_id, update)
+        return {"status": "archived", "stage_id": stage_id,
+                "display_name": manifest["display_name"], "reason": reason}
 
 
 _applier: Optional[StagedChangeApplier] = None

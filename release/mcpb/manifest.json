@@ -83,6 +83,10 @@
       "description": "Record path-free results for a claimed playlist batch."
     },
     {
+      "name": "release_batch",
+      "description": "Return selected in-progress tokens to pending after interrupted work."
+    },
+    {
       "name": "job_status",
       "description": "Get aggregate progress for a playlist job."
     },
