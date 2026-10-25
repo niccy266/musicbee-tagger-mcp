@@ -23,8 +23,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Allow running from a source checkout without installing.
@@ -46,6 +49,7 @@ from musicbee_tagger_mcp.tools.tags import (  # noqa: E402
 )
 from musicbee_tagger_mcp.tools.text import repair_mojibake  # noqa: E402
 from musicbee_tagger_mcp.job_store import JobStore  # noqa: E402
+from musicbee_tagger_mcp.data_paths import ensure_data_subdirectory  # noqa: E402
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 RETRYABLE_STATUS = {429, 500, 502, 503}
@@ -65,10 +69,15 @@ identity is hidden behind opaque tokens. For each file:
    mb_recording_id, mb_release_id, forensic_score, and a short note.
 
 Genre cleanup is part of every verified match. Use the verified MusicBrainz
-genre value when it is present: normalize it to a clean, deduplicated,
-semicolon-separated list, remove obvious encoding damage or junk fragments,
-and include it in new_tags when it differs from the current genre. Do not
-invent genres or replace a meaningful current genre with an empty/weak result.
+genre value when it is present: deduplicate exact repeated values and remove
+obvious encoding damage only. Preserve meaningful existing genres and do not
+replace them with an empty or weak result. Do not remove mood descriptors or
+other non-genre values unless you can identify them as clear junk. Do not invent
+genres. Include a corrected genre in new_tags when it is reliably supported.
+
+Filename-derived artist/title values are search clues only. Do not stage them
+without independent corroboration from existing tags, release credits, or a
+verified recording match.
 
 Rules:
 - Use tokens exactly as given; never invent tokens.
@@ -77,7 +86,53 @@ Rules:
 - When every file in the batch is staged or explicitly marked unresolved in
   your final message, call finish_batch with a one-line summary.
 - Be concise in tool arguments; do not repeat file contents back.
+- When useful, include a short visible progress summary in the assistant
+  response. Do not provide private chain-of-thought.
 """
+
+_LOCAL_PATH_PATTERN = re.compile(
+    r"(?<![\w])(?:[A-Za-z]:[\\/][^\s\"'<>|]+|\\\\[^\\\s]+\\[^\s\"'<>|]+)"
+)
+
+
+def _sanitize_log(value):
+    if isinstance(value, dict):
+        return {str(key): _sanitize_log(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_log(item) for item in value]
+    if isinstance(value, str):
+        return _LOCAL_PATH_PATTERN.sub("(local path omitted)", value)
+    return value
+
+
+class RunLog:
+    """Append path-sanitized JSONL events to a local run log."""
+
+    def __init__(self, path: Path, run_id: str):
+        self.path = path
+        self.run_id = run_id
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def write(self, event: str, **details) -> None:
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "run_id": self.run_id,
+            "event": event,
+            **_sanitize_log(details),
+        }
+        with self.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+
+
+def debug_checkpoint(enabled: bool, label: str, run_log=None) -> bool:
+    """Pause only in debug runs; return False when the operator enters q."""
+    if not enabled:
+        return True
+    answer = input(f"\n[DEBUG] {label} [Enter=continue, q=stop]: ").strip().lower()
+    proceed = answer != "q"
+    if run_log:
+        run_log.write("debug_checkpoint", label=label, choice="continue" if proceed else "stop")
+    return proceed
 
 TOOLS = [
     {
@@ -231,7 +286,7 @@ LOCAL_TOOLS = {
 }
 
 
-def call_openrouter(messages, model, api_key, temperature=0.2, retries=3):
+def call_openrouter(messages, model, api_key, temperature=0.2, retries=3, run_log=None):
     """One chat completion with tool support, via the openai SDK pointed at
     OpenRouter (https://openrouter.ai/docs/quickstart#using-the-client-sdks).
     Returns the raw OpenAI-shaped dict the batch loop expects."""
@@ -247,6 +302,9 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3):
         },
     )
     for attempt in range(retries):
+        started = time.monotonic()
+        if run_log:
+            run_log.write("model_request_started", model=model, attempt=attempt + 1)
         try:
             response = client.chat.completions.create(
                 model=model,
@@ -254,10 +312,34 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3):
                 tools=TOOLS,
                 temperature=temperature,
             )
-            return response.model_dump(mode="json")
+            payload = response.model_dump(mode="json")
+            choice = (payload.get("choices") or [{}])[0]
+            message = choice.get("message") or {}
+            if run_log:
+                run_log.write(
+                    "model_response",
+                    model=model,
+                    attempt=attempt + 1,
+                    elapsed_seconds=round(time.monotonic() - started, 3),
+                    finish_reason=choice.get("finish_reason"),
+                    visible_summary=message.get("content"),
+                    tool_calls=message.get("tool_calls", []),
+                    usage=payload.get("usage"),
+                )
+            return payload
         except (APITimeoutError, APIStatusError) as error:
             status = getattr(error, "status_code", None)
             retryable = status in RETRYABLE_STATUS or status is None
+            if run_log:
+                run_log.write(
+                    "model_request_error",
+                    model=model,
+                    attempt=attempt + 1,
+                    elapsed_seconds=round(time.monotonic() - started, 3),
+                    status=status,
+                    retrying=retryable and attempt < retries - 1,
+                    error=str(error)[:500],
+                )
             if retryable and attempt < retries - 1:
                 time.sleep(2 ** attempt)
                 continue
@@ -266,9 +348,12 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3):
     raise RuntimeError("OpenRouter unreachable")
 
 
-def run_batch(tokens, model, api_key, max_turns, state, state_path):
+def run_batch(tokens, model, api_key, max_turns, state, state_path,
+              run_log=None, debug=False):
     """One agent loop over one batch of tokens. Returns the message history."""
     brief = get_batch_brief(tokens)
+    if run_log:
+        run_log.write("batch_brief", batch=state.get("batch"), files=brief)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
@@ -282,15 +367,32 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path):
         },
     ]
     staged, unresolved = [], []
+    verified_by_token = {}
 
     for turn in range(1, max_turns + 1):
-        response = call_openrouter(messages, model, api_key)
+        if not debug_checkpoint(
+            debug, f"Batch {state.get('batch')} model turn {turn}", run_log
+        ):
+            state.setdefault("errors", {}).update({
+                token: "Debug run stopped before model turn."
+                for token in tokens if token not in staged and token not in unresolved
+            })
+            state.update(summary="Stopped at debug checkpoint", staged=staged,
+                         unresolved=unresolved, finished=False)
+            save_state(state_path, state)
+            return messages
+        response = call_openrouter(messages, model, api_key, run_log=run_log)
         message = response["choices"][0]["message"]
         messages.append(message)
 
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:
             if (message.get("content") or "").strip():
+                if run_log:
+                    run_log.write(
+                        "assistant_progress", batch=state.get("batch"), turn=turn,
+                        visible_summary=message.get("content"),
+                    )
                 messages.append({
                     "role": "user",
                     "content": "Continue until every file is staged or marked "
@@ -298,6 +400,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path):
                 })
             continue
 
+        abort_batch = False
         for call in tool_calls:
             name = call["function"]["name"]
             try:
@@ -305,7 +408,53 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path):
             except json.JSONDecodeError:
                 args = {}
 
+            if run_log:
+                run_log.write(
+                    "tool_call", batch=state.get("batch"), turn=turn,
+                    tool=name, arguments=args,
+                )
+
+            token = args.get("token")
+            token_tools = {
+                "read_track_metadata", "extract_filename_clues", "verify_mbid",
+                "stage_tag_changes", "mark_unresolved",
+            }
+            if name in token_tools and token not in tokens:
+                result = {"error": "Token is not part of the active batch."}
+                messages.append({
+                    "role": "tool", "tool_call_id": call["id"],
+                    "content": json.dumps(result),
+                })
+                if run_log:
+                    run_log.write("tool_result", batch=state.get("batch"),
+                                  tool=name, result=result)
+                continue
+
+            if name in token_tools and token in (staged + unresolved):
+                result = {"error": "This file was already resolved in this batch."}
+                messages.append({
+                    "role": "tool", "tool_call_id": call["id"],
+                    "content": json.dumps(result),
+                })
+                if run_log:
+                    run_log.write("tool_result", batch=state.get("batch"),
+                                  tool=name, result=result)
+                continue
+
             if name == "finish_batch":
+                missing = [item for item in tokens if item not in staged and item not in unresolved]
+                if missing:
+                    result = {
+                        "error": f"{len(missing)} file(s) are not resolved yet; process or mark them unresolved before finishing."
+                    }
+                    messages.append({
+                        "role": "tool", "tool_call_id": call["id"],
+                        "content": json.dumps(result),
+                    })
+                    if run_log:
+                        run_log.write("finish_rejected", batch=state.get("batch"),
+                                      unresolved_count=len(missing))
+                    continue
                 messages.append({
                     "role": "tool",
                     "tool_call_id": call["id"],
@@ -318,10 +467,13 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path):
                     finished=True,
                 )
                 save_state(state_path, state)
+                if run_log:
+                    run_log.write("batch_finished", batch=state.get("batch"),
+                                  summary=state.get("summary"), staged=staged,
+                                  unresolved=unresolved)
                 return messages
 
             if name == "mark_unresolved":
-                token = args.get("token")
                 reason = str(args.get("reason", "No safe match"))[:200]
                 if token and token not in staged and token not in unresolved:
                     unresolved.append(token)
@@ -331,7 +483,55 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path):
                     "tool_call_id": call["id"],
                     "content": "Recorded as unresolved: " + reason,
                 })
+                if run_log:
+                    run_log.write("track_unresolved", batch=state.get("batch"),
+                                  token=token, reason=reason)
                 continue
+
+            if name == "stage_tag_changes":
+                if not debug_checkpoint(
+                    debug,
+                    f"Stage proposal for {args.get('token')} ({args.get('new_tags', {})})",
+                    run_log,
+                ):
+                    state.setdefault("errors", {}).update({
+                        item: "Debug run stopped before staging this file."
+                        for item in tokens if item not in staged and item not in unresolved
+                    })
+                    state.update(summary="Stopped at debug checkpoint", staged=staged,
+                                 unresolved=unresolved, finished=False)
+                    abort_batch = True
+                    break
+                verification = verified_by_token.get(token)
+                requested_mbid = args.get("mb_recording_id")
+                if (
+                    not verification
+                    or verification.get("verified") is not True
+                    or float(verification.get("confidence", 0)) < 75.0
+                    or (requested_mbid and requested_mbid != verification.get("recording_id"))
+                ):
+                    result = {"error": "Staging blocked: this file has no matching verified recording."}
+                    messages.append({
+                        "role": "tool", "tool_call_id": call["id"],
+                        "content": json.dumps(result),
+                    })
+                    if run_log:
+                        run_log.write("staging_blocked", batch=state.get("batch"),
+                                      token=token, reason=result["error"])
+                    continue
+                args["mb_recording_id"] = verification["recording_id"]
+                args["forensic_score"] = verification["confidence"]
+                if not args.get("mb_release_id"):
+                    args["mb_release_id"] = (verification.get("top_release") or {}).get("release_id")
+                # Auto-include genre from verified MusicBrainz recording if present
+                mb_genre = verification.get("genre")
+                if mb_genre and mb_genre.strip():
+                    new_tags = dict(args.get("new_tags") or {})
+                    current_genre = new_tags.get("genre", "").strip()
+                    # Only add genre if it differs from current and is not empty/weak
+                    if mb_genre != current_genre:
+                        new_tags["genre"] = mb_genre
+                        args["new_tags"] = new_tags
 
             fn = LOCAL_TOOLS.get(name)
             try:
@@ -340,18 +540,33 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path):
                 result = {"error": f"{type(error).__name__}: {str(error)[:300]}"}
             result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
 
-            if name == "stage_tag_changes" and "error" not in result:
-                staged.append(args.get("token"))
+            if name == "stage_tag_changes":
+                if "error" not in result:
+                    staged.append(token)
+                    state.setdefault("errors", {}).pop(token, None)
+                else:
+                    state.setdefault("errors", {})[token] = str(result["error"])
             elif name == "verify_mbid" and isinstance(result, dict):
-                score = result.get("score") or result.get("confidence") or 0
-                if score < 0.75:
-                    unresolved.append(args.get("token"))
+                if result.get("verified") is True and float(result.get("confidence", 0)) >= 75.0:
+                    verified_by_token[token] = result
+                else:
+                    state.setdefault("errors", {})[token] = (
+                        result.get("error") or "; ".join(result.get("mismatches", []))
+                        or "Recording verification did not pass."
+                    )
 
             messages.append({
                 "role": "tool",
                 "tool_call_id": call["id"],
                 "content": json.dumps(result, ensure_ascii=False)[:6000],
             })
+            if run_log:
+                run_log.write("tool_result", batch=state.get("batch"), tool=name,
+                              token=token, result=result)
+
+        if abort_batch:
+            save_state(state_path, state)
+            return messages
 
         save_state(state_path, state)
         print(f"  turn {turn}: {len(staged)} staged, {len(unresolved)} unresolved")
@@ -362,11 +577,20 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path):
         unresolved=unresolved,
         finished=False,
     )
+    state.setdefault("errors", {}).update({
+        token: "Iteration cap reached before the file was resolved."
+        for token in tokens if token not in staged and token not in unresolved
+    })
     save_state(state_path, state)
+    if run_log:
+        run_log.write("batch_iteration_cap", batch=state.get("batch"),
+                      staged=staged, unresolved=unresolved,
+                      errors=state.get("errors", {}))
     return messages
 
 
 def save_state(path, state):
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2))
 
 
@@ -404,15 +628,30 @@ def main():
         nargs="?",
         help="Playlist job id; omitted when there is exactly one available job",
     )
-    parser.add_argument("--model", default="openai/gpt-4o-mini")
+    parser.add_argument("--model", default="openrouter/free")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     parser.add_argument("--max-batches", type=int, default=None,
                         help="Stop after this many batches (useful for a trial run)")
     parser.add_argument("--max-turns", type=int, default=15)
     parser.add_argument("--state", type=Path, default=Path("agent_state.json"))
+    parser.add_argument(
+        "--log", type=Path, default=None,
+        help="JSONL run log path (defaults to the private data directory)",
+    )
+    parser.add_argument(
+        "--debug", action="store_true",
+        help="Pause at safe batch, model-request, and staging checkpoints",
+    )
     parser.add_argument("--resume", action="store_true",
                         help="Skip files recorded as staged in the state file")
     args = parser.parse_args()
+
+    run_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    log_path = args.log or (ensure_data_subdirectory("agent_logs") /
+                            f"openrouter-{timestamp}-{run_id[:8]}.jsonl")
+    run_log = RunLog(log_path, run_id)
+    print(f"Run log: {log_path}")
 
     jobs = JobStore()
     job_id = select_job_id(args.job_id, jobs)
@@ -426,12 +665,25 @@ def main():
         sys.exit(status["error"])
     print(f"Job {job_id} ({status['playlist_name']!r}): "
           f"{status['counts']['pending']} pending")
+    run_log.write(
+        "run_started", job_id=job_id, playlist_name=status["playlist_name"],
+        model=args.model, batch_size=args.batch_size,
+        max_batches=args.max_batches, max_turns=args.max_turns,
+        debug=args.debug,
+        starting_counts=status["counts"],
+    )
 
     state = json.loads(args.state.read_text()) if args.state.exists() else {}
     done = set(state.get("staged_by_file", [])) if args.resume else set()
 
     batch_number = 0
     while True:
+        if not debug_checkpoint(
+            args.debug, f"Claim the next batch of up to {args.batch_size} files?",
+            run_log,
+        ):
+            print("Stopped before claiming another batch.")
+            break
         claim = jobs.next_batch(job_id, size=args.batch_size)
         if "error" in claim:
             sys.exit(claim["error"])
@@ -450,24 +702,76 @@ def main():
             "finished": False,
         }
         print(f"Batch {batch_number} ({claim['remaining']} after): {', '.join(names)}")
-        run_batch(tokens, args.model, api_key, args.max_turns, batch_state, args.state)
+        run_log.write("batch_claimed", batch=batch_number, files=names,
+                      token_count=len(tokens), pending_after_claim=claim["remaining"])
+
+        if debug_checkpoint(
+            args.debug,
+            f"Submit batch {batch_number} metadata to OpenRouter model {args.model}?",
+            run_log,
+        ):
+            try:
+                run_batch(
+                    tokens, args.model, api_key, args.max_turns, batch_state,
+                    args.state, run_log=run_log, debug=args.debug,
+                )
+            except Exception as error:
+                detail = _sanitize_log(f"{type(error).__name__}: {error}")
+                run_log.write("batch_error", batch=batch_number, error=detail)
+                batch_state["summary"] = "Agent run failed"
+                batch_state["finished"] = False
+                batch_state.setdefault("errors", {}).update({
+                    token: str(detail)[:300]
+                    for token in tokens
+                    if token not in batch_state.get("staged", [])
+                    and token not in batch_state.get("unresolved", [])
+                })
+        else:
+            batch_state["summary"] = "Stopped before sending the batch to OpenRouter"
+            batch_state["finished"] = False
+            released = jobs.release_batch(job_id, tokens)
+            run_log.write("batch_released", batch=batch_number,
+                          reason="Debug stop before model submission", result=released)
+            print(f"Released {len(released.get('released', []))} files to pending.")
+            break
 
         errors = batch_state.get("errors", {})
+        completed_tokens = set(batch_state["staged"]) | set(batch_state["unresolved"])
         results = [
             {
                 "token": token,
                 "success": token in batch_state["staged"],
                 "error": errors.get(token, "Agent did not stage or resolve this file"),
             }
-            for token in tokens
+            for token in tokens if token in completed_tokens
         ]
-        jobs.complete_batch(job_id, results)
+        completion = jobs.complete_batch(job_id, results)
+        unprocessed = [token for token in tokens if token not in completed_tokens]
+        release_result = jobs.release_batch(job_id, unprocessed) if unprocessed else {
+            "released": [], "unchanged": [],
+        }
+        run_log.write("batch_completed", batch=batch_number,
+                      outcomes=completion,
+                      released=release_result,
+                      staged_count=len(batch_state["staged"]),
+                      unresolved_count=len(batch_state["unresolved"]),
+                      finished=batch_state["finished"])
 
         staged_names = {
             names[i] for i, tok in enumerate(tokens) if tok in batch_state["staged"]
         }
         state.setdefault("staged_by_file", []).extend(sorted(staged_names - done))
         save_state(args.state, state)
+
+        print(
+            f"Batch {batch_number} result: {len(batch_state['staged'])} staged, "
+            f"{len(batch_state['unresolved'])} unresolved, "
+            f"{len(unprocessed)} returned to pending."
+        )
+
+        if unprocessed:
+            print("Stopped after an incomplete batch; released tracks can be retried later.")
+            break
 
         if args.max_batches is not None and batch_number >= args.max_batches:
             print(f"Stopped after requested limit of {args.max_batches} batch(es).")
@@ -480,6 +784,8 @@ def main():
         f"{counts['in_progress']} in progress. "
         "Review staged manifests, then run apply_staged to write tags."
     )
+    run_log.write("run_finished", job_id=job_id, final_counts=counts,
+                  batches_processed=batch_number)
 
 
 if __name__ == "__main__":
