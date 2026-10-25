@@ -7,6 +7,8 @@ __pycache__/
 *$py.class
 *.log
 .pytest_cache/
+.pytest-*/
+pytest-of-*/
 tests/sample_audio/
 *.bak
 dist/

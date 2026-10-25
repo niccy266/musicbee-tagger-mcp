@@ -36,6 +36,13 @@ if ($runningServers.Count -gt 0) {
     throw "Cannot upgrade while MusicBee Tagger MCP is running (PID(s): $processIds). Close MCP clients using this server, then rerun the installer."
 }
 
+& $pythonPath -m pip install $resolvedWheel
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not install the release wheel or its runtime dependencies."
+}
+
+# Resolve dependencies above, then force-refresh only the supplied wheel. This
+# also deploys changed source when reinstalling a wheel with the same version.
 & $pythonPath -m pip install --force-reinstall --no-deps $resolvedWheel
 if ($LASTEXITCODE -ne 0) {
     throw "Could not install the release wheel into the dedicated virtual environment."
