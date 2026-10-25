@@ -321,3 +321,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 ### 2026-10-25 — Update agent-loop model example
 - Changed the documented default model in `scripts/openrouter_agent_loop.py` to `openrouter/free`.
 - Validation: using the project virtual environment with `K:\bin` added to the test process PATH, the full suite passed (108 passed, 1 skipped). Pytest needed a workspace basetemp and `MUSICBEE_TAGGER_DATA_DIR` override for sandbox write access.
+
+### 2026-10-26 — Prepare v0.4.3 release
+- Updated the Windows installer to install the wheel's declared runtime dependencies before force-refreshing the wheel without reinstalling dependencies. This fixes fresh installs while preserving same-version source-checkout updates.
+- Aligned the README queue-tool examples with the current MCP tools and carried forward the agent-loop model example and pytest temporary-directory ignore cleanup.
+- Validation: full suite passed (111 passed, 1 skipped); Pylint `--errors-only`, installer syntax parsing, and `git diff --check` passed. A fresh isolated source install imported all runtime dependencies and launched the apply CLI help successfully. Built all six v0.4.3 release assets.
