@@ -160,7 +160,11 @@ def test_human_playlist_registration_command_is_packaged():
     assert "musicbee-tagger-clear-registrations.exe" in installer
     assert "musicbee-tagger-clear-registrations.cmd" in installer
     assert "Get-CimInstance Win32_Process" in installer
-    assert "Close MCP clients using this server" in installer
+    assert "Ask these processes to close before continuing? [y/N]" in installer
+    assert "Terminate the remaining processes so installation can continue? [y/N]" in installer
+    assert "Stop-Process -Id $process.ProcessId" in installer
+    assert "~usicbee-tagger-mcp*" in installer
+    assert "~usicbee_tagger_mcp*" in installer
 
 
 def test_source_checkout_installer_builds_and_installs_local_wheel():

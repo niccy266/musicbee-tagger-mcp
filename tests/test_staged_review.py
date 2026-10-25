@@ -24,7 +24,7 @@ def test_print_diff_wraps_long_values_within_table(capsys):
     lines = capsys.readouterr().out.splitlines()
     album_line = next(i for i, line in enumerate(lines) if "| album" in line)
     assert "should wrap across" in lines[album_line + 1]
-    assert max(map(len, lines)) <= 80
+    assert {wcswidth(line) for line in lines} == {80}
 
 
 def test_print_diff_aligns_wide_metadata(capsys):
@@ -34,7 +34,7 @@ def test_print_diff_aligns_wide_metadata(capsys):
         proposed_title="千と千尋",
     )
     widths = {wcswidth(line) for line in capsys.readouterr().out.splitlines()}
-    assert len(widths) == 1
+    assert widths == {80}
 
 
 def test_print_review_always_shows_primary_fields_and_marks_unchanged(

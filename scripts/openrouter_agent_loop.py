@@ -64,6 +64,12 @@ identity is hidden behind opaque tokens. For each file:
 4. Stage: when verified, call stage_tag_changes with the corrected tags,
    mb_recording_id, mb_release_id, forensic_score, and a short note.
 
+Genre cleanup is part of every verified match. Use the verified MusicBrainz
+genre value when it is present: normalize it to a clean, deduplicated,
+semicolon-separated list, remove obvious encoding damage or junk fragments,
+and include it in new_tags when it differs from the current genre. Do not
+invent genres or replace a meaningful current genre with an empty/weak result.
+
 Rules:
 - Use tokens exactly as given; never invent tokens.
 - One file at a time; do not revisit a file you already staged or marked
@@ -170,6 +176,21 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "mark_unresolved",
+            "description": "Record a file as unresolved with a short reason.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "token": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["token", "reason"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "finish_batch",
             "description": "Call when every file in the batch is resolved.",
             "parameters": {
@@ -181,12 +202,31 @@ TOOLS = [
     },
 ]
 
+def _search_canonical_release(artist, title, duration_seconds=None):
+    return search_canonical_release(
+        artist=artist, title=title, duration_sec=duration_seconds
+    )
+
+
+def _verify_mbid(token, mb_recording_id):
+    metadata = read_track_metadata(token)
+    if "error" in metadata:
+        return metadata
+    tags = metadata.get("tags", {})
+    return verify_mbid(
+        recording_id=mb_recording_id,
+        expected_artist=tags.get("artist"),
+        expected_title=tags.get("title"),
+        duration_sec=metadata.get("duration_seconds"),
+    )
+
+
 LOCAL_TOOLS = {
     "read_track_metadata": lambda token: read_track_metadata(token),
     "extract_filename_clues": lambda token: extract_filename_clues(token),
     "repair_mojibake": lambda text: repair_mojibake(text),
-    "search_canonical_release": search_canonical_release,
-    "verify_mbid": verify_mbid,
+    "search_canonical_release": _search_canonical_release,
+    "verify_mbid": _verify_mbid,
     "stage_tag_changes": stage_tag_changes,
 }
 
@@ -280,8 +320,24 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path):
                 save_state(state_path, state)
                 return messages
 
+            if name == "mark_unresolved":
+                token = args.get("token")
+                reason = str(args.get("reason", "No safe match"))[:200]
+                if token and token not in staged and token not in unresolved:
+                    unresolved.append(token)
+                    state.setdefault("errors", {})[token] = reason
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "content": "Recorded as unresolved: " + reason,
+                })
+                continue
+
             fn = LOCAL_TOOLS.get(name)
-            result = fn(**args) if fn else {"error": f"Unknown tool {name}"}
+            try:
+                result = fn(**args) if fn else {"error": f"Unknown tool {name}"}
+            except Exception as error:
+                result = {"error": f"{type(error).__name__}: {str(error)[:300]}"}
             result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
 
             if name == "stage_tag_changes" and "error" not in result:
@@ -350,6 +406,8 @@ def main():
     )
     parser.add_argument("--model", default="openai/gpt-4o-mini")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+    parser.add_argument("--max-batches", type=int, default=None,
+                        help="Stop after this many batches (useful for a trial run)")
     parser.add_argument("--max-turns", type=int, default=15)
     parser.add_argument("--state", type=Path, default=Path("agent_state.json"))
     parser.add_argument("--resume", action="store_true",
@@ -394,8 +452,13 @@ def main():
         print(f"Batch {batch_number} ({claim['remaining']} after): {', '.join(names)}")
         run_batch(tokens, args.model, api_key, args.max_turns, batch_state, args.state)
 
+        errors = batch_state.get("errors", {})
         results = [
-            {"token": token, "success": token in batch_state["staged"]}
+            {
+                "token": token,
+                "success": token in batch_state["staged"],
+                "error": errors.get(token, "Agent did not stage or resolve this file"),
+            }
             for token in tokens
         ]
         jobs.complete_batch(job_id, results)
@@ -405,6 +468,10 @@ def main():
         }
         state.setdefault("staged_by_file", []).extend(sorted(staged_names - done))
         save_state(args.state, state)
+
+        if args.max_batches is not None and batch_number >= args.max_batches:
+            print(f"Stopped after requested limit of {args.max_batches} batch(es).")
+            break
 
     status = jobs.job_status(job_id)
     counts = status["counts"]

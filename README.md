@@ -66,8 +66,11 @@ installer while supplying the included wheel:
    ```
 
    Before upgrading an existing installation, close MCP clients using the
-   server. The installer checks for running server processes and refuses to
-   upgrade while the launcher is in use.
+   server. If installed MusicBee Tagger processes are running, the installer
+   asks to close them. If a process has no closable window or does not exit, it
+   offers to terminate it before continuing. Save any work in those processes
+   first. The installer also removes stale `~usicbee-tagger-mcp*` pip leftovers
+   from the dedicated environment after interrupted upgrades.
 
    The installer creates a dedicated virtual environment, installs the wheel,
    and writes `musicbee-tagger-mcp.cmd`, `musicbee-tagger-apply.cmd`,
