@@ -58,7 +58,7 @@ Retrieve technical specs, existing tags, and filename patterns for all tokens in
 get_batch_brief(tokens=[...])
 ```
 *Pay close attention to exact track duration in seconds (e.g. 174.68s) — this is your strongest forensic fingerprint.*
-*Filename parsing returns both artist/title interpretations for separated names because filename order is ambiguous. Treat these as candidates, not facts; prefer embedded tags or corroborating evidence.*
+*Filename artist/title pairs are unverified research clues, not evidence. The parser mechanically splits on separators and tries both orientations; a separator may be inside a multi-part artist, title, or unrelated naming convention. Use candidates only to form searches. Never stage a filename-derived artist or title without independent corroboration from embedded tags, a release tracklist/credits, or a reliable recording match supported by duration.*
 
 ### Step 3: Encoding & Sanity Check
 * Check for Soviet/Cyrillic CP1251 misread as Latin-1 or Japanese Shift-JIS with `repair_mojibake(text)`.
@@ -85,7 +85,7 @@ verify_mbid(
 * Verify `duration_diff_seconds <= 2.5s` (exact match) or `<= 6.0s`.
 * Verify `verified: true` and `confidence >= 75.0`.
 * If verification fails or flags major mismatches, do NOT stage. Re-investigate or ask the user.
-There is no MCP flag-for-review tool; report unresolved candidates and the reason for review in your final summary.
+* If later review shows that an existing proposal is wrong, inspect it with `get_staged_change`, then amend or withdraw it. Report unresolved candidates and the reason they remain pending in your final summary.
 
 ### Step 6: Stage Tag Changes
 Prepare clean scrobble metadata:
@@ -106,6 +106,14 @@ stage_tag_changes(
 )
 ```
 Only propose fields supported by the preview/apply pipeline and corroborated by the evidence. A passing recording verification does not by itself verify a particular release, album, year, or album artist; leave those fields unchanged unless separately confirmed. Preview each proposal and stage only fields that actually differ.
+
+### Reviewing Existing Stages
+
+Use `list_staged_changes` to find pending proposals and get their current `revision`. Call `get_staged_change(stage_id)` to review the saved notes, previous diff, proposed values, and the file's current tags. It returns no file path or registry token.
+
+Use `amend_staged_changes` to correct a pending proposal. Pass its current `expected_revision`, only the changed `new_tags`, any `remove_fields` to drop, and a short path-free `reason` describing the corroborating evidence. Amendment re-reads the file and rebuilds the diff; it never writes audio. If the revision is stale, inspect the stage again before retrying.
+
+Use `withdraw_staged_change` with the current revision and a path-free reason when a proposal should be canceled. Withdrawal is recorded in local history, removes the proposal from the pending list, and prevents the CLI from applying it. Neither amendment nor withdrawal applies audio tags; only the user CLI does that.
 
 ---
 

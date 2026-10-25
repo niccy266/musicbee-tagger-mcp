@@ -145,6 +145,15 @@ K:\bin\musicbee-tagger-apply.cmd --all
 The last command prompts before each write. Review each diff carefully. Do not
 run an apply command unless you intend to modify the corresponding audio file.
 
+Agents can inspect an existing proposal with `get_staged_change`, then amend it
+with `amend_staged_changes` or withdraw it with `withdraw_staged_change`. These
+actions update only the local stage manifest; amendment re-reads the current
+tags and requires the stage revision plus a path-free reason. Withdrawn stages
+remain in local history and are excluded from pending changes. Only the user
+CLI applies audio tags. Filename-derived artist/title pairs are ambiguous
+research clues, not evidence: a separator can split an artist name, a title,
+or unrelated text, so corroborate those values before staging them.
+
 ### Configuration and data
 
 The standalone config sets `MUSICBEE_TAGGER_DATA_DIR` for the server process.

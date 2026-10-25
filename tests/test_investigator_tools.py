@@ -22,6 +22,8 @@ def test_filename_parser_standard():
         {"artist": "Jimmy Takeuchi", "title": "Drum Drum Drum"},
         {"artist": "Drum Drum Drum", "title": "Jimmy Takeuchi"},
     ]
+    assert res["artist_title_candidates_are_unverified"] is True
+    assert "unverified" in res["artist_title_candidates_note"].lower()
     assert res["year_guess"] == "1970"
 
 

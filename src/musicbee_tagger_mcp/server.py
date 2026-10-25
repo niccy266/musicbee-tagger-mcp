@@ -9,7 +9,14 @@ from .tools.inspection import (
     read_track_metadata,
 )
 from .tools.musicbrainz import search_canonical_release, verify_mbid
-from .tools.tags import list_staged_changes, preview_tags, stage_tag_changes
+from .tools.tags import (
+    amend_staged_changes,
+    get_staged_change,
+    list_staged_changes,
+    preview_tags,
+    stage_tag_changes,
+    withdraw_staged_change,
+)
 from .tools.text import repair_mojibake
 
 app = MCPServer("musicbee-tagger")

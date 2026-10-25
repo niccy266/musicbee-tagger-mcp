@@ -19,25 +19,29 @@ class StagedChangeApplier:
         return self.store.load(stage_id)
 
     def apply(self, stage_id: str, create_backup: bool = True) -> dict:
-        manifest = self.load(stage_id)
-        if manifest.get("applied"):
-            return {"status": "already_applied", "stage_id": stage_id}
+        def apply_locked(manifest: dict) -> dict:
+            if manifest.get("applied"):
+                return {"status": "already_applied", "stage_id": stage_id}
+            if manifest.get("withdrawn"):
+                return {"status": "withdrawn", "stage_id": stage_id}
 
-        result = apply_tags_to_file(
-            manifest["absolute_path"],
-            manifest["proposed_tags"],
-            create_backup=create_backup,
-        )
-        manifest["applied"] = True
-        manifest["applied_at"] = datetime.now(timezone.utc).isoformat()
-        self.store.save(manifest)
-        return {
-            "status": "applied",
-            "stage_id": stage_id,
-            "display_name": manifest["display_name"],
-            "fields_written": result.get("fields_written", []),
-            "backup_created": result.get("backup_created") is not None,
-        }
+            result = apply_tags_to_file(
+                manifest["absolute_path"],
+                manifest["proposed_tags"],
+                create_backup=create_backup,
+            )
+            manifest["applied"] = True
+            manifest["applied_at"] = datetime.now(timezone.utc).isoformat()
+            return {
+                "status": "applied",
+                "stage_id": stage_id,
+                "display_name": manifest["display_name"],
+                "fields_written": result.get("fields_written", []),
+                "backup_created": result.get("backup_created") is not None,
+            }
+
+        _, result = self.store.transact(stage_id, apply_locked)
+        return result
 
 
 _applier: Optional[StagedChangeApplier] = None

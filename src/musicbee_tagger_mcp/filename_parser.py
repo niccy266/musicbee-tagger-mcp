@@ -1,7 +1,9 @@
 """Filename clue extractor for forensic track resolution.
 
-Extracts track numbers, artist guesses, title guesses, years, and bracketed
-clues (e.g. regional markers, live venues, catalog numbers) from bare filenames.
+Extracts possible track numbers, artist/title pairs, years, and bracketed clues
+(e.g. regional markers, live venues, catalog numbers) from bare filenames.
+Artist/title pairs are unverified hypotheses: separators do not establish which
+side is the artist, and filename text is only a clue for further research.
 Operates on display names only (no directory paths).
 """
 
@@ -31,7 +33,11 @@ def clean_stem(filename: str) -> str:
 
 def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
     """
-    Parse a bare filename into structured investigative signals.
+    Parse a bare filename into investigative signals, not authoritative tags.
+
+    Artist/title candidate pairs are unordered hypotheses. A separator can
+    split an artist name, a title, or unrelated filename text; corroborate
+    candidates with track metadata, duration, and release track listings.
     Does not use or expose directory paths.
     """
     raw_stem = clean_stem(filename)
@@ -57,7 +63,7 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
         except ValueError:
             pass
 
-    # 4. Attempt Artist / Title separation
+    # 4. Generate unranked Artist / Title hypotheses from ambiguous separators.
     # Common separators: " - ", " – ", " — ", " _ "
     parts = re.split(r"\s+[\-\–\—\_]\s+", cleaned_stem)
     artist_guess: Optional[str] = None
@@ -94,6 +100,12 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
         "artist_guess": artist_guess,
         "title_guess": title_guess,
         "artist_title_candidates": artist_title_candidates,
+        "artist_title_candidates_are_unverified": True,
+        "artist_title_candidates_note": (
+            "Unverified filename hypotheses only. Separators can split an "
+            "artist name, title, or unrelated text; corroborate before using "
+            "these values as tags."
+        ),
         "year_guess": detected_year,
         "bracket_clues": context_clues,
     }

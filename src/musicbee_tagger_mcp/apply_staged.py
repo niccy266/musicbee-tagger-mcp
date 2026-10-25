@@ -22,6 +22,9 @@ def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> Non
     if manifest.get("applied"):
         print(f"[SKIP] {stage_id} has already been applied.")
         return
+    if manifest.get("withdrawn"):
+        print(f"[SKIP] {stage_id} has been withdrawn.")
+        return
 
     print()
     print_review(manifest, stage_id)
@@ -36,6 +39,9 @@ def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> Non
         return
 
     result = applier.apply(stage_id, create_backup=not no_backup)
+    if result.get("status") == "withdrawn":
+        print(f"\n[SKIP] {stage_id} was withdrawn before it could be applied.")
+        return
     fields = result.get("fields_written", [])
     backed_up = result.get("backup_created", False)
     print(f"\n✓ Applied {len(fields)} field(s): {', '.join(fields)}")

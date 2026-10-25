@@ -4,6 +4,7 @@
 
 - Always run tests relevant to code changes before finishing work, using the project's virtual environment when available.
 - Push completed changes to the current working branch on `origin`; do not push work directly to `main` or `master`.
+- Treat filename-derived artist/title candidates as unverified research clues; corroborate them independently before proposing tag values.
 
 ## Branches for issue work
 
