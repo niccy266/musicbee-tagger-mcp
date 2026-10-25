@@ -704,13 +704,28 @@ def save_state(path, state):
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def select_job_id(requested_job_id, jobs):
-    """Resolve an explicit id or automatically select the sole available job."""
+def select_job_id(requested_job_id, jobs, state=None, state_path=None):
+    """Resolve an explicit id, a remembered job, or the first available job."""
     if requested_job_id:
         status = jobs.job_status(requested_job_id)
         if "error" in status:
             raise SystemExit(status["error"])
         return requested_job_id
+
+    if state is None and state_path is not None:
+        state = {}
+        try:
+            path = Path(state_path)
+            if path.exists():
+                state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            state = {}
+    if isinstance(state, (str, Path)):
+        try:
+            path = Path(state)
+            state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            state = {}
 
     try:
         available = jobs.list_jobs()
@@ -718,16 +733,17 @@ def select_job_id(requested_job_id, jobs):
         raise SystemExit(str(error)) from error
     if not available:
         raise SystemExit("No available playlist jobs. Register a playlist first.")
-    if len(available) > 1:
-        print("Multiple playlist jobs are available:")
-        for job in available:
-            print(
-                f"  {job['job_id']}  {job['playlist_name']} "
-                f"({job['counts']['pending']} pending)"
-            )
-        raise SystemExit("Choose a job by passing its job id.")
+    available_ids = [job["job_id"] for job in available]
+
+    remembered = None
+    if isinstance(state, dict):
+        remembered = state.get("job_id") or state.get("last_job_id")
+    if remembered in available_ids:
+        print(f"Using last assigned playlist job: {remembered}")
+        return remembered
+
     job_id = available[0]["job_id"]
-    print(f"Using the only available playlist job: {job_id}")
+    print(f"Using first available playlist job: {job_id}")
     return job_id
 
 
@@ -768,8 +784,11 @@ def main():
     run_log = RunLog(log_path, run_id)
     print(f"Run log: {log_path}")
 
+    state = json.loads(args.state.read_text(encoding="utf-8")) if args.state.exists() else {}
     jobs = JobStore()
-    job_id = select_job_id(args.job_id, jobs)
+    job_id = select_job_id(args.job_id, jobs, state=state, state_path=args.state)
+    state["job_id"] = job_id
+    state["last_job_id"] = job_id
 
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
@@ -788,7 +807,6 @@ def main():
         starting_counts=status["counts"],
     )
 
-    state = json.loads(args.state.read_text(encoding="utf-8")) if args.state.exists() else {}
     done = set(state.get("staged_by_file", [])) if args.resume else set()
 
     batch_number = 0
