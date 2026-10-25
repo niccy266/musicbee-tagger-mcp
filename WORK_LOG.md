@@ -317,3 +317,7 @@ python -m musicbee_tagger_mcp.apply_staged --all
 ### 2026-10-25 — Align README with shared queue MCP tools
 - Replaced outdated operation-claim API names with the registered batch queue tools (`enqueue_batch_operation`, `list_batch_operations`, and `update_batch_operation`) and clarified cross-restart visibility for agents sharing a data directory.
 - Validation: 14 focused queue tests passed; `git diff --check` passed.
+
+### 2026-10-25 — Update agent-loop model example
+- Changed the documented default model in `scripts/openrouter_agent_loop.py` to `openrouter/free`.
+- Validation: unable to run the test suite because `pytest` is not installed and the available Python 3.14 environment has no pytest module.
