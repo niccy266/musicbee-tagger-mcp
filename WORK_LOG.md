@@ -320,4 +320,4 @@ python -m musicbee_tagger_mcp.apply_staged --all
 
 ### 2026-10-25 — Update agent-loop model example
 - Changed the documented default model in `scripts/openrouter_agent_loop.py` to `openrouter/free`.
-- Validation: unable to run the test suite because `pytest` is not installed and the available Python 3.14 environment has no pytest module.
+- Validation: using the project virtual environment, 104 tests passed and 4 were skipped with the ffmpeg-dependent M4A test deselected. The full run had 104 passed, 4 skipped, and one failure because `ffmpeg` is not installed. Pytest needed a workspace basetemp and `MUSICBEE_TAGGER_DATA_DIR` override for sandbox write access.
