@@ -161,6 +161,18 @@ def _tag_str(value: Any) -> Optional[str]:
     return _INVISIBLE_RE.sub("", str(value)).strip()
 
 
+def _genre_str(values: Any) -> str:
+    """Normalize scalar or multi-value genre tags to the canonical separator."""
+    if not isinstance(values, (list, tuple)):
+        values = [values]
+    genres = []
+    for value in values:
+        text = _tag_str(value)
+        if text:
+            genres.extend(part.strip() for part in text.split("\x00") if part.strip())
+    return "; ".join(genres)
+
+
 def get_first_tag(tags: Any, keys) -> Optional[str]:
     """First matching tag value across candidate keys.
 
@@ -180,11 +192,11 @@ def get_first_tag(tags: Any, keys) -> Optional[str]:
                     if isinstance(value[0], tuple):
                         return value[0]  # MP4 (track, total) pairs stay structured
                     if key.lower() in ("genre", "tcon", "\xa9gen"):
-                        return "; ".join(
-                            part for part in (_tag_str(item) for item in value) if part
-                        )
+                        return _genre_str(value)
                     return _tag_str(value[0])
                 if value:
+                    if key.lower() in ("genre", "tcon", "\xa9gen"):
+                        return _genre_str(value)
                     return _tag_str(value)
         except (ValueError, KeyError):
             lower = key.lower()
@@ -195,11 +207,11 @@ def get_first_tag(tags: Any, keys) -> Optional[str]:
                         if isinstance(value[0], tuple):
                             return value[0]
                         if lower == "genre":
-                            return "; ".join(
-                                part for part in (_tag_str(item) for item in value) if part
-                            )
+                            return _genre_str(value)
                         return _tag_str(value[0])
                     if value:
+                        if lower == "genre":
+                            return _genre_str(value)
                         return _tag_str(value)
             except (ValueError, KeyError):
                 continue
