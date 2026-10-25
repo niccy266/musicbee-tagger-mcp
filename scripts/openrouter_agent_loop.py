@@ -445,6 +445,28 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
 def run_batch(tokens, model, api_key, max_turns, state, state_path,
               run_log=None, debug=False, prior_context="", lookahead=None):
     """One agent loop over one batch of tokens. Returns the message history."""
+    # Skip batches whose tokens were already reported as failed in an earlier run.
+    reported_failed = set(state.get("unresolved", []) or [])
+    reported_failed.update(state.get("errors", {}) or {})
+    if tokens and all(token in reported_failed for token in tokens):
+        state.setdefault("staged", [])
+        state.setdefault("unresolved", [])
+        state["unresolved"] = list(dict.fromkeys(list(state.get("unresolved", [])) + list(tokens)))
+        state.setdefault("errors", {})
+        for token in tokens:
+            state["errors"].setdefault(token, "Reported as failed in a previous batch")
+        state["finished"] = True
+        save_state(state_path, state)
+        if run_log:
+            run_log.write(
+                "batch_skipped",
+                batch=state.get("batch"),
+                reason="All tokens already reported as failed",
+                token_count=len(tokens),
+            )
+        print(f"Batch {state.get('batch')} skipped: all tokens already reported as failed.")
+        return []
+
     brief = get_batch_brief(tokens)
     if run_log:
         run_log.write("batch_brief", batch=state.get("batch"), files=brief)
@@ -827,6 +849,20 @@ def main():
         names = [entry["display_name"] for entry in claim["batch"]]
         lookahead_names = jobs.peek_pending(job_id, size=max(0, args.lookahead))
 
+        # Skip a claimed batch when every display name was already reported as
+        # failed in a previous run, so we do not re-send it to the model.
+        skip_batch = bool(names) and all(
+            name in set(state.get("failed_by_file", [])) for name in names
+        )
+        if skip_batch:
+            print(f"Batch {batch_number} skipped: all tokens already reported as failed.")
+            run_log.write(
+                "batch_skipped",
+                batch=batch_number,
+                reason="All tokens already reported as failed",
+                files=names,
+            )
+
         batch_state = {
             "batch": batch_number,
             "files": names,
@@ -835,11 +871,21 @@ def main():
             "unresolved": [],
             "finished": False,
         }
+        if skip_batch:
+            batch_state["unresolved"] = list(tokens)
+            batch_state["errors"] = {
+                token: "Reported as failed in a previous run" for token in tokens
+            }
+            batch_state["finished"] = True
+            batch_state["summary"] = "Skipped: all tokens already reported as failed"
+
         print(f"Batch {batch_number} ({claim['remaining']} after): {', '.join(names)}")
         run_log.write("batch_claimed", batch=batch_number, files=names,
                       token_count=len(tokens), pending_after_claim=claim["remaining"])
 
-        if debug_checkpoint(
+        if skip_batch:
+            pass
+        elif debug_checkpoint(
             args.debug,
             f"Submit batch {batch_number} metadata to OpenRouter model {args.model}?",
             run_log,
@@ -908,6 +954,9 @@ def main():
         if len(state["context"]) > args.context_chars:
             state["context"] = state["context"][-args.context_chars:]
         state.setdefault("staged_by_file", []).extend(sorted(set(staged_names) - done))
+        state.setdefault("failed_by_file", []).extend(
+            sorted(set(unresolved_names) - set(state.get("failed_by_file", [])))
+        )
         save_state(args.state, state)
 
         print(
