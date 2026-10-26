@@ -1062,6 +1062,24 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
     future_track_names = _as_track_name_list(future_tracks)
     if not future_track_names and lookahead:
         future_track_names = _as_track_name_list(lookahead)
+    # Give the model short, 6-character aliases for opaque track tokens so it
+    # does not have to reproduce long UUIDs.  Internal state, staging, and job
+    # tracking continue to use the full tokens.
+    token_aliases = {}
+    short_to_full = {}
+    for token in tokens or []:
+        if not isinstance(token, str):
+            continue
+        alias = token[:6]
+        if alias in short_to_full and short_to_full[alias] != token:
+            for start in range(1, max(1, len(token) - 5)):
+                candidate = token[start:start + 6]
+                if len(candidate) == 6 and candidate not in short_to_full:
+                    alias = candidate
+                    break
+        token_aliases[token] = alias
+        short_to_full[alias] = token
+
     reported_failed = set(state.get("unresolved", []) or [])
     reported_failed.update(state.get("errors", {}) or {})
     if tokens and all(token in reported_failed for token in tokens):
@@ -1084,6 +1102,9 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         return []
 
     brief = get_batch_brief(tokens)
+    for item in brief or []:
+        if isinstance(item, dict) and isinstance(item.get("token"), str):
+            item["token"] = token_aliases.get(item["token"], item["token"][:6])
     if run_log:
         run_log.write("batch_brief", batch=state.get("batch"), files=brief)
 
@@ -1161,6 +1182,10 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                 )
 
             token = args.get("token")
+            if isinstance(token, str):
+                token = short_to_full.get(token, token)
+                if "token" in args:
+                    args["token"] = token
             token_tools = {
                 "read_track_metadata", "extract_filename_clues", "verify_mbid",
                 "stage_tag_changes", "mark_unresolved",
