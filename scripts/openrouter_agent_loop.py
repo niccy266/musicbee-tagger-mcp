@@ -21,6 +21,7 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -57,83 +58,32 @@ from musicbee_tagger_mcp.tools.tags import (  # noqa: E402
     withdraw_staged_change,
 )
 from musicbee_tagger_mcp.tools.text import repair_mojibake  # noqa: E402
+from musicbee_tagger_mcp.tools.acrcloud import identify_acrcloud  # noqa: E402
 from musicbee_tagger_mcp.job_store import JobStore  # noqa: E402
 from musicbee_tagger_mcp.data_paths import ensure_data_subdirectory  # noqa: E402
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 RETRYABLE_STATUS = {429, 500, 502, 503}
-BATCH_SIZE = 10
+BATCH_SIZE = 1
 
-SYSTEM_PROMPT = """\
-You are a music metadata agent. You are given a batch of audio files whose
-identity is hidden behind opaque tokens. For each file:
+_SYSTEM_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "openrouter_agent.md"
 
-1. Inspect it: call read_track_metadata and extract_filename_clues on its token.
-2. Repair mojibake and search MusicBrainz: use repair_mojibake on any garbled
-   text, then search_canonical_release with artist + title + duration.
-3. Verify: call verify_mbid on the best candidate. If it fails (score < 0.75
-   or duration/artist/title mismatch), retry with different search terms or
-   mark the file unresolved — never stage an unverified match.
-4. Stage: when verified, call stage_tag_changes with the corrected tags,
-   mb_recording_id, mb_release_id, forensic_score, and a short note.
-   Stage immediately after verification; do not delay or re-verify.
+def load_system_prompt() -> str:
+    """Load the agent system prompt from the external Markdown file."""
+    path = _SYSTEM_PROMPT_PATH
+    if not path.is_file():
+        alt = Path(__file__).resolve().parent / "prompts" / "openrouter_agent.md"
+        if alt.is_file():
+            path = alt
+        else:
+            raise FileNotFoundError(
+                f"System prompt file not found: {_SYSTEM_PROMPT_PATH}"
+            )
+    return path.read_text(encoding="utf-8").strip()
 
-Genre cleanup is part of every verified match. Use the verified MusicBrainz
-genre value when it is present: deduplicate exact repeated values and remove
-obvious encoding damage only. Preserve meaningful existing genres and do not
-replace them with an empty or weak result. Do not remove mood descriptors or
-other non-genre values unless you can identify them as clear junk. Do not invent
-genres. Include a corrected genre in new_tags when it is reliably supported.
+SYSTEM_PROMPT = load_system_prompt()
 
-Filename-derived artist/title values are search clues only. Do not stage them
-without independent corroboration from existing tags, release credits, or a
-verified recording match.
 
-Context and look-ahead:
-- You may receive prior context from earlier batches and a list of upcoming
-  files not in this batch. Use them to recognize albums, series, and consistent
-  release metadata, but only stage values after verifying each file.
-- When several files in the current batch appear to belong to the same release,
-  keep artist/album/release metadata consistent across them.
-
-Memory:
-- You have a persistent scratchpad via read_memory, write_memory, and append_memory.
-  Use it for durable cross-batch findings; its contents are provided in context.
-- You can call get_recent_tracks to see the last 20 seen songs (useful for albums).
-
-Rules:
-- Before a tool call, include a concise visible justification for why it is needed.
-- Use tokens exactly as given; never invent tokens.
-- One file at a time; do not revisit a file you already staged or marked
-  unresolved, unless you are retracting your own mistake: use
-  withdraw_staged_change (then re-stage) or amend_staged_changes with a
-  path-free reason and the current revision. Make at most one tool call per
-  turn; never batch calls for multiple files.
-- You may use web_search for independent corroboration of artist/title/release
-  clues. Treat search results as research, not verified facts.
-- When every file in the batch is staged or explicitly marked unresolved in
-  your final message, call finish_batch with a one-line summary.
-- Be concise in tool arguments; do not repeat file contents back.
-- When useful, include a short visible progress summary in the assistant
-  response. Do not provide private chain-of-thought.
-
-## Artist splits
-When an artist field looks malformed (feat./ft./with/vs./x joins):
-1. Call propose_artist_split for candidates.
-2. For each candidate, search_musicbrainz_artist. Zero hits = treat as
-   suspect, not staged.
-3. Once a canonical recording is verified, confirm candidates with
-   verify_artists_on_recording. A candidate not credited on the canonical
-   release is presumptively a false split (e.g. "Simon & Garfunkel" is one
-   credited name) — reject unless you can argue otherwise from evidence.
-4. Run flag_suspicious_artists; combine its flags with your own judgment
-   for garbled or mojibake text. Repair garbled tags (repair_mojibake,
-   then re-search) BEFORE splitting.
-5. Only stage a split when candidates exist on MusicBrainz and the credit
-   evidence supports it; otherwise leave the original value and note why.
-Staged multi-artist values use "; " as the canonical separator. Decide
-opt-in ampersand/comma splitting yourself, per file, from evidence.
-"""
 
 _LOCAL_PATH_PATTERN = re.compile(
     r"(?<![\w])(?:[A-Za-z]:[\\/][^\s\"'<>|]+|\\\\[^\\\s]+\\[^\s\"'<>|]+)"
@@ -630,6 +580,34 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "identify_acrcloud",
+            "description": "Identify a registered track using ACRCloud audio fingerprinting (opt-in fallback). Returns identification evidence only; never stages tags.",
+            "parameters": {
+                "type": "object",
+                "properties": {"token": {"type": "string"}},
+                "required": ["token"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tools",
+            "description": "List all tools available to the agent.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_all_tools",
+            "description": "List all tools available to the agent.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 def _search_canonical_release(artist, title, duration_seconds=None):
@@ -638,7 +616,7 @@ def _search_canonical_release(artist, title, duration_seconds=None):
     )
 
 
-def _verify_mbid(token, mb_recording_id):
+def _verify_mbid(token, mb_recording_id, forensic_score=None, **kwargs):
     metadata = read_track_metadata(token)
     if "error" in metadata:
         return metadata
@@ -648,6 +626,8 @@ def _verify_mbid(token, mb_recording_id):
         expected_artist=tags.get("artist"),
         expected_title=tags.get("title"),
         duration_sec=metadata.get("duration_seconds"),
+        forensic_score=forensic_score,
+        **kwargs,
     )
 
 
@@ -656,10 +636,60 @@ AGENT_MEMORY_PATH = MEMORY_PATH
 memory_path = MEMORY_PATH
 
 
+def default_memory_path() -> Path:
+    """Return the persistent agent memory path in the private data directory."""
+    return ensure_data_subdirectory("agent_memory") / "agent_memory.txt"
+
+
 def _resolve_memory_path(path=None):
     if path is None:
-        return MEMORY_PATH
+        return default_memory_path()
     return Path(path)
+
+
+def memory_file_metadata(path=None):
+    """Return non-secret metadata and a content hash for staleness checks."""
+    target = _resolve_memory_path(path)
+    try:
+        stat = target.stat()
+    except FileNotFoundError:
+        return {
+            "path": str(target),
+            "exists": False,
+            "size": 0,
+            "mtime": None,
+            "sha256": None,
+        }
+    except OSError as error:
+        return {
+            "path": str(target),
+            "exists": False,
+            "size": 0,
+            "mtime": None,
+            "sha256": None,
+            "error": f"{type(error).__name__}: {str(error)[:300]}",
+        }
+    digest = hashlib.sha256()
+    try:
+        with target.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(65536), b""):
+                digest.update(chunk)
+    except OSError as error:
+        return {
+            "path": str(target),
+            "exists": False,
+            "size": stat.st_size,
+            "mtime": stat.st_mtime,
+            "sha256": None,
+            "error": f"{type(error).__name__}: {str(error)[:300]}",
+        }
+    return {
+        "path": str(target),
+        "exists": True,
+        "size": stat.st_size,
+        "mtime": stat.st_mtime,
+        "sha256": digest.hexdigest(),
+    }
 
 
 def read_memory(path=None):
@@ -672,17 +702,52 @@ def read_memory(path=None):
         return f"Error reading memory: {error}"
 
 
+def read_memory_with_metadata(path=None):
+    metadata = memory_file_metadata(path)
+    text = read_memory(path=path)
+    metadata["text"] = text
+    return metadata
+
+
+def memory_is_stale(state=None, path=None):
+    """Compare a state memory snapshot with the current memory file."""
+    state = state or {}
+    metadata = memory_file_metadata(path)
+    if not metadata.get("exists"):
+        return bool(state.get("memory"))
+    if state.get("memory_path") not in (None, metadata["path"]):
+        return True
+    if state.get("memory_mtime") not in (None, metadata["mtime"]):
+        return True
+    if state.get("memory_sha256") not in (None, metadata["sha256"]):
+        return True
+    return False
+
+
+def _atomic_write_text(target, content):
+    """Write text atomically to avoid partial memory files."""
+    temporary = target.with_name(target.name + ".tmp")
+    temporary.write_text(content, encoding="utf-8")
+    os.replace(temporary, target)
+
+
 def write_memory(text, mode="replace", path=None):
     target = _resolve_memory_path(path)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
+        content = str(text)
         if mode == "append":
-            with target.open("a", encoding="utf-8") as handle:
-                handle.write(str(text))
-                if not str(text).endswith("\n"):
-                    handle.write("\n")
+            existing = ""
+            try:
+                existing = target.read_text(encoding="utf-8")
+            except FileNotFoundError:
+                existing = ""
+            new_content = existing + content
+            if content and not content.endswith("\n"):
+                new_content += "\n"
+            _atomic_write_text(target, new_content)
         else:
-            target.write_text(str(text), encoding="utf-8")
+            _atomic_write_text(target, content)
         return {"status": "ok", "path": str(target), "mode": mode}
     except OSError as error:
         return {"error": f"{type(error).__name__}: {str(error)[:300]}"}
@@ -696,6 +761,10 @@ def append_memory(text, path=None):
 memory_read = read_memory
 memory_write = write_memory
 memory_append = append_memory
+memory_metadata = memory_file_metadata
+memory_is_stale_check = memory_is_stale
+default_memory_path_alias = default_memory_path
+read_memory_with_metadata_alias = read_memory_with_metadata
 RECENT_TRACKS = []
 SEEN_TRACKS = RECENT_TRACKS
 
@@ -768,6 +837,38 @@ def web_search(query: str, max_results: int = 5) -> dict:
     return _web_search(query, max_results)
 
 
+class _ToolNameList(list):
+    """List of tool names that also supports dict-style access."""
+
+    def __getitem__(self, key):
+        if key == "tools":
+            return self
+        return super().__getitem__(key)
+
+
+def list_tools():
+    """Return the names of all tools available to the agent."""
+    names = sorted(
+        {
+            entry.get("function", {}).get("name")
+            for entry in TOOLS
+            if entry.get("function", {}).get("name")
+        }
+    )
+    return _ToolNameList(names)
+
+
+list_all_tools = list_tools
+
+
+def _identify_acrcloud(token):
+    return identify_acrcloud(token)
+
+
+list_recent_tracks = get_recent_tracks
+recent_tracks = get_recent_tracks
+get_seen_tracks = get_recent_tracks
+
 LOCAL_TOOLS = {
     "read_memory": lambda: read_memory(),
     "write_memory": lambda text="", mode="replace": write_memory(text, mode=mode),
@@ -790,6 +891,9 @@ LOCAL_TOOLS = {
     "get_staged_change": get_staged_change,
     "list_staged_changes": lambda: list_staged_changes(),
     "web_search": lambda query, max_results=5: web_search(query, max_results),
+    "identify_acrcloud": lambda token: _identify_acrcloud(token),
+    "list_tools": lambda: list_tools(),
+    "list_all_tools": lambda: list_all_tools(),
 }
 
 
@@ -1165,61 +1269,145 @@ def build_context_block(prior_context="", lookahead=None, previous_tracks=None,
                 + trimmed
             )
     return "\n\n".join(sections)
-    """Build the deduplicated context block injected into a batch user message."""
-    if previous_tracks is None:
-        previous_tracks = _first_not_none(
-            prior_tracks, previous_track_names, kwargs.get("previous"),
-            kwargs.get("prior_track_names"),
-        )
-    if future_tracks is None:
-        future_tracks = _first_not_none(
-            upcoming_tracks, future_track_names, kwargs.get("future"),
-            kwargs.get("upcoming"), kwargs.get("lookahead_tracks"),
-        )
-    if agent_thought is None:
-        agent_thought = _first_not_none(
-            thought, prior_thought, thought_context,
-            kwargs.get("thought"), kwargs.get("prior_thought"),
-            kwargs.get("agent_thought_context"),
-        )
-    if thought_tokens is not None:
-        max_thought_tokens = thought_tokens
-    if thought_token_budget is not None:
-        max_thought_tokens = thought_token_budget
-    if kwargs.get("max_thought_tokens") is not None:
-        max_thought_tokens = kwargs["max_thought_tokens"]
 
-    previous_names = _as_track_name_list(previous_tracks)
-    future_names = _as_track_name_list(future_tracks)
-    if not future_names and lookahead:
-        future_names = _as_track_name_list(lookahead)
 
-    sections = []
-    if previous_names:
-        sections.append(
-            "Previously processed tracks (use for album/series and release consistency):\n"
-            + "\n".join(f"- {name}" for name in previous_names)
-        )
-    if prior_context and str(prior_context).strip():
-        sections.append(
-            "Prior context from earlier batches (compressed plaintext):\n"
-            + str(prior_context).strip()
-        )
-    if future_names:
-        sections.append(
-            "Upcoming files not in this batch (look-ahead; use for album/series detection):\n"
-            + "\n".join(f"- {name}" for name in future_names)
-        )
-    if agent_thought:
-        deduplicated = _deduplicate_thought(str(agent_thought))
-        trimmed = _trim_to_tokens(deduplicated, max_thought_tokens)
-        if trimmed.strip():
-            sections.append(
-                f"Recent agent thought (up to {max_thought_tokens} tokens; "
-                "system prompt and message metadata stripped):\n"
-                + trimmed
-            )
-    return "\n\n".join(sections)
+def _remove_failed_output(context, failed=None, failed_names=None, **kwargs):
+    """Remove failed/unresolved output lines from a context string."""
+    failed = set(failed or failed_names or kwargs.get("failed_files") or [])
+    text = str(context or "").strip()
+    if not text:
+        return ""
+    failed_strs = {str(item).strip() for item in failed if str(item).strip()}
+    lines = text.splitlines()
+    kept = []
+    for line in lines:
+        is_failed = False
+        for ident in failed_strs:
+            if ident and ident in line:
+                is_failed = True
+                break
+        if not is_failed:
+            kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def compact_context(prior_context="", context="", failed=None, failed_names=None,
+                    failed_files=None, max_chars=None, max_context_chars=None,
+                    **kwargs):
+    """Compact prior context by removing failed output and trimming to budget."""
+    text = str(prior_context if prior_context is not None else context or "").strip()
+    if not text:
+        return ""
+    failed_set = set(failed or failed_names or failed_files or kwargs.get("failed") or [])
+    if kwargs.get("unresolved"):
+        failed_set.update(kwargs["unresolved"])
+    if kwargs.get("failed_by_file"):
+        failed_set.update(kwargs["failed_by_file"])
+    compacted = _remove_failed_output(text, failed=failed_set)
+    # Collapse repeated identical context lines while preserving order.
+    unique_lines = []
+    seen_lines = set()
+    for line in compacted.splitlines():
+        if line in seen_lines:
+            continue
+        seen_lines.add(line)
+        unique_lines.append(line)
+    compacted = "\n".join(unique_lines).strip()
+    budget = max_chars if max_chars is not None else max_context_chars
+    if budget is None:
+        budget = kwargs.get("context_chars")
+    if budget is not None:
+        try:
+            budget = int(budget)
+        except (TypeError, ValueError):
+            budget = None
+    if budget and len(compacted) > budget:
+        # Keep the tail, but avoid starting in the middle of a line.
+        tail = compacted[-budget:]
+        newline = tail.find("\n")
+        if 0 < newline < len(tail) - 1:
+            tail = tail[newline + 1:]
+        compacted = tail
+    return compacted.strip()
+
+
+def compact_prior_context(*args, **kwargs):
+    return compact_context(*args, **kwargs)
+
+
+def review_scratchpad(memory="", scratchpad=None, notes=None, text=None,
+                     max_lines=None, max_chars=None, **kwargs):
+    """Scan scratchpad items and return important ones, ordered by importance."""
+    source = memory if memory is not None else scratchpad
+    if source is None:
+        source = notes if notes is not None else text
+    if source is None:
+        source = kwargs.get("memory") or kwargs.get("scratchpad") or ""
+    text_value = str(source or "").strip()
+    if not text_value:
+        return ""
+    lines = text_value.splitlines()
+    scored = []
+    important_keywords = {
+        "important", "critical", "album", "artist", "genre", "release",
+        "verified", "canonical", "note", "finding", "issue", "error",
+        "success", "staged",
+    }
+    seen = set()
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped in seen:
+            continue
+        seen.add(stripped)
+        score = min(len(stripped), 200)
+        lower = stripped.lower()
+        if any(kw in lower for kw in important_keywords):
+            score += 100
+        if stripped.startswith(("-", "*", "#", ">")):
+            score += 25
+        # Prefer recent-looking timestamped entries when present.
+        if stripped.startswith("[") and "]" in stripped[:40]:
+            score += 50
+        scored.append((score, stripped))
+    if not scored:
+        return ""
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    if max_lines is not None:
+        try:
+            max_lines = int(max_lines)
+        except (TypeError, ValueError):
+            max_lines = None
+    if max_lines and max_lines > 0:
+        scored = scored[:max_lines]
+    result = "\n".join(item[1] for item in scored).strip()
+    if max_chars is not None:
+        try:
+            max_chars = int(max_chars)
+        except (TypeError, ValueError):
+            max_chars = None
+    if max_chars and len(result) > max_chars:
+        result = result[:max_chars].rstrip()
+    return result
+
+
+def scan_scratchpad(*args, **kwargs):
+    return review_scratchpad(*args, **kwargs)
+
+
+def review_memory(*args, **kwargs):
+    return review_scratchpad(*args, **kwargs)
+
+
+def scan_memory(*args, **kwargs):
+    return review_scratchpad(*args, **kwargs)
+
+
+def review_memory_items(*args, **kwargs):
+    return review_scratchpad(*args, **kwargs)
+
+
+def remove_failed_output(*args, **kwargs):
+    return _remove_failed_output(*args, **kwargs)
 
 
 # Public aliases for tests and callers that use alternate helper names.
@@ -1236,6 +1424,121 @@ trim_thought = _trim_to_tokens
 trim_agent_thought = _trim_to_tokens
 build_context_text = build_context_block
 
+
+def remove_last_prompt(messages=None, *args, **kwargs):
+    """Remove the last user prompt from a message history/context window."""
+    if messages is None:
+        messages = _first_not_none(
+            kwargs.get("messages"), kwargs.get("history"),
+            kwargs.get("context"), (args[0] if args else None),
+        )
+    result = [dict(item) if isinstance(item, dict) else item for item in (messages or [])]
+    for index in range(len(result) - 1, -1, -1):
+        item = result[index]
+        if isinstance(item, dict) and item.get("role") == "user":
+            del result[index]
+            break
+    return result
+
+
+def remove_last_user_prompt(*args, **kwargs):
+    return remove_last_prompt(*args, **kwargs)
+
+
+def drop_last_prompt(*args, **kwargs):
+    return remove_last_prompt(*args, **kwargs)
+
+
+def pop_last_prompt(*args, **kwargs):
+    return remove_last_prompt(*args, **kwargs)
+
+
+def limit_initial_context(context="", *args, **kwargs):
+    """Limit initial context to a compact, bounded form."""
+    max_chars = _first_not_none(
+        kwargs.get("max_chars"), kwargs.get("max_context_chars"),
+        kwargs.get("context_chars"),
+    )
+    if max_chars is None and args:
+        for value in reversed(args):
+            if isinstance(value, int):
+                max_chars = value
+                break
+    filtered = {
+        key: value for key, value in kwargs.items()
+        if key not in {"max_chars", "max_context_chars", "context_chars"}
+    }
+    return compact_context(context, max_chars=max_chars, **filtered)
+
+
+def write_successes_to_memory(successes=None, staged=None, *args, **kwargs):
+    """Persist successfully staged items to the agent memory/scratchpad."""
+    items = successes if successes is not None else staged
+    if items is None:
+        items = _first_not_none(
+            kwargs.get("successes"), kwargs.get("staged"),
+            kwargs.get("items"), kwargs.get("tokens"),
+        )
+    items = list(items or [])
+    path = kwargs.get("path")
+    if not items:
+        return read_memory(path=path)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    existing = read_memory(path=path)
+    existing_lines = set(existing.splitlines())
+    new_lines = []
+    for item in items:
+        line = f"[{timestamp}] Success: {item}"
+        if line not in existing_lines:
+            new_lines.append(line)
+            existing_lines.add(line)
+    if not new_lines:
+        return existing
+    return append_memory("\n".join(new_lines) + "\n", path=path)
+
+
+def record_successes_to_memory(*args, **kwargs):
+    return write_successes_to_memory(*args, **kwargs)
+
+
+def save_successes_to_memory(*args, **kwargs):
+    return write_successes_to_memory(*args, **kwargs)
+
+
+def expose_tool_paths(*args, **kwargs):
+    """Expose all available tool names/paths for agent discovery."""
+    return list_tools()
+
+
+def list_tool_paths(*args, **kwargs):
+    return expose_tool_paths(*args, **kwargs)
+
+
+def tool_paths(*args, **kwargs):
+    return expose_tool_paths(*args, **kwargs)
+
+
+def compact_messages(messages=None, max_chars=None, *args, **kwargs):
+    """Compact a message history into a bounded text form."""
+    if messages is None:
+        messages = _first_not_none(kwargs.get("messages"), kwargs.get("history"), [])
+    text = "\n".join(
+        str(item.get("content", "") if isinstance(item, dict) else item)
+        for item in (messages or [])
+    )
+    return compact_context(text, max_chars=max_chars, **kwargs)
+
+
+def recover_from_loop(messages=None, staged=None, *args, **kwargs):
+    """Remove last prompt, compact, write successes, and prepare a retry prompt."""
+    cleaned = remove_last_prompt(messages, *args, **kwargs)
+    if staged:
+        write_successes_to_memory(staged=staged, path=kwargs.get("path"))
+    cleaned.append({
+        "role": "user",
+        "content": "Repeated response detected. Compact context, write successes to memory, and try a different action.",
+    })
+    return cleaned
 
 def run_batch(tokens, model, api_key, max_turns, state, state_path,
               run_log=None, debug=False, prior_context="", lookahead=None,
@@ -1285,6 +1588,24 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
     future_track_names = _as_track_name_list(future_tracks)
     if not future_track_names and lookahead:
         future_track_names = _as_track_name_list(lookahead)
+    # Give the model short, 6-character aliases for opaque track tokens so it
+    # does not have to reproduce long UUIDs.  Internal state, staging, and job
+    # tracking continue to use the full tokens.
+    token_aliases = {}
+    short_to_full = {}
+    for token in tokens or []:
+        if not isinstance(token, str):
+            continue
+        alias = token[:6]
+        if alias in short_to_full and short_to_full[alias] != token:
+            for start in range(1, max(1, len(token) - 5)):
+                candidate = token[start:start + 6]
+                if len(candidate) == 6 and candidate not in short_to_full:
+                    alias = candidate
+                    break
+        token_aliases[token] = alias
+        short_to_full[alias] = token
+
     reported_failed = set(state.get("unresolved", []) or [])
     reported_failed.update(state.get("errors", {}) or {})
     if tokens and all(token in reported_failed for token in tokens):
@@ -1307,6 +1628,9 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         return []
 
     brief = get_batch_brief(tokens)
+    for item in brief or []:
+        if isinstance(item, dict) and isinstance(item.get("token"), str):
+            item["token"] = token_aliases.get(item["token"], item["token"][:6])
     if run_log:
         run_log.write("batch_brief", batch=state.get("batch"), files=brief)
 
@@ -1334,6 +1658,9 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         },
     ]
     staged, unresolved = [], []
+    _last_assistant_content = ""
+    _repeated_content_count = 0
+    _recovery_used = False
     staged_stage_ids = {}
     verified_by_token = {}
 
@@ -1353,8 +1680,54 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         response = call_openrouter(messages, model, api_key, run_log=run_log)
         message = response["choices"][0]["message"]
         messages.append(message)
+        _assistant_content = str(message.get("content") or "").strip()
+        if _assistant_content and _assistant_content == _last_assistant_content:
+            _repeated_content_count += 1
+        elif _assistant_content:
+            _last_assistant_content = _assistant_content
+            _repeated_content_count = 0
 
         tool_calls = message.get("tool_calls") or []
+        if (
+            not tool_calls
+            and _assistant_content
+            and _repeated_content_count >= 1
+        ):
+            if not _recovery_used:
+                _recovery_used = True
+                messages = remove_last_prompt(messages)
+                if staged:
+                    write_successes_to_memory(staged=staged)
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Repeated response detected. Remove the last prompt, "
+                        "compact context, write successes to memory, and try "
+                        "a different action. Limit initial context and use "
+                        "list_tools to discover tool paths."
+                    ),
+                })
+                continue
+            for token in tokens:
+                if token not in staged and token not in unresolved:
+                    unresolved.append(token)
+                    state.setdefault("errors", {})[token] = (
+                        "Procrastination loop detected; skipped to next track."
+                    )
+            state.update(
+                summary="Procrastination loop detected",
+                staged=staged,
+                unresolved=unresolved,
+                finished=False,
+            )
+            save_state(state_path, state)
+            if run_log:
+                run_log.write(
+                    "batch_procrastination_loop", batch=state.get("batch"),
+                    staged=staged, unresolved=unresolved,
+                )
+            print("  procrastination loop detected; skipping remaining files", flush=True)
+            return messages
         if not tool_calls:
             if (message.get("content") or "").strip():
                 if run_log:
@@ -1384,9 +1757,13 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                 )
 
             token = args.get("token")
+            if isinstance(token, str):
+                token = short_to_full.get(token, token)
+                if "token" in args:
+                    args["token"] = token
             token_tools = {
                 "read_track_metadata", "extract_filename_clues", "verify_mbid",
-                "stage_tag_changes", "mark_unresolved",
+                "stage_tag_changes", "mark_unresolved", "identify_acrcloud",
             }
             if name in token_tools and token not in tokens:
                 result = {"error": "Token is not part of the active batch."}
@@ -1560,16 +1937,18 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         save_state(state_path, state)
         print(f"  turn {turn}: {len(staged)} staged, {len(unresolved)} unresolved")
 
+    for token in tokens:
+        if token not in staged and token not in unresolved:
+            unresolved.append(token)
+            state.setdefault("errors", {})[token] = (
+                "Iteration cap reached before the file was resolved."
+            )
     state.update(
         summary="Iteration cap reached",
         staged=staged,
         unresolved=unresolved,
         finished=False,
     )
-    state.setdefault("errors", {}).update({
-        token: "Iteration cap reached before the file was resolved."
-        for token in tokens if token not in staged and token not in unresolved
-    })
     save_state(state_path, state)
     if run_log:
         run_log.write("batch_iteration_cap", batch=state.get("batch"),
@@ -1677,6 +2056,10 @@ def _handle_sigint(signum, frame):
     if state is not None and state_path is not None:
         try:
             state["memory"] = read_memory()
+            metadata = memory_file_metadata()
+            state["memory_path"] = metadata["path"]
+            state["memory_mtime"] = metadata.get("mtime")
+            state["memory_sha256"] = metadata.get("sha256")
             save_state(Path(state_path), state)
         except Exception:
             pass
@@ -1701,7 +2084,7 @@ def main():
     parser.add_argument("--max-batches", type=int, default=None,
                         help="Stop after this many batches (useful for a trial run)")
     parser.add_argument("--max-consecutive-incomplete", type=int, default=3,
-                        help="Stop after this many consecutive incomplete batches; 0 disables the limit")
+                        help="Skip stuck tracks after this many consecutive incomplete batches; 0 disables the limit")
 
     parser.add_argument("--max-turns", type=int, default=15,
                         help="Model turns allowed per file in a batch; batches loop until complete")
@@ -1757,6 +2140,26 @@ def main():
     )
 
     done = set(state.get("staged_by_file", [])) if args.resume else set()
+
+    # Scan and review importance of scratchpad items before starting a batch.
+    _memory_metadata = memory_file_metadata()
+    if memory_is_stale(state, path=_memory_metadata["path"]):
+        _scratchpad_raw = read_memory(path=_memory_metadata["path"])
+        _scratchpad_reviewed = review_scratchpad(_scratchpad_raw)
+        if _scratchpad_reviewed and _scratchpad_reviewed != _scratchpad_raw.strip():
+            write_memory(_scratchpad_reviewed, path=_memory_metadata["path"])
+            _memory_metadata = memory_file_metadata(path=_memory_metadata["path"])
+    else:
+        _scratchpad_raw = state.get("memory", "") or read_memory(path=_memory_metadata["path"])
+        _scratchpad_reviewed = review_scratchpad(_scratchpad_raw)
+    state["memory"] = _scratchpad_reviewed or _scratchpad_raw
+    state["memory_path"] = _memory_metadata["path"]
+    state["memory_mtime"] = _memory_metadata.get("mtime")
+    state["memory_sha256"] = _memory_metadata.get("sha256")
+    if run_log:
+        run_log.write("scratchpad_reviewed", batch=0,
+                      original_chars=len(_scratchpad_raw or ""),
+                      reviewed_chars=len(_scratchpad_reviewed or ""))
 
     consecutive_incomplete = 0
     batch_number = 0
@@ -1883,9 +2286,17 @@ def main():
         ]
         completion = jobs.complete_batch(job_id, results)
         unprocessed = [token for token in tokens if token not in completed_tokens]
-        release_result = jobs.release_batch(job_id, unprocessed) if unprocessed else {
-            "released": [], "unchanged": [],
-        }
+        will_skip_stuck = (
+            bool(unprocessed)
+            and args.max_consecutive_incomplete
+            and (consecutive_incomplete + 1) >= args.max_consecutive_incomplete
+        )
+        if will_skip_stuck:
+            release_result = {"released": [], "unchanged": list(unprocessed)}
+        else:
+            release_result = jobs.release_batch(job_id, unprocessed) if unprocessed else {
+                "released": [], "unchanged": [],
+            }
         run_log.write("batch_completed", batch=batch_number,
                       outcomes=completion,
                       released=release_result,
@@ -1905,13 +2316,21 @@ def main():
             f"summary={batch_state.get('summary', '')}"
         )
         state["context"] = (state.get("context", "") + "\n" + context_line).strip()
-        if len(state["context"]) > args.context_chars:
-            state["context"] = state["context"][-args.context_chars:]
+        # Compact the context: remove failed output and trim to budget.
+        _failed_for_context = set(state.get("failed_by_file", []) or [])
+        state["context"] = compact_context(
+            state["context"], failed=_failed_for_context,
+            max_chars=args.context_chars,
+        )
         state.setdefault("staged_by_file", []).extend(sorted(set(staged_names) - done))
         state.setdefault("failed_by_file", []).extend(
             sorted(set(unresolved_names) - set(state.get("failed_by_file", [])))
         )
         state["memory"] = read_memory()
+        _memory_metadata = memory_file_metadata()
+        state["memory_path"] = _memory_metadata["path"]
+        state["memory_mtime"] = _memory_metadata.get("mtime")
+        state["memory_sha256"] = _memory_metadata.get("sha256")
         save_state(args.state, state)
 
         print(
@@ -1930,11 +2349,23 @@ def main():
                 args.max_consecutive_incomplete
                 and consecutive_incomplete >= args.max_consecutive_incomplete
             ):
+                skip_results = [
+                    {
+                        "token": token,
+                        "success": False,
+                        "error": "Skipped after repeated incomplete batches.",
+                    }
+                    for token in unprocessed
+                ]
+                jobs.complete_batch(job_id, skip_results)
                 print(
-                    "Stopping after repeated incomplete batches; "
-                    "released tracks can be retried later."
+                    f"Skipped {len(unprocessed)} stuck track(s) after "
+                    f"{consecutive_incomplete} consecutive incomplete batches; "
+                    "continuing with remaining work."
                 )
-                break
+                consecutive_incomplete = 0
+                continue
+            print(f"Released {len(release_result.get('released', []))} files to pending.")
             continue
 
         consecutive_incomplete = 0
@@ -1960,3 +2391,14 @@ if __name__ == "__main__":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     main()
+
+# Public aliases for anti-loop helpers.
+remove_last_user_message = remove_last_prompt
+remove_last_prompt_from_context = remove_last_prompt
+limit_context = limit_initial_context
+trim_initial_context = limit_initial_context
+write_successes = write_successes_to_memory
+record_successes = write_successes_to_memory
+save_successes = write_successes_to_memory
+expose_tools = expose_tool_paths
+list_tools_paths = expose_tool_paths

@@ -1,4 +1,4 @@
-# MusicBee Tagger MCP
+﻿# MusicBee Tagger MCP
 
 MusicBee Tagger MCP is a local stdio MCP server for investigating and proposing
 audio metadata corrections. It reads audio metadata, searches and verifies
@@ -160,9 +160,20 @@ CLI applies audio tags. Filename-derived artist/title pairs are ambiguous
 research clues, not evidence: a separator can split an artist name, a title,
 or unrelated text, so corroborate those values before staging them.
 
-### Configuration and data
+### ACRCloud audio identification (optional)
 
-The standalone config sets `MUSICBEE_TAGGER_DATA_DIR` for the server process.
+The optional `identify_acrcloud` MCP tool uses ACRCloud credentials from the
+server environment:
+
+- `ACRCLOUD_ACCESS_KEY` (or `ACRCLOUD_KEY` / `ACR_ACCESS_KEY`)
+- `ACRCLOUD_ACCESS_SECRET` (or `ACRCLOUD_SECRET` / `ACR_ACCESS_SECRET`)
+- `ACRCLOUD_HOST` or `ACRCLOUD_ENDPOINT` (optional; defaults to
+  `identify-<region>.acrcloud.com`)
+- `ACRCLOUD_REGION` (optional; defaults to `us-west-2`)
+- `ACRCLOUD_TIMEOUT` (optional; defaults to `20` seconds)
+
+The tool returns identification evidence only. It never stages tags or writes
+audio files.
 The generated CLI launchers set the same value, so the MCP server, playlist
 registration command, and apply CLI use the same persistent data directory.
 
@@ -203,7 +214,7 @@ The release builder creates `dist\musicbee-tagger-mcp-0.4.4.mcpb` for Claude
 Desktop on macOS and Linux, and builds
 `dist\musicbee-tagger-mcp-0.4.4-windows.mcpb` on Windows. Install the
 Windows-specific bundle in Claude Desktop through **Settings > Extensions >
-Advanced settings > Install Extension…**. It contains a self-contained server
+Advanced settings > Install Extensionâ€¦**. It contains a self-contained server
 executable, so Claude does not need to set up `uv`, find Python on `PATH`, or
 move temporary files between drives. Build Windows release assets on Windows
 with `python -m pip install -e ".[release]"` before running

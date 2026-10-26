@@ -134,6 +134,8 @@ class StageManifestStore:
                         "revision": manifest.get("revision", 1),
                         "diff_summary": manifest.get("diff", []),
                         "forensic_score": manifest.get("forensic_score"),
+                        "match_source": manifest.get("match_source"),
+                        "match_confidence": manifest.get("match_confidence"),
                         "deferred": bool(manifest.get("deferred", False)),
                         "deferred_at": manifest.get("deferred_at"),
                     })

@@ -9,7 +9,12 @@ from ..metadata_reader import read_audio_metadata
 
 def read_track_metadata(token: str) -> Dict[str, Any]:
     """Read metadata for a registered track without returning its path."""
-    path = get_registry().resolve(token)
+    try:
+        path = get_registry().resolve(token)
+    except KeyError:
+        # Tokens may be unknown to this server process's registry/data dir.
+        # Keep the response path-free and avoid an unhandled MCP tool error.
+        return {"error": "Unknown file token"}
     try:
         metadata = read_audio_metadata(str(path))
     except Exception:
@@ -26,7 +31,10 @@ def extract_filename_clues(token: str) -> Dict[str, Any]:
     separator may split an artist, title, or unrelated text. Corroborate them
     with metadata, duration, or a release track listing before staging tags.
     """
-    entry = get_registry().resolve(token)
+    try:
+        entry = get_registry().resolve(token)
+    except KeyError:
+        return {"error": "Unknown file token"}
     return extract_clues_from_filename(entry.name)
 
 

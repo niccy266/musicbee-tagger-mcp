@@ -321,6 +321,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 ### 2026-10-25 — Update agent-loop model example
 - Changed the documented default model in `scripts/openrouter_agent_loop.py` to `openrouter/free`.
 - Validation: using the project virtual environment with `K:\bin` added to the test process PATH, the full suite passed (108 passed, 1 skipped). Pytest needed a workspace basetemp and `MUSICBEE_TAGGER_DATA_DIR` override for sandbox write access.
+
+
 ### 2026-10-26 — Prepare v0.4.3 release
 - Updated the Windows installer to install the wheel's declared runtime dependencies before force-refreshing the wheel without reinstalling dependencies. This fixes fresh installs while preserving same-version source-checkout updates.
 - Aligned the README queue-tool examples with the current MCP tools and carried forward the agent-loop model example and pytest temporary-directory ignore cleanup.
@@ -342,4 +344,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Corrected over-indented MusicBrainz genre auto-inclusion block in `scripts/openrouter_agent_loop.py` so it runs as part of stage verification handling instead of being unreachable inside the release-id assignment.
 - Validation: `py_compile` passed; `tests/test_openrouter_agent_loop.py` passed (4 passed); `git diff --check` passed. No audio files were modified.
 
+### 2026-10-26 — Expose all agent tools including ACRCloud and memory listing
+- Added `identify_acrcloud` to the OpenRouter agent tool set and local dispatch, and added `list_tools`/`list_all_tools` so the agent can discover every available tool.
+- Updated the system prompt to state that the agent may use all tools, including `identify_acrcloud`, `write_memory`/`append_memory`, and `list_tools`.
+- Validation: `py_compile` passed; `tests/test_openrouter_agent_loop.py` passed (4 passed); `tests/test_secure_pipeline.py` passed (15 passed). No audio files were modified.
 

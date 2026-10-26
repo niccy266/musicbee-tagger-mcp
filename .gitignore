@@ -61,3 +61,10 @@ _netrc
 *.sqlite
 *.sqlite3
 *.db
+
+# Agent runtime state
+agent_state.json
+agent_state*.json
+musicbee-mcpb-*/
+.pytest-tmp/
+
