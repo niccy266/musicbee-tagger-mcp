@@ -41,7 +41,7 @@ python scripts/openrouter_agent_loop.py [job_id] \
 ```
 
 Logs default to the private application data directory's `agent_logs` folder.
-`--max-consecutive-incomplete` (default 3; use 0 to disable) controls how many incomplete batches may occur before the run stops; otherwise released tracks are retried on later iterations.
+`--max-consecutive-incomplete` (default 3; use 0 to disable) controls how many incomplete batches may occur before stuck tracks are skipped; otherwise released tracks are retried on later iterations.
 `--debug` pauses before claiming a batch, submitting metadata to OpenRouter,
 each model turn, and each stage operation; press Enter to continue or `q` to
 stop at that checkpoint. Without `--debug`, no pause prompts occur.

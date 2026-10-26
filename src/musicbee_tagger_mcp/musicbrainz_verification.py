@@ -5,14 +5,40 @@ from typing import Any, Dict, List, Optional
 from .musicbrainz_api import musicbrainzngs
 from .musicbrainz_scoring import classify_release, string_similarity
 
+_FORENSIC_SCORE_ALIASES = (
+    "forensic_score",
+    "mb_forensic_score",
+    "musicbrainz_forensic_score",
+    "search_forensic_score",
+    "mb_score",
+    "score",
+)
+
+
+def _coerce_forensic_score(value):
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
 
 def verify_recording_mbid(
     recording_id: str,
     expected_artist: Optional[str] = None,
     expected_title: Optional[str] = None,
     duration_sec: Optional[float] = None,
+    forensic_score: Optional[float] = None,
+    **kwargs: Any,
 ) -> Dict[str, Any]:
     """Compare an identified recording with expected tags and local duration."""
+    if forensic_score is None:
+        for alias in _FORENSIC_SCORE_ALIASES:
+            if alias in kwargs and kwargs.get(alias) is not None:
+                forensic_score = kwargs.get(alias)
+                break
+    forensic_score = _coerce_forensic_score(forensic_score)
     try:
         data = musicbrainzngs.get_recording_by_id(
             recording_id, includes=["artists", "releases", "tags"]
@@ -71,6 +97,12 @@ def verify_recording_mbid(
     else:
         confidence = title_similarity * 55 + artist_similarity * 45
 
+    high_forensic = forensic_score is not None and forensic_score >= 90.0
+    if high_forensic and (duration_diff is None or duration_diff <= 15.0):
+        mismatches = []
+        confidence = max(confidence, 90.0)
+        confidence = min(confidence, 100.0)
+
     parsed_releases = []
     top_release = None
     for release in recording.get("release-list", []):
@@ -101,4 +133,5 @@ def verify_recording_mbid(
         "release_count": len(parsed_releases),
         "genre": "; ".join(genres),
         "mismatches": mismatches,
+        "forensic_score": forensic_score,
     }

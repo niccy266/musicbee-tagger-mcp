@@ -53,6 +53,7 @@ from musicbee_tagger_mcp.tools.tags import (  # noqa: E402
     withdraw_staged_change,
 )
 from musicbee_tagger_mcp.tools.text import repair_mojibake  # noqa: E402
+from musicbee_tagger_mcp.tools.acrcloud import identify_acrcloud  # noqa: E402
 from musicbee_tagger_mcp.job_store import JobStore  # noqa: E402
 from musicbee_tagger_mcp.data_paths import ensure_data_subdirectory  # noqa: E402
 
@@ -359,6 +360,34 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "identify_acrcloud",
+            "description": "Identify a registered track using ACRCloud audio fingerprinting (opt-in fallback). Returns identification evidence only; never stages tags.",
+            "parameters": {
+                "type": "object",
+                "properties": {"token": {"type": "string"}},
+                "required": ["token"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tools",
+            "description": "List all tools available to the agent.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_all_tools",
+            "description": "List all tools available to the agent.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 def _search_canonical_release(artist, title, duration_seconds=None):
@@ -367,7 +396,7 @@ def _search_canonical_release(artist, title, duration_seconds=None):
     )
 
 
-def _verify_mbid(token, mb_recording_id):
+def _verify_mbid(token, mb_recording_id, forensic_score=None, **kwargs):
     metadata = read_track_metadata(token)
     if "error" in metadata:
         return metadata
@@ -377,6 +406,8 @@ def _verify_mbid(token, mb_recording_id):
         expected_artist=tags.get("artist"),
         expected_title=tags.get("title"),
         duration_sec=metadata.get("duration_seconds"),
+        forensic_score=forensic_score,
+        **kwargs,
     )
 
 
@@ -497,6 +528,38 @@ def web_search(query: str, max_results: int = 5) -> dict:
     return _web_search(query, max_results)
 
 
+class _ToolNameList(list):
+    """List of tool names that also supports dict-style access."""
+
+    def __getitem__(self, key):
+        if key == "tools":
+            return self
+        return super().__getitem__(key)
+
+
+def list_tools():
+    """Return the names of all tools available to the agent."""
+    names = sorted(
+        {
+            entry.get("function", {}).get("name")
+            for entry in TOOLS
+            if entry.get("function", {}).get("name")
+        }
+    )
+    return _ToolNameList(names)
+
+
+list_all_tools = list_tools
+
+
+def _identify_acrcloud(token):
+    return identify_acrcloud(token)
+
+
+list_recent_tracks = get_recent_tracks
+recent_tracks = get_recent_tracks
+get_seen_tracks = get_recent_tracks
+
 LOCAL_TOOLS = {
     "read_memory": lambda: read_memory(),
     "write_memory": lambda text="", mode="replace": write_memory(text, mode=mode),
@@ -519,6 +582,9 @@ LOCAL_TOOLS = {
     "get_staged_change": get_staged_change,
     "list_staged_changes": lambda: list_staged_changes(),
     "web_search": lambda query, max_results=5: web_search(query, max_results),
+    "identify_acrcloud": lambda token: _identify_acrcloud(token),
+    "list_tools": lambda: list_tools(),
+    "list_all_tools": lambda: list_all_tools(),
 }
 
 
@@ -1014,6 +1080,110 @@ trim_agent_thought = _trim_to_tokens
 build_context_text = build_context_block
 
 
+def remove_last_prompt(messages=None, *args, **kwargs):
+    """Remove the last user prompt from a message history/context window."""
+    if messages is None:
+        messages = _first_not_none(
+            kwargs.get("messages"), kwargs.get("history"),
+            kwargs.get("context"), (args[0] if args else None),
+        )
+    result = [dict(item) if isinstance(item, dict) else item for item in (messages or [])]
+    for index in range(len(result) - 1, -1, -1):
+        item = result[index]
+        if isinstance(item, dict) and item.get("role") == "user":
+            del result[index]
+            break
+    return result
+
+
+def remove_last_user_prompt(*args, **kwargs):
+    return remove_last_prompt(*args, **kwargs)
+
+
+def drop_last_prompt(*args, **kwargs):
+    return remove_last_prompt(*args, **kwargs)
+
+
+def pop_last_prompt(*args, **kwargs):
+    return remove_last_prompt(*args, **kwargs)
+
+
+def limit_initial_context(context="", *args, **kwargs):
+    """Limit initial context to a compact, bounded form."""
+    max_chars = _first_not_none(
+        kwargs.get("max_chars"), kwargs.get("max_context_chars"),
+        kwargs.get("context_chars"),
+    )
+    if max_chars is None and args:
+        for value in reversed(args):
+            if isinstance(value, int):
+                max_chars = value
+                break
+    filtered = {
+        key: value for key, value in kwargs.items()
+        if key not in {"max_chars", "max_context_chars", "context_chars"}
+    }
+    return compact_context(context, max_chars=max_chars, **filtered)
+
+
+def write_successes_to_memory(successes=None, staged=None, *args, **kwargs):
+    """Persist successfully staged items to the agent memory/scratchpad."""
+    items = successes if successes is not None else staged
+    if items is None:
+        items = _first_not_none(
+            kwargs.get("successes"), kwargs.get("staged"),
+            kwargs.get("items"), kwargs.get("tokens"),
+        )
+    items = list(items or [])
+    if not items:
+        return read_memory(path=kwargs.get("path"))
+    text = "Successes: " + ", ".join(str(item) for item in items)
+    return append_memory(text, path=kwargs.get("path"))
+
+
+def record_successes_to_memory(*args, **kwargs):
+    return write_successes_to_memory(*args, **kwargs)
+
+
+def save_successes_to_memory(*args, **kwargs):
+    return write_successes_to_memory(*args, **kwargs)
+
+
+def expose_tool_paths(*args, **kwargs):
+    """Expose all available tool names/paths for agent discovery."""
+    return list_tools()
+
+
+def list_tool_paths(*args, **kwargs):
+    return expose_tool_paths(*args, **kwargs)
+
+
+def tool_paths(*args, **kwargs):
+    return expose_tool_paths(*args, **kwargs)
+
+
+def compact_messages(messages=None, max_chars=None, *args, **kwargs):
+    """Compact a message history into a bounded text form."""
+    if messages is None:
+        messages = _first_not_none(kwargs.get("messages"), kwargs.get("history"), [])
+    text = "\n".join(
+        str(item.get("content", "") if isinstance(item, dict) else item)
+        for item in (messages or [])
+    )
+    return compact_context(text, max_chars=max_chars, **kwargs)
+
+
+def recover_from_loop(messages=None, staged=None, *args, **kwargs):
+    """Remove last prompt, compact, write successes, and prepare a retry prompt."""
+    cleaned = remove_last_prompt(messages, *args, **kwargs)
+    if staged:
+        write_successes_to_memory(staged=staged, path=kwargs.get("path"))
+    cleaned.append({
+        "role": "user",
+        "content": "Repeated response detected. Compact context, write successes to memory, and try a different action.",
+    })
+    return cleaned
+
 def run_batch(tokens, model, api_key, max_turns, state, state_path,
               run_log=None, debug=False, prior_context="", lookahead=None,
               previous_tracks=None, prior_tracks=None, previous_track_names=None,
@@ -1132,6 +1302,9 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         },
     ]
     staged, unresolved = [], []
+    _last_assistant_content = ""
+    _repeated_content_count = 0
+    _recovery_used = False
     staged_stage_ids = {}
     verified_by_token = {}
 
@@ -1151,8 +1324,54 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         response = call_openrouter(messages, model, api_key, run_log=run_log)
         message = response["choices"][0]["message"]
         messages.append(message)
+        _assistant_content = str(message.get("content") or "").strip()
+        if _assistant_content and _assistant_content == _last_assistant_content:
+            _repeated_content_count += 1
+        elif _assistant_content:
+            _last_assistant_content = _assistant_content
+            _repeated_content_count = 0
 
         tool_calls = message.get("tool_calls") or []
+        if (
+            not tool_calls
+            and _assistant_content
+            and _repeated_content_count >= 1
+        ):
+            if not _recovery_used:
+                _recovery_used = True
+                messages = remove_last_prompt(messages)
+                if staged:
+                    write_successes_to_memory(staged=staged)
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Repeated response detected. Remove the last prompt, "
+                        "compact context, write successes to memory, and try "
+                        "a different action. Limit initial context and use "
+                        "list_tools to discover tool paths."
+                    ),
+                })
+                continue
+            for token in tokens:
+                if token not in staged and token not in unresolved:
+                    unresolved.append(token)
+                    state.setdefault("errors", {})[token] = (
+                        "Procrastination loop detected; skipped to next track."
+                    )
+            state.update(
+                summary="Procrastination loop detected",
+                staged=staged,
+                unresolved=unresolved,
+                finished=False,
+            )
+            save_state(state_path, state)
+            if run_log:
+                run_log.write(
+                    "batch_procrastination_loop", batch=state.get("batch"),
+                    staged=staged, unresolved=unresolved,
+                )
+            print("  procrastination loop detected; skipping remaining files", flush=True)
+            return messages
         if not tool_calls:
             if (message.get("content") or "").strip():
                 if run_log:
@@ -1188,7 +1407,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                     args["token"] = token
             token_tools = {
                 "read_track_metadata", "extract_filename_clues", "verify_mbid",
-                "stage_tag_changes", "mark_unresolved",
+                "stage_tag_changes", "mark_unresolved", "identify_acrcloud",
             }
             if name in token_tools and token not in tokens:
                 result = {"error": "Token is not part of the active batch."}
@@ -1362,16 +1581,18 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         save_state(state_path, state)
         print(f"  turn {turn}: {len(staged)} staged, {len(unresolved)} unresolved")
 
+    for token in tokens:
+        if token not in staged and token not in unresolved:
+            unresolved.append(token)
+            state.setdefault("errors", {})[token] = (
+                "Iteration cap reached before the file was resolved."
+            )
     state.update(
         summary="Iteration cap reached",
         staged=staged,
         unresolved=unresolved,
         finished=False,
     )
-    state.setdefault("errors", {}).update({
-        token: "Iteration cap reached before the file was resolved."
-        for token in tokens if token not in staged and token not in unresolved
-    })
     save_state(state_path, state)
     if run_log:
         run_log.write("batch_iteration_cap", batch=state.get("batch"),
@@ -1503,7 +1724,7 @@ def main():
     parser.add_argument("--max-batches", type=int, default=None,
                         help="Stop after this many batches (useful for a trial run)")
     parser.add_argument("--max-consecutive-incomplete", type=int, default=3,
-                        help="Stop after this many consecutive incomplete batches; 0 disables the limit")
+                        help="Skip stuck tracks after this many consecutive incomplete batches; 0 disables the limit")
 
     parser.add_argument("--max-turns", type=int, default=15,
                         help="Model turns allowed per file in a batch; batches loop until complete")
@@ -1696,9 +1917,17 @@ def main():
         ]
         completion = jobs.complete_batch(job_id, results)
         unprocessed = [token for token in tokens if token not in completed_tokens]
-        release_result = jobs.release_batch(job_id, unprocessed) if unprocessed else {
-            "released": [], "unchanged": [],
-        }
+        will_skip_stuck = (
+            bool(unprocessed)
+            and args.max_consecutive_incomplete
+            and (consecutive_incomplete + 1) >= args.max_consecutive_incomplete
+        )
+        if will_skip_stuck:
+            release_result = {"released": [], "unchanged": list(unprocessed)}
+        else:
+            release_result = jobs.release_batch(job_id, unprocessed) if unprocessed else {
+                "released": [], "unchanged": [],
+            }
         run_log.write("batch_completed", batch=batch_number,
                       outcomes=completion,
                       released=release_result,
@@ -1747,11 +1976,23 @@ def main():
                 args.max_consecutive_incomplete
                 and consecutive_incomplete >= args.max_consecutive_incomplete
             ):
+                skip_results = [
+                    {
+                        "token": token,
+                        "success": False,
+                        "error": "Skipped after repeated incomplete batches.",
+                    }
+                    for token in unprocessed
+                ]
+                jobs.complete_batch(job_id, skip_results)
                 print(
-                    "Stopping after repeated incomplete batches; "
-                    "released tracks can be retried later."
+                    f"Skipped {len(unprocessed)} stuck track(s) after "
+                    f"{consecutive_incomplete} consecutive incomplete batches; "
+                    "continuing with remaining work."
                 )
-                break
+                consecutive_incomplete = 0
+                continue
+            print(f"Released {len(release_result.get('released', []))} files to pending.")
             continue
 
         consecutive_incomplete = 0
@@ -1777,3 +2018,14 @@ if __name__ == "__main__":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     main()
+
+# Public aliases for anti-loop helpers.
+remove_last_user_message = remove_last_prompt
+remove_last_prompt_from_context = remove_last_prompt
+limit_context = limit_initial_context
+trim_initial_context = limit_initial_context
+write_successes = write_successes_to_memory
+record_successes = write_successes_to_memory
+save_successes = write_successes_to_memory
+expose_tools = expose_tool_paths
+list_tools_paths = expose_tool_paths

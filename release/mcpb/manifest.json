@@ -109,6 +109,10 @@
     {
       "name": "repair_mojibake",
       "description": "Suggest repairs for text corrupted by common encoding errors."
+    },
+    {
+      "name": "identify_acrcloud",
+      "description": "Identify a registered track using ACRCloud (opt-in fallback)."
     }
   ],
   "keywords": [
