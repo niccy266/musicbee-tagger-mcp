@@ -21,10 +21,12 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         return {"error": "query is required"}
     if max_results < 1:
         max_results = 5
-    url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(query)
+    url = "https://html.duckduckgo.com/html/"
+    data = urllib.parse.urlencode({"q": query}).encode("utf-8")
     try:
         request = urllib.request.Request(
             url,
+            data=data,
             headers={"User-Agent": "Mozilla/5.0 (compatible; MusicBeeTagger/1.0)"},
         )
         with urllib.request.urlopen(request, timeout=15) as response:
