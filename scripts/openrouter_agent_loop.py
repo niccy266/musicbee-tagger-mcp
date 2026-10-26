@@ -1315,22 +1315,42 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
             not tool_calls
             and _assistant_content
             and _repeated_content_count >= 1
-            and not _recovery_used
         ):
-            _recovery_used = True
-            messages = remove_last_prompt(messages)
-            if staged:
-                write_successes_to_memory(staged=staged)
-            messages.append({
-                "role": "user",
-                "content": (
-                    "Repeated response detected. Remove the last prompt, "
-                    "compact context, write successes to memory, and try "
-                    "a different action. Limit initial context and use "
-                    "list_tools to discover tool paths."
-                ),
-            })
-            continue
+            if not _recovery_used:
+                _recovery_used = True
+                messages = remove_last_prompt(messages)
+                if staged:
+                    write_successes_to_memory(staged=staged)
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Repeated response detected. Remove the last prompt, "
+                        "compact context, write successes to memory, and try "
+                        "a different action. Limit initial context and use "
+                        "list_tools to discover tool paths."
+                    ),
+                })
+                continue
+            for token in tokens:
+                if token not in staged and token not in unresolved:
+                    unresolved.append(token)
+                    state.setdefault("errors", {})[token] = (
+                        "Procrastination loop detected; skipped to next track."
+                    )
+            state.update(
+                summary="Procrastination loop detected",
+                staged=staged,
+                unresolved=unresolved,
+                finished=False,
+            )
+            save_state(state_path, state)
+            if run_log:
+                run_log.write(
+                    "batch_procrastination_loop", batch=state.get("batch"),
+                    staged=staged, unresolved=unresolved,
+                )
+            print("  procrastination loop detected; skipping remaining files", flush=True)
+            return messages
         if not tool_calls:
             if (message.get("content") or "").strip():
                 if run_log:
@@ -1536,16 +1556,18 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         save_state(state_path, state)
         print(f"  turn {turn}: {len(staged)} staged, {len(unresolved)} unresolved")
 
+    for token in tokens:
+        if token not in staged and token not in unresolved:
+            unresolved.append(token)
+            state.setdefault("errors", {})[token] = (
+                "Iteration cap reached before the file was resolved."
+            )
     state.update(
         summary="Iteration cap reached",
         staged=staged,
         unresolved=unresolved,
         finished=False,
     )
-    state.setdefault("errors", {}).update({
-        token: "Iteration cap reached before the file was resolved."
-        for token in tokens if token not in staged and token not in unresolved
-    })
     save_state(state_path, state)
     if run_log:
         run_log.write("batch_iteration_cap", batch=state.get("batch"),
@@ -1677,7 +1699,7 @@ def main():
     parser.add_argument("--max-batches", type=int, default=None,
                         help="Stop after this many batches (useful for a trial run)")
     parser.add_argument("--max-consecutive-incomplete", type=int, default=3,
-                        help="Stop after this many consecutive incomplete batches; 0 disables the limit")
+                        help="Skip stuck tracks after this many consecutive incomplete batches; 0 disables the limit")
 
     parser.add_argument("--max-turns", type=int, default=15,
                         help="Model turns allowed per file in a batch; batches loop until complete")
@@ -1870,9 +1892,17 @@ def main():
         ]
         completion = jobs.complete_batch(job_id, results)
         unprocessed = [token for token in tokens if token not in completed_tokens]
-        release_result = jobs.release_batch(job_id, unprocessed) if unprocessed else {
-            "released": [], "unchanged": [],
-        }
+        will_skip_stuck = (
+            bool(unprocessed)
+            and args.max_consecutive_incomplete
+            and (consecutive_incomplete + 1) >= args.max_consecutive_incomplete
+        )
+        if will_skip_stuck:
+            release_result = {"released": [], "unchanged": list(unprocessed)}
+        else:
+            release_result = jobs.release_batch(job_id, unprocessed) if unprocessed else {
+                "released": [], "unchanged": [],
+            }
         run_log.write("batch_completed", batch=batch_number,
                       outcomes=completion,
                       released=release_result,
@@ -1921,11 +1951,23 @@ def main():
                 args.max_consecutive_incomplete
                 and consecutive_incomplete >= args.max_consecutive_incomplete
             ):
+                skip_results = [
+                    {
+                        "token": token,
+                        "success": False,
+                        "error": "Skipped after repeated incomplete batches.",
+                    }
+                    for token in unprocessed
+                ]
+                jobs.complete_batch(job_id, skip_results)
                 print(
-                    "Stopping after repeated incomplete batches; "
-                    "released tracks can be retried later."
+                    f"Skipped {len(unprocessed)} stuck track(s) after "
+                    f"{consecutive_incomplete} consecutive incomplete batches; "
+                    "continuing with remaining work."
                 )
-                break
+                consecutive_incomplete = 0
+                continue
+            print(f"Released {len(release_result.get('released', []))} files to pending.")
             continue
 
         consecutive_incomplete = 0
