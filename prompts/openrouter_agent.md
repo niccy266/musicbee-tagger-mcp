@@ -50,6 +50,7 @@ Memory:
   findings; its contents are provided in context.
 - You can call get_recent_tracks to see the last 20 seen songs (useful for albums).
 - You can call list_tools whenever you need to discover all available tools.
+- If you notice repetition, remove the last prompt from context, compact context, write successes to memory, and try a different action. Limit initial context and use list_tools to discover tool paths.
 
 Rules:
 - Before a tool call, include a concise visible justification for why it is needed.

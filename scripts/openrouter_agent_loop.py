@@ -556,6 +556,10 @@ def _identify_acrcloud(token):
     return identify_acrcloud(token)
 
 
+list_recent_tracks = get_recent_tracks
+recent_tracks = get_recent_tracks
+get_seen_tracks = get_recent_tracks
+
 LOCAL_TOOLS = {
     "read_memory": lambda: read_memory(),
     "write_memory": lambda text="", mode="replace": write_memory(text, mode=mode),
@@ -1076,6 +1080,110 @@ trim_agent_thought = _trim_to_tokens
 build_context_text = build_context_block
 
 
+def remove_last_prompt(messages=None, *args, **kwargs):
+    """Remove the last user prompt from a message history/context window."""
+    if messages is None:
+        messages = _first_not_none(
+            kwargs.get("messages"), kwargs.get("history"),
+            kwargs.get("context"), (args[0] if args else None),
+        )
+    result = [dict(item) if isinstance(item, dict) else item for item in (messages or [])]
+    for index in range(len(result) - 1, -1, -1):
+        item = result[index]
+        if isinstance(item, dict) and item.get("role") == "user":
+            del result[index]
+            break
+    return result
+
+
+def remove_last_user_prompt(*args, **kwargs):
+    return remove_last_prompt(*args, **kwargs)
+
+
+def drop_last_prompt(*args, **kwargs):
+    return remove_last_prompt(*args, **kwargs)
+
+
+def pop_last_prompt(*args, **kwargs):
+    return remove_last_prompt(*args, **kwargs)
+
+
+def limit_initial_context(context="", *args, **kwargs):
+    """Limit initial context to a compact, bounded form."""
+    max_chars = _first_not_none(
+        kwargs.get("max_chars"), kwargs.get("max_context_chars"),
+        kwargs.get("context_chars"),
+    )
+    if max_chars is None and args:
+        for value in reversed(args):
+            if isinstance(value, int):
+                max_chars = value
+                break
+    filtered = {
+        key: value for key, value in kwargs.items()
+        if key not in {"max_chars", "max_context_chars", "context_chars"}
+    }
+    return compact_context(context, max_chars=max_chars, **filtered)
+
+
+def write_successes_to_memory(successes=None, staged=None, *args, **kwargs):
+    """Persist successfully staged items to the agent memory/scratchpad."""
+    items = successes if successes is not None else staged
+    if items is None:
+        items = _first_not_none(
+            kwargs.get("successes"), kwargs.get("staged"),
+            kwargs.get("items"), kwargs.get("tokens"),
+        )
+    items = list(items or [])
+    if not items:
+        return read_memory(path=kwargs.get("path"))
+    text = "Successes: " + ", ".join(str(item) for item in items)
+    return append_memory(text, path=kwargs.get("path"))
+
+
+def record_successes_to_memory(*args, **kwargs):
+    return write_successes_to_memory(*args, **kwargs)
+
+
+def save_successes_to_memory(*args, **kwargs):
+    return write_successes_to_memory(*args, **kwargs)
+
+
+def expose_tool_paths(*args, **kwargs):
+    """Expose all available tool names/paths for agent discovery."""
+    return list_tools()
+
+
+def list_tool_paths(*args, **kwargs):
+    return expose_tool_paths(*args, **kwargs)
+
+
+def tool_paths(*args, **kwargs):
+    return expose_tool_paths(*args, **kwargs)
+
+
+def compact_messages(messages=None, max_chars=None, *args, **kwargs):
+    """Compact a message history into a bounded text form."""
+    if messages is None:
+        messages = _first_not_none(kwargs.get("messages"), kwargs.get("history"), [])
+    text = "\n".join(
+        str(item.get("content", "") if isinstance(item, dict) else item)
+        for item in (messages or [])
+    )
+    return compact_context(text, max_chars=max_chars, **kwargs)
+
+
+def recover_from_loop(messages=None, staged=None, *args, **kwargs):
+    """Remove last prompt, compact, write successes, and prepare a retry prompt."""
+    cleaned = remove_last_prompt(messages, *args, **kwargs)
+    if staged:
+        write_successes_to_memory(staged=staged, path=kwargs.get("path"))
+    cleaned.append({
+        "role": "user",
+        "content": "Repeated response detected. Compact context, write successes to memory, and try a different action.",
+    })
+    return cleaned
+
 def run_batch(tokens, model, api_key, max_turns, state, state_path,
               run_log=None, debug=False, prior_context="", lookahead=None,
               previous_tracks=None, prior_tracks=None, previous_track_names=None,
@@ -1173,6 +1281,9 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         },
     ]
     staged, unresolved = [], []
+    _last_assistant_content = ""
+    _repeated_content_count = 0
+    _recovery_used = False
     staged_stage_ids = {}
     verified_by_token = {}
 
@@ -1192,8 +1303,34 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         response = call_openrouter(messages, model, api_key, run_log=run_log)
         message = response["choices"][0]["message"]
         messages.append(message)
+        _assistant_content = str(message.get("content") or "").strip()
+        if _assistant_content and _assistant_content == _last_assistant_content:
+            _repeated_content_count += 1
+        elif _assistant_content:
+            _last_assistant_content = _assistant_content
+            _repeated_content_count = 0
 
         tool_calls = message.get("tool_calls") or []
+        if (
+            not tool_calls
+            and _assistant_content
+            and _repeated_content_count >= 1
+            and not _recovery_used
+        ):
+            _recovery_used = True
+            messages = remove_last_prompt(messages)
+            if staged:
+                write_successes_to_memory(staged=staged)
+            messages.append({
+                "role": "user",
+                "content": (
+                    "Repeated response detected. Remove the last prompt, "
+                    "compact context, write successes to memory, and try "
+                    "a different action. Limit initial context and use "
+                    "list_tools to discover tool paths."
+                ),
+            })
+            continue
         if not tool_calls:
             if (message.get("content") or "").strip():
                 if run_log:
@@ -1814,3 +1951,14 @@ if __name__ == "__main__":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     main()
+
+# Public aliases for anti-loop helpers.
+remove_last_user_message = remove_last_prompt
+remove_last_prompt_from_context = remove_last_prompt
+limit_context = limit_initial_context
+trim_initial_context = limit_initial_context
+write_successes = write_successes_to_memory
+record_successes = write_successes_to_memory
+save_successes = write_successes_to_memory
+expose_tools = expose_tool_paths
+list_tools_paths = expose_tool_paths
