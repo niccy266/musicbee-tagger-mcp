@@ -940,7 +940,9 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
                 usage = None
                 printed_prefix = False
                 printed_reasoning_prefix = False
+                chunk_count = 0
                 for chunk in response_stream:
+                    chunk_count += 1
                     if getattr(chunk, "usage", None) is not None:
                         try:
                             usage = chunk.usage.model_dump(mode="json")
@@ -986,6 +988,14 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
                                         entry["function"]["name"] += function.name
                                     if getattr(function, "arguments", None):
                                         entry["function"]["arguments"] += function.arguments
+                if run_log:
+                    run_log.write(
+                        "model_stream_completed",
+                        model=model,
+                        attempt=attempt + 1,
+                        chunks=chunk_count,
+                        elapsed_seconds=round(time.monotonic() - started, 3),
+                    )
                 if printed_reasoning_prefix:
                     print(flush=True)
                 if printed_prefix:
@@ -1088,6 +1098,17 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
                 continue
             detail = str(error)[:300]
             raise RuntimeError(f"OpenRouter error {status or 'timeout'}: {detail}")
+        except Exception as error:
+            if run_log:
+                run_log.write(
+                    "model_request_unexpected_error",
+                    model=model,
+                    attempt=attempt + 1,
+                    elapsed_seconds=round(time.monotonic() - started, 3),
+                    error=str(error)[:500],
+                )
+            raise
+
     raise RuntimeError("OpenRouter unreachable")
 
 
@@ -2024,6 +2045,8 @@ def select_job_id(requested_job_id, jobs, state=None, state_path=None):
     return job_id
 
 
+_RUN_LOG = None
+
 _INTERRUPT_CONTEXT: dict = {
     "job_id": None,
     "jobs": None,
@@ -2042,6 +2065,17 @@ def _handle_sigint(signum, frame):
     batch_state = ctx.get("batch_state")
     state = ctx.get("state")
     state_path = ctx.get("state_path")
+    run_log = ctx.get("run_log") or globals().get("_RUN_LOG")
+    if run_log:
+        try:
+            run_log.write(
+                "run_interrupted",
+                job_id=job_id,
+                batch=(batch_state.get("batch") if isinstance(batch_state, dict) else None),
+                token_count=len(tokens),
+            )
+        except Exception:
+            pass
     print("\nInterrupted by user; returning claimed files to pending...", flush=True)
     if jobs is not None and job_id is not None and tokens:
         try:
@@ -2129,6 +2163,8 @@ def main():
     log_path = args.log or (ensure_data_subdirectory("agent_logs") /
                             f"openrouter-{timestamp}-{run_id[:8]}.jsonl")
     run_log = RunLog(log_path, run_id)
+    global _RUN_LOG
+    _RUN_LOG = run_log
     print(f"Run log: {log_path}")
 
     state = json.loads(args.state.read_text(encoding="utf-8")) if args.state.exists() else {}
@@ -2141,7 +2177,7 @@ def main():
 
     _INTERRUPT_CONTEXT.update(
         job_id=job_id, jobs=jobs, state=state, state_path=args.state,
-        tokens=[], batch_state=None,
+        tokens=[], batch_state=None, run_log=run_log,
     )
     signal.signal(signal.SIGINT, _handle_sigint)
 
@@ -2427,7 +2463,17 @@ if __name__ == "__main__":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    main()
+    try:
+        main()
+    except Exception as error:
+        print(f"Fatal error: {type(error).__name__}: {error}", flush=True)
+        run_log = globals().get("_RUN_LOG")
+        if run_log is not None:
+            try:
+                run_log.write("run_failed", error=str(error)[:500])
+            except Exception:
+                pass
+        raise SystemExit(1)
 
 # Public aliases for anti-loop helpers.
 remove_last_user_message = remove_last_prompt
