@@ -86,6 +86,8 @@ class StagingManager:
         mb_recording_id: Optional[str] = None,
         mb_release_id: Optional[str] = None,
         forensic_score: Optional[float] = None,
+        match_source: Optional[str] = None,
+        match_confidence: Optional[float] = None,
         notes: str = "",
     ) -> dict:
         """Write a pending change manifest and return a stage_id + summary.
@@ -110,6 +112,8 @@ class StagingManager:
             "mb_recording_id": mb_recording_id,
             "mb_release_id": mb_release_id,
             "forensic_score": forensic_score,
+            "match_source": match_source,
+            "match_confidence": match_confidence,
             "notes": notes,
             "applied": False,
             "withdrawn": False,
@@ -157,6 +161,8 @@ class StagingManager:
             "mb_recording_id": manifest.get("mb_recording_id"),
             "mb_release_id": manifest.get("mb_release_id"),
             "forensic_score": manifest.get("forensic_score"),
+            "match_source": manifest.get("match_source"),
+            "match_confidence": manifest.get("match_confidence"),
             "current_tags": current_tags,
             "current_tags_error": current_tags_error,
             "history": manifest.get("history", []),
@@ -171,6 +177,8 @@ class StagingManager:
         remove_fields: Optional[List[str]] = None,
         mb_recording_id: Optional[str] = None,
         mb_release_id: Optional[str] = None,
+        match_source: Optional[str] = None,
+        match_confidence: Optional[float] = None,
     ) -> dict:
         """Revise a pending proposal and recompute its diff; never writes audio."""
         reason = _validate_reason(reason)
@@ -274,6 +282,12 @@ class StagingManager:
             if mb_release_id is not None:
                 manifest["mb_release_id"] = mb_release_id.strip() or None
                 amended_fields.append("mb_release_id")
+            if match_source is not None:
+                manifest["match_source"] = match_source.strip() if isinstance(match_source, str) else match_source
+                amended_fields.append("match_source")
+            if match_confidence is not None:
+                manifest["match_confidence"] = match_confidence
+                amended_fields.append("match_confidence")
             manifest["proposed_tags"] = proposed
             manifest["diff"] = diff
             manifest["revision"] = current_revision + 1

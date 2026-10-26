@@ -61,4 +61,4 @@ def test_windows_mcpb_executable_initializes_and_lists_tools(tmp_path):
     assert "amend_staged_changes" in names
     assert "withdraw_staged_change" in names
     assert "release_batch" in names
-    assert len(names) == 20
+    assert len(names) == 22

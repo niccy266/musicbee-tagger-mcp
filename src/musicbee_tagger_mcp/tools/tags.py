@@ -25,6 +25,8 @@ def stage_tag_changes(
     mb_recording_id: Optional[str] = None,
     mb_release_id: Optional[str] = None,
     forensic_score: Optional[float] = None,
+    match_source: Optional[str] = None,
+    match_confidence: Optional[float] = None,
     notes: str = "",
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
@@ -42,6 +44,8 @@ def stage_tag_changes(
             mb_recording_id=mb_recording_id,
             mb_release_id=mb_release_id,
             forensic_score=forensic_score,
+            match_source=match_source,
+            match_confidence=match_confidence,
             notes=notes,
         )
     except Exception:
@@ -76,6 +80,8 @@ def amend_staged_changes(
     remove_fields: Optional[List[str]] = None,
     mb_recording_id: Optional[str] = None,
     mb_release_id: Optional[str] = None,
+    match_source: Optional[str] = None,
+    match_confidence: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Amend a pending proposal without writing audio.
 
@@ -94,6 +100,8 @@ def amend_staged_changes(
             remove_fields=remove_fields,
             mb_recording_id=mb_recording_id,
             mb_release_id=mb_release_id,
+            match_source=match_source,
+            match_confidence=match_confidence,
         )
     except (FileNotFoundError, ValueError) as error:
         return {"error": str(error)}
