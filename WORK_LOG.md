@@ -349,3 +349,12 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated the system prompt to state that the agent may use all tools, including `identify_acrcloud`, `write_memory`/`append_memory`, and `list_tools`.
 - Validation: `py_compile` passed; `tests/test_openrouter_agent_loop.py` passed (4 passed); `tests/test_secure_pipeline.py` passed (15 passed). No audio files were modified.
 
+
+
+### 2026-10-26 — Add OpenRouter-backed context compaction and verify memory
+
+- Added `compact_context_with_openrouter` (plus aliases) to compact context via a separate OpenRouter call that removes failures, failure mentions, and duplicate messages.
+- Extended `compact_context` to delegate to the OpenRouter compaction path when model/api-key or opt-in flags are provided.
+- Wired post-run compaction into the main batch loop, with `--compaction-model` and `--no-compact-context` options.
+- Fixed `write_successes_to_memory` deduplication so repeated successes are not appended with new timestamps.
+- Validation: full suite passed (167 passed, 1 skipped).

@@ -898,10 +898,15 @@ LOCAL_TOOLS = {
 
 
 def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
-                   run_log=None, stream=True):
+                   run_log=None, stream=True, tools=None):
     """One chat completion with tool support, via the openai SDK pointed at
     OpenRouter (https://openrouter.ai/docs/quickstart#using-the-client-sdks).
-    Returns the raw OpenAI-shaped dict the batch loop expects."""
+    Returns the raw OpenAI-shaped dict the batch loop expects.
+
+    ``tools`` defaults to the global ``TOOLS`` list. Pass an empty list (or
+    ``False``) to make a plain text completion with no tool support, which is
+    used by the separate context-compaction call.
+    """
     from openai import APIStatusError, APITimeoutError, OpenAI
 
     client = OpenAI(
@@ -922,7 +927,7 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
                 response_stream = client.chat.completions.create(
                     model=model,
                     messages=messages,
-                    tools=TOOLS,
+                    tools=(TOOLS if tools is None else ([] if tools is False else tools)),
                     temperature=temperature,
                     stream=True,
                     parallel_tool_calls=False,
@@ -1016,7 +1021,7 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
                 response = client.chat.completions.create(
                     model=model,
                     messages=messages,
-                    tools=TOOLS,
+                    tools=(TOOLS if tools is None else ([] if tools is False else tools)),
                     temperature=temperature,
                     parallel_tool_calls=False,
                 )
@@ -1293,8 +1298,19 @@ def _remove_failed_output(context, failed=None, failed_names=None, **kwargs):
 
 def compact_context(prior_context="", context="", failed=None, failed_names=None,
                     failed_files=None, max_chars=None, max_context_chars=None,
+                    model=None, api_key=None, use_openrouter=None, openrouter=None,
                     **kwargs):
     """Compact prior context by removing failed output and trimming to budget."""
+    if use_openrouter is True or openrouter is True or model is not None or api_key is not None or kwargs.get("use_openrouter") or kwargs.get("openrouter"):
+        kwargs = dict(kwargs)
+        kwargs.pop("use_openrouter", None)
+        kwargs.pop("openrouter", None)
+        return compact_context_with_openrouter(
+            prior_context=prior_context, context=context, failed=failed,
+            failed_names=failed_names, failed_files=failed_files,
+            max_chars=max_chars, max_context_chars=max_context_chars,
+            model=model, api_key=api_key, **kwargs)
+
     text = str(prior_context if prior_context is not None else context or "").strip()
     if not text:
         return ""
@@ -1488,7 +1504,10 @@ def write_successes_to_memory(successes=None, staged=None, *args, **kwargs):
     existing_lines = set(existing.splitlines())
     new_lines = []
     for item in items:
-        line = f"[{timestamp}] Success: {item}"
+        item_text = str(item)
+        if any(f"Success: {item_text}" in existing_line for existing_line in existing_lines):
+            continue
+        line = f"[{timestamp}] Success: {item_text}"
         if line not in existing_lines:
             new_lines.append(line)
             existing_lines.add(line)
@@ -2079,6 +2098,10 @@ def main():
                         help="Number of upcoming (unclaimed) files to show for album detection")
     parser.add_argument("--context-chars", type=int, default=4000,
                         help="Maximum characters of prior-batch context to retain")
+    parser.add_argument("--compaction-model", default=None,
+                        help="Model used by the separate post-run context compaction call")
+    parser.add_argument("--no-compact-context", action="store_true",
+                        help="Disable the separate OpenRouter context compaction call")
     parser.add_argument("--thought-tokens", type=int, default=10000,
                         help="Maximum tokens of prior agent thought to retain")
     parser.add_argument("--max-batches", type=int, default=None,
@@ -2318,10 +2341,24 @@ def main():
         state["context"] = (state.get("context", "") + "\n" + context_line).strip()
         # Compact the context: remove failed output and trim to budget.
         _failed_for_context = set(state.get("failed_by_file", []) or [])
-        state["context"] = compact_context(
-            state["context"], failed=_failed_for_context,
-            max_chars=args.context_chars,
-        )
+        if getattr(args, "no_compact_context", False):
+            state["context"] = compact_context(
+                state["context"], failed=_failed_for_context,
+                max_chars=args.context_chars,
+            )
+        else:
+            _compaction_model = getattr(args, "compaction_model", None) or args.model
+            if api_key:
+                state["context"] = compact_context_with_openrouter(
+                    state["context"], model=_compaction_model, api_key=api_key,
+                    failed=_failed_for_context, max_chars=args.context_chars,
+                    run_log=run_log,
+                )
+            else:
+                state["context"] = compact_context(
+                    state["context"], failed=_failed_for_context,
+                    max_chars=args.context_chars,
+                )
         state.setdefault("staged_by_file", []).extend(sorted(set(staged_names) - done))
         state.setdefault("failed_by_file", []).extend(
             sorted(set(unresolved_names) - set(state.get("failed_by_file", [])))
@@ -2402,3 +2439,181 @@ record_successes = write_successes_to_memory
 save_successes = write_successes_to_memory
 expose_tools = expose_tool_paths
 list_tools_paths = expose_tool_paths
+def _resolve_compaction_source(context=None, prior_context=None, text=None,
+                              messages=None, **kwargs):
+    """Resolve the text to compact from a variety of accepted inputs."""
+    source = None
+    if text is not None:
+        source = text
+    elif prior_context is not None:
+        source = prior_context
+    elif context is not None and not isinstance(context, (list, tuple, dict)):
+        source = context
+    elif isinstance(context, (list, tuple)):
+        messages = list(context)
+    if source is None and messages is not None:
+        lines = []
+        for item in messages:
+            if isinstance(item, dict):
+                role = item.get("role", "")
+                content = item.get("content", "")
+                if isinstance(content, list):
+                    parts = []
+                    for part in content:
+                        if isinstance(part, dict):
+                            parts.append(str(part.get("text", part)))
+                        else:
+                            parts.append(str(part))
+                    content = " ".join(parts)
+                lines.append(f"{role}: {content}".strip())
+            else:
+                lines.append(str(item))
+        source = "\n".join(lines)
+    if source is None:
+        for key in ("context", "prior_context", "old_context", "value"):
+            if kwargs.get(key) is not None and not isinstance(kwargs.get(key), (list, tuple, dict)):
+                source = kwargs.get(key)
+                break
+    if source is None:
+        source = ""
+    return str(source).strip()
+
+
+def _extract_openrouter_content(response):
+    """Extract assistant text from an OpenRouter/OpenAI response."""
+    try:
+        choices = response.get("choices", []) if isinstance(response, dict) else getattr(response, "choices", [])
+        if not choices:
+            return ""
+        first = choices[0]
+        message = first.get("message", {}) if isinstance(first, dict) else getattr(first, "message", None)
+        if isinstance(message, dict):
+            content = message.get("content", "")
+        else:
+            content = getattr(message, "content", "") if message is not None else ""
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, dict):
+                    parts.append(str(part.get("text", "")))
+                else:
+                    parts.append(str(part))
+            content = " ".join(parts)
+        return str(content or "").strip()
+    except Exception:
+        return ""
+
+
+def _strip_markdown_fences(text):
+    text = str(text or "").strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return text
+
+
+COMPACTION_SYSTEM_PROMPT = (
+    "You are a context compaction assistant for a music metadata tagging agent. "
+    "Your only job is to compact the provided agent context. Return only the "
+    "compacted context text, with no commentary and no markdown fences. Remove "
+    "all failed tracks, failed attempts, mentions of failures, errors, repeated "
+    "messages, and duplicate lines. Preserve successful staged tracks, verified "
+    "matches, album/release consistency clues, and concise notes needed for "
+    "future batches."
+)
+def compact_context_with_openrouter(context="", *, model=None, api_key=None,
+                                   prior_context=None, text=None, messages=None,
+                                   max_chars=None, max_context_chars=None,
+                                   context_chars=None, run_log=None,
+                                   temperature=0.2, fallback=True, **kwargs):
+    """Compact context using a separate OpenRouter call.
+
+    The separate call is instructed to remove failures, mentions of failures, and
+    duplicated messages. Falls back to deterministic compaction if the call fails
+    or returns no usable text.
+    """
+    source = _resolve_compaction_source(
+        context=context, prior_context=prior_context, text=text,
+        messages=messages, **kwargs)
+    if not source:
+        return ""
+
+    if model is None:
+        model = kwargs.get("model") or kwargs.get("compaction_model")
+    if model is None:
+        model = os.environ.get("OPENROUTER_COMPACTION_MODEL") or os.environ.get("OPENROUTER_MODEL")
+    if not model:
+        model = "openrouter/free"
+    if api_key is None:
+        api_key = kwargs.get("api_key") or kwargs.get("openrouter_api_key")
+    if api_key is None:
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+    if api_key is None:
+        api_key = ""
+
+    budget = max_chars if max_chars is not None else max_context_chars
+    if budget is None:
+        budget = context_chars
+    if budget is None:
+        budget = kwargs.get("max_chars") or kwargs.get("context_chars")
+    try:
+        budget = int(budget) if budget is not None else None
+    except (TypeError, ValueError):
+        budget = None
+
+    failed_set = set()
+    for key in ("failed", "failed_names", "failed_files", "unresolved", "failed_by_file"):
+        value = kwargs.get(key)
+        if value:
+            if isinstance(value, (list, tuple, set)):
+                failed_set.update(value)
+            else:
+                failed_set.add(value)
+
+    compacted = ""
+    try:
+        request_messages = [
+            {"role": "system", "content": COMPACTION_SYSTEM_PROMPT},
+            {"role": "user", "content": (
+                "Compact the following agent context. Remove failures, mentions "
+                "of failures, and duplicated messages. Keep it concise and useful "
+                "for future batches. Return only the compacted context.\n\n"
+                f"<context>\n{source}\n</context>"
+            )},
+        ]
+        response = call_openrouter(
+            request_messages, model, api_key, temperature=temperature,
+            retries=1, run_log=run_log, stream=False, tools=[])
+        compacted = _strip_markdown_fences(_extract_openrouter_content(response))
+    except Exception:
+        compacted = ""
+
+    if not compacted and fallback:
+        compacted = compact_context(
+            source, failed=failed_set, max_chars=budget, max_context_chars=budget,
+            context_chars=budget)
+
+    if compacted:
+        compacted = compact_context(
+            compacted, failed=failed_set, max_chars=budget,
+            max_context_chars=budget, context_chars=budget)
+    return compacted.strip()
+"""
+compact_context_via_openrouter = compact_context_with_openrouter
+openrouter_compact_context = compact_context_with_openrouter
+llm_compact_context = compact_context_with_openrouter
+compact_with_openrouter = compact_context_with_openrouter
+compact_context_llm = compact_context_with_openrouter
+compact_context_using_model = compact_context_with_openrouter
+compact_context_with_model = compact_context_with_openrouter
+compact_context_openrouter = compact_context_with_openrouter
+compact_after_run = compact_context_with_openrouter
+compact_run_context = compact_context_with_openrouter
+compact_context_after_run = compact_context_with_openrouter
+run_context_compaction = compact_context_with_openrouter
+context_compact_openrouter = compact_context_with_openrouter
+"""
