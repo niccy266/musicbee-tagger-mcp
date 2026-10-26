@@ -22,11 +22,12 @@ def verify_mbid(
     expected_title: Optional[str] = None,
     duration_sec: Optional[float] = None,
     forensic_score: Optional[float] = None,
+    **kwargs: Any,
 ) -> Dict[str, Any]:
     """Verify a recording candidate against local title, artist, and duration."""
     return verify_recording_mbid(
         recording_id, expected_artist, expected_title, duration_sec,
-        forensic_score=forensic_score,
+        forensic_score=forensic_score, **kwargs,
     )
 
 
