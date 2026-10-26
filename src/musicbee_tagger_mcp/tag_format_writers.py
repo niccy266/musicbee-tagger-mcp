@@ -61,7 +61,8 @@ def write_vorbis(audio: FLAC | OggVorbis, new_tags: Dict[str, Any]) -> None:
     """Write canonical fields to a Vorbis comment tag (FLAC / OGG)."""
     for field, spec in FIELD_MAP.items():
         if spec.vorbis is not None and new_tags.get(field) is not None:
-            audio[spec.vorbis] = _tag_values(new_tags[field])
+            audio[spec.vorbis] = (_genre_values(new_tags[field]) if field == "genre"
+                                  else [_tag_value(new_tags[field])])
     audio.save()
 
 
