@@ -9,7 +9,10 @@ from ..tag_writer import preview_tag_changes
 
 def preview_tags(token: str, new_tags: Dict[str, Any]) -> Dict[str, Any]:
     """Preview proposed metadata changes without modifying audio."""
-    path = get_registry().resolve(token)
+    try:
+        path = get_registry().resolve(token)
+    except KeyError:
+        return {"error": "Unknown file token"}
     try:
         result = preview_tag_changes(str(path), new_tags)
     except Exception:
@@ -35,7 +38,10 @@ def stage_tag_changes(
     Corroborate them with track metadata, duration, or release track listings
     before staging them as tag values.
     """
-    entry = get_registry().resolve(token)
+    try:
+        entry = get_registry().resolve(token)
+    except KeyError:
+        return {"error": "Unknown file token"}
     try:
         return get_staging_manager().stage(
             absolute_path=entry,
