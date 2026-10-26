@@ -21,6 +21,7 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -416,10 +417,60 @@ AGENT_MEMORY_PATH = MEMORY_PATH
 memory_path = MEMORY_PATH
 
 
+def default_memory_path() -> Path:
+    """Return the persistent agent memory path in the private data directory."""
+    return ensure_data_subdirectory("agent_memory") / "agent_memory.txt"
+
+
 def _resolve_memory_path(path=None):
     if path is None:
-        return MEMORY_PATH
+        return default_memory_path()
     return Path(path)
+
+
+def memory_file_metadata(path=None):
+    """Return non-secret metadata and a content hash for staleness checks."""
+    target = _resolve_memory_path(path)
+    try:
+        stat = target.stat()
+    except FileNotFoundError:
+        return {
+            "path": str(target),
+            "exists": False,
+            "size": 0,
+            "mtime": None,
+            "sha256": None,
+        }
+    except OSError as error:
+        return {
+            "path": str(target),
+            "exists": False,
+            "size": 0,
+            "mtime": None,
+            "sha256": None,
+            "error": f"{type(error).__name__}: {str(error)[:300]}",
+        }
+    digest = hashlib.sha256()
+    try:
+        with target.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(65536), b""):
+                digest.update(chunk)
+    except OSError as error:
+        return {
+            "path": str(target),
+            "exists": False,
+            "size": stat.st_size,
+            "mtime": stat.st_mtime,
+            "sha256": None,
+            "error": f"{type(error).__name__}: {str(error)[:300]}",
+        }
+    return {
+        "path": str(target),
+        "exists": True,
+        "size": stat.st_size,
+        "mtime": stat.st_mtime,
+        "sha256": digest.hexdigest(),
+    }
 
 
 def read_memory(path=None):
@@ -432,17 +483,52 @@ def read_memory(path=None):
         return f"Error reading memory: {error}"
 
 
+def read_memory_with_metadata(path=None):
+    metadata = memory_file_metadata(path)
+    text = read_memory(path=path)
+    metadata["text"] = text
+    return metadata
+
+
+def memory_is_stale(state=None, path=None):
+    """Compare a state memory snapshot with the current memory file."""
+    state = state or {}
+    metadata = memory_file_metadata(path)
+    if not metadata.get("exists"):
+        return bool(state.get("memory"))
+    if state.get("memory_path") not in (None, metadata["path"]):
+        return True
+    if state.get("memory_mtime") not in (None, metadata["mtime"]):
+        return True
+    if state.get("memory_sha256") not in (None, metadata["sha256"]):
+        return True
+    return False
+
+
+def _atomic_write_text(target, content):
+    """Write text atomically to avoid partial memory files."""
+    temporary = target.with_name(target.name + ".tmp")
+    temporary.write_text(content, encoding="utf-8")
+    os.replace(temporary, target)
+
+
 def write_memory(text, mode="replace", path=None):
     target = _resolve_memory_path(path)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
+        content = str(text)
         if mode == "append":
-            with target.open("a", encoding="utf-8") as handle:
-                handle.write(str(text))
-                if not str(text).endswith("\n"):
-                    handle.write("\n")
+            existing = ""
+            try:
+                existing = target.read_text(encoding="utf-8")
+            except FileNotFoundError:
+                existing = ""
+            new_content = existing + content
+            if content and not content.endswith("\n"):
+                new_content += "\n"
+            _atomic_write_text(target, new_content)
         else:
-            target.write_text(str(text), encoding="utf-8")
+            _atomic_write_text(target, content)
         return {"status": "ok", "path": str(target), "mode": mode}
     except OSError as error:
         return {"error": f"{type(error).__name__}: {str(error)[:300]}"}
@@ -456,6 +542,10 @@ def append_memory(text, path=None):
 memory_read = read_memory
 memory_write = write_memory
 memory_append = append_memory
+memory_metadata = memory_file_metadata
+memory_is_stale_check = memory_is_stale
+default_memory_path_alias = default_memory_path
+read_memory_with_metadata_alias = read_memory_with_metadata
 RECENT_TRACKS = []
 SEEN_TRACKS = RECENT_TRACKS
 
@@ -995,6 +1085,15 @@ def compact_context(prior_context="", context="", failed=None, failed_names=None
     if kwargs.get("failed_by_file"):
         failed_set.update(kwargs["failed_by_file"])
     compacted = _remove_failed_output(text, failed=failed_set)
+    # Collapse repeated identical context lines while preserving order.
+    unique_lines = []
+    seen_lines = set()
+    for line in compacted.splitlines():
+        if line in seen_lines:
+            continue
+        seen_lines.add(line)
+        unique_lines.append(line)
+    compacted = "\n".join(unique_lines).strip()
     budget = max_chars if max_chars is not None else max_context_chars
     if budget is None:
         budget = kwargs.get("context_chars")
@@ -1004,7 +1103,12 @@ def compact_context(prior_context="", context="", failed=None, failed_names=None
         except (TypeError, ValueError):
             budget = None
     if budget and len(compacted) > budget:
-        compacted = compacted[-budget:]
+        # Keep the tail, but avoid starting in the middle of a line.
+        tail = compacted[-budget:]
+        newline = tail.find("\n")
+        if 0 < newline < len(tail) - 1:
+            tail = tail[newline + 1:]
+        compacted = tail
     return compacted.strip()
 
 
@@ -1012,8 +1116,9 @@ def compact_prior_context(*args, **kwargs):
     return compact_context(*args, **kwargs)
 
 
-def review_scratchpad(memory="", scratchpad=None, notes=None, text=None, **kwargs):
-    """Scan scratchpad items and return the important ones, ordered by importance."""
+def review_scratchpad(memory="", scratchpad=None, notes=None, text=None,
+                     max_lines=None, max_chars=None, **kwargs):
+    """Scan scratchpad items and return important ones, ordered by importance."""
     source = memory if memory is not None else scratchpad
     if source is None:
         source = notes if notes is not None else text
@@ -1027,22 +1132,43 @@ def review_scratchpad(memory="", scratchpad=None, notes=None, text=None, **kwarg
     important_keywords = {
         "important", "critical", "album", "artist", "genre", "release",
         "verified", "canonical", "note", "finding", "issue", "error",
+        "success", "staged",
     }
+    seen = set()
     for line in lines:
         stripped = line.strip()
-        if not stripped:
+        if not stripped or stripped in seen:
             continue
-        score = len(stripped)
+        seen.add(stripped)
+        score = min(len(stripped), 200)
         lower = stripped.lower()
         if any(kw in lower for kw in important_keywords):
             score += 100
         if stripped.startswith(("-", "*", "#", ">")):
             score += 25
+        # Prefer recent-looking timestamped entries when present.
+        if stripped.startswith("[") and "]" in stripped[:40]:
+            score += 50
         scored.append((score, stripped))
     if not scored:
         return ""
     scored.sort(key=lambda item: (-item[0], item[1]))
-    return "\n".join(item[1] for item in scored).strip()
+    if max_lines is not None:
+        try:
+            max_lines = int(max_lines)
+        except (TypeError, ValueError):
+            max_lines = None
+    if max_lines and max_lines > 0:
+        scored = scored[:max_lines]
+    result = "\n".join(item[1] for item in scored).strip()
+    if max_chars is not None:
+        try:
+            max_chars = int(max_chars)
+        except (TypeError, ValueError):
+            max_chars = None
+    if max_chars and len(result) > max_chars:
+        result = result[:max_chars].rstrip()
+    return result
 
 
 def scan_scratchpad(*args, **kwargs):
@@ -1135,10 +1261,21 @@ def write_successes_to_memory(successes=None, staged=None, *args, **kwargs):
             kwargs.get("items"), kwargs.get("tokens"),
         )
     items = list(items or [])
+    path = kwargs.get("path")
     if not items:
-        return read_memory(path=kwargs.get("path"))
-    text = "Successes: " + ", ".join(str(item) for item in items)
-    return append_memory(text, path=kwargs.get("path"))
+        return read_memory(path=path)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    existing = read_memory(path=path)
+    existing_lines = set(existing.splitlines())
+    new_lines = []
+    for item in items:
+        line = f"[{timestamp}] Success: {item}"
+        if line not in existing_lines:
+            new_lines.append(line)
+            existing_lines.add(line)
+    if not new_lines:
+        return existing
+    return append_memory("\n".join(new_lines) + "\n", path=path)
 
 
 def record_successes_to_memory(*args, **kwargs):
@@ -1700,6 +1837,10 @@ def _handle_sigint(signum, frame):
     if state is not None and state_path is not None:
         try:
             state["memory"] = read_memory()
+            metadata = memory_file_metadata()
+            state["memory_path"] = metadata["path"]
+            state["memory_mtime"] = metadata.get("mtime")
+            state["memory_sha256"] = metadata.get("sha256")
             save_state(Path(state_path), state)
         except Exception:
             pass
@@ -1782,11 +1923,20 @@ def main():
     done = set(state.get("staged_by_file", [])) if args.resume else set()
 
     # Scan and review importance of scratchpad items before starting a batch.
-    _scratchpad_raw = read_memory()
-    _scratchpad_reviewed = review_scratchpad(_scratchpad_raw)
-    if _scratchpad_reviewed and _scratchpad_reviewed != _scratchpad_raw.strip():
-        write_memory(_scratchpad_reviewed)
+    _memory_metadata = memory_file_metadata()
+    if memory_is_stale(state, path=_memory_metadata["path"]):
+        _scratchpad_raw = read_memory(path=_memory_metadata["path"])
+        _scratchpad_reviewed = review_scratchpad(_scratchpad_raw)
+        if _scratchpad_reviewed and _scratchpad_reviewed != _scratchpad_raw.strip():
+            write_memory(_scratchpad_reviewed, path=_memory_metadata["path"])
+            _memory_metadata = memory_file_metadata(path=_memory_metadata["path"])
+    else:
+        _scratchpad_raw = state.get("memory", "") or read_memory(path=_memory_metadata["path"])
+        _scratchpad_reviewed = review_scratchpad(_scratchpad_raw)
     state["memory"] = _scratchpad_reviewed or _scratchpad_raw
+    state["memory_path"] = _memory_metadata["path"]
+    state["memory_mtime"] = _memory_metadata.get("mtime")
+    state["memory_sha256"] = _memory_metadata.get("sha256")
     if run_log:
         run_log.write("scratchpad_reviewed", batch=0,
                       original_chars=len(_scratchpad_raw or ""),
@@ -1958,6 +2108,10 @@ def main():
             sorted(set(unresolved_names) - set(state.get("failed_by_file", [])))
         )
         state["memory"] = read_memory()
+        _memory_metadata = memory_file_metadata()
+        state["memory_path"] = _memory_metadata["path"]
+        state["memory_mtime"] = _memory_metadata.get("mtime")
+        state["memory_sha256"] = _memory_metadata.get("sha256")
         save_state(args.state, state)
 
         print(
