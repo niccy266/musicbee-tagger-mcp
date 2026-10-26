@@ -125,7 +125,7 @@ def heuristic_flags(candidates: List[str]) -> List[Dict[str, str]]:
         if "  " in name or name != name.strip():
             notes.append("whitespace debris")
         if any(0xE000 <= ord(c) <= 0xF8FF for c in name) or re.search(
-            "Ã[\u0080-\u00bf]", name):
+            "Ã[^\x20-\x7e]", name):
             notes.append("mojibake pattern — likely encoding debris")
         if notes:
             flags.append({"artist": name, "flags": "; ".join(notes)})
