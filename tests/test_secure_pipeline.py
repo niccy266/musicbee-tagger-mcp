@@ -255,6 +255,7 @@ def test_apply_staged_not_in_mcp_server():
         "list_batch_operations",
         "update_batch_operation",
         "preview_tags",
+        "web_search",
         "stage_tag_changes",
         "list_staged_changes",
         "get_staged_change",
