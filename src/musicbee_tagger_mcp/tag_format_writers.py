@@ -4,7 +4,7 @@ All field routing lives in ``field_map.FIELD_MAP``; these routines only
 know how to physically set frames/comments/atoms for their format.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from mutagen.flac import FLAC
 from mutagen.id3 import ID3, TXXX, UFID
@@ -12,6 +12,17 @@ from mutagen.mp4 import MP4, MP4FreeForm
 from mutagen.oggvorbis import OggVorbis
 
 from .field_map import FIELD_MAP, id3_frame_class
+
+
+def _tag_values(value: Any) -> List[Any]:
+    """Normalize a tag value to a list, preserving native multi-value lists.
+
+    Strings split on the canonical multi-artist separator ("; ") only when
+    they came through as one string but represent multiple artists.
+    """
+    if isinstance(value, (list, tuple)):
+        return [v for v in value if str(v).strip()]
+    return [str(value)]
 
 
 def _tag_value(value: Any) -> str:
@@ -50,8 +61,7 @@ def write_vorbis(audio: FLAC | OggVorbis, new_tags: Dict[str, Any]) -> None:
     """Write canonical fields to a Vorbis comment tag (FLAC / OGG)."""
     for field, spec in FIELD_MAP.items():
         if spec.vorbis is not None and new_tags.get(field) is not None:
-            audio[spec.vorbis] = (_genre_values(new_tags[field]) if field == "genre"
-                                  else [_tag_value(new_tags[field])])
+            audio[spec.vorbis] = _tag_values(new_tags[field])
     audio.save()
 
 
@@ -70,5 +80,5 @@ def write_mp4(audio: MP4, new_tags: Dict[str, Any]) -> None:
         elif field == "genre":
             audio[spec.mp4] = _genre_values(value)
         else:
-            audio[spec.mp4] = [_tag_value(value)]
+            audio[spec.mp4] = _tag_values(value)
     audio.save()
