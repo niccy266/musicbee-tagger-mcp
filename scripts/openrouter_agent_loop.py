@@ -117,7 +117,6 @@ Rules:
 - When useful, include a short visible progress summary in the assistant
   response. Do not provide private chain-of-thought.
 
-
 ## Artist splits
 When an artist field looks malformed (feat./ft./with/vs./x joins):
 1. Call propose_artist_split for candidates.
@@ -191,10 +190,16 @@ TOOLS = [
             "description": "Read existing tags and technical data for a file token.",
             "parameters": {
                 "type": "object",
-                "properties": {"token": {"type": "string"}},
-                "required": ["token"],
-            },
-        },
+                "properties": {
+                    "token": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "token"
+                ]
+            }
+        }
     },
     {
         "type": "function",
@@ -203,10 +208,16 @@ TOOLS = [
             "description": "Parse artist/title clues out of the file's name.",
             "parameters": {
                 "type": "object",
-                "properties": {"token": {"type": "string"}},
-                "required": ["token"],
-            },
-        },
+                "properties": {
+                    "token": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "token"
+                ]
+            }
+        }
     },
     {
         "type": "function",
@@ -215,67 +226,98 @@ TOOLS = [
             "description": "Detect and repair mojibake/encoding damage in text. Call only when text is visibly garbled or has encoding damage.",
             "parameters": {
                 "type": "object",
-                "properties": {"text": {"type": "string"}},
-                "required": ["text"],
-            },
-        },
+                "properties": {
+                    "text": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "text"
+                ]
+            }
+        }
     },
     {
         "type": "function",
         "function": {
             "name": "search_canonical_release",
-            "description": "Search MusicBrainz for the canonical release. "
-            "Returns candidates with MBIDs.",
+            "description": "Search MusicBrainz for the canonical release. Returns candidates with MBIDs.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "artist": {"type": "string"},
-                    "title": {"type": "string"},
-                    "duration_seconds": {"type": "integer"},
+                    "artist": {
+                        "type": "string"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "duration_seconds": {
+                        "type": "integer"
+                    }
                 },
-                "required": ["artist", "title"],
-            },
-        },
+                "required": [
+                    "artist",
+                    "title"
+                ]
+            }
+        }
     },
     {
         "type": "function",
         "function": {
             "name": "verify_mbid",
-            "description": "Verify a MusicBrainz candidate against the file "
-            "(duration/artist/title). Only verified matches may be staged.",
+            "description": "Verify a MusicBrainz candidate against the file (duration/artist/title). Only verified matches may be staged.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "token": {"type": "string"},
-                    "mb_recording_id": {"type": "string"},
+                    "token": {
+                        "type": "string"
+                    },
+                    "mb_recording_id": {
+                        "type": "string"
+                    }
                 },
-                "required": ["token", "mb_recording_id"],
-            },
-        },
+                "required": [
+                    "token",
+                    "mb_recording_id"
+                ]
+            }
+        }
     },
     {
         "type": "function",
         "function": {
             "name": "stage_tag_changes",
-            "description": "Stage corrected tags for a file (manifest only, "
-            "no audio write until apply).",
+            "description": "Stage corrected tags for a file (manifest only, no audio write until apply).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "token": {"type": "string"},
+                    "token": {
+                        "type": "string"
+                    },
                     "new_tags": {
                         "type": "object",
-                        "description": "Tag name -> value, e.g. "
-                        "{\"title\": \"...\", \"artist\": \"...\", \"album\": \"...\"}",
+                        "description": "Tag name -> value, e.g. {\"title\": \"...\", \"artist\": \"...\", \"album\": \"...\"}"
                     },
-                    "mb_recording_id": {"type": "string"},
-                    "mb_release_id": {"type": "string"},
-                    "forensic_score": {"type": "number"},
-                    "notes": {"type": "string"},
+                    "mb_recording_id": {
+                        "type": "string"
+                    },
+                    "mb_release_id": {
+                        "type": "string"
+                    },
+                    "forensic_score": {
+                        "type": "number"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
                 },
-                "required": ["token", "new_tags"],
-            },
-        },
+                "required": [
+                    "token",
+                    "new_tags"
+                ]
+            }
+        }
     },
     {
         "type": "function",
@@ -285,13 +327,23 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "stage_id": {"type": "string"},
-                    "expected_revision": {"type": "integer"},
-                    "reason": {"type": "string"},
+                    "stage_id": {
+                        "type": "string"
+                    },
+                    "expected_revision": {
+                        "type": "integer"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
                 },
-                "required": ["stage_id", "expected_revision", "reason"],
-            },
-        },
+                "required": [
+                    "stage_id",
+                    "expected_revision",
+                    "reason"
+                ]
+            }
+        }
     },
     {
         "type": "function",
@@ -301,15 +353,33 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "stage_id": {"type": "string"},
-                    "expected_revision": {"type": "integer"},
-                    "new_tags": {"type": "object"},
-                    "reason": {"type": "string"},
-                    "remove_fields": {"type": "array", "items": {"type": "string"}},
+                    "stage_id": {
+                        "type": "string"
+                    },
+                    "expected_revision": {
+                        "type": "integer"
+                    },
+                    "new_tags": {
+                        "type": "object"
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "remove_fields": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
                 },
-                "required": ["stage_id", "expected_revision", "new_tags", "reason"],
-            },
-        },
+                "required": [
+                    "stage_id",
+                    "expected_revision",
+                    "new_tags",
+                    "reason"
+                ]
+            }
+        }
     },
     {
         "type": "function",
@@ -318,18 +388,28 @@ TOOLS = [
             "description": "Inspect a staged change by stage_id.",
             "parameters": {
                 "type": "object",
-                "properties": {"stage_id": {"type": "string"}},
-                "required": ["stage_id"],
-            },
-        },
+                "properties": {
+                    "stage_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "stage_id"
+                ]
+            }
+        }
     },
     {
         "type": "function",
         "function": {
             "name": "list_staged_changes",
             "description": "List all pending staged changes.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     },
     {
         "type": "function",
@@ -339,12 +419,18 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string"},
-                    "max_results": {"type": "integer"},
+                    "query": {
+                        "type": "string"
+                    },
+                    "max_results": {
+                        "type": "integer"
+                    }
                 },
-                "required": ["query"],
-            },
-        },
+                "required": [
+                    "query"
+                ]
+            }
+        }
     },
     {
         "type": "function",
@@ -354,12 +440,19 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "token": {"type": "string"},
-                    "reason": {"type": "string"},
+                    "token": {
+                        "type": "string"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
                 },
-                "required": ["token", "reason"],
-            },
-        },
+                "required": [
+                    "token",
+                    "reason"
+                ]
+            }
+        }
     },
     {
         "type": "function",
@@ -368,18 +461,28 @@ TOOLS = [
             "description": "Call when every file in the batch is resolved.",
             "parameters": {
                 "type": "object",
-                "properties": {"summary": {"type": "string"}},
-                "required": ["summary"],
-            },
-        },
+                "properties": {
+                    "summary": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "summary"
+                ]
+            }
+        }
     },
     {
         "type": "function",
         "function": {
             "name": "read_memory",
             "description": "Read the persistent agent scratchpad/memory file.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     },
     {
         "type": "function",
@@ -388,24 +491,19 @@ TOOLS = [
             "description": "Replace the persistent agent scratchpad/memory file.",
             "parameters": {
                 "type": "object",
-                "properties": {"text": {"type": "string"}, "mode": {"type": "string"}},
-                "required": ["text"],
-
-            "name": "propose_artist_split",
-            "description": (
-                "Mechanically split a malformed artist field into candidate "
-                "artists (feat./ft./with/vs./x/semicolon markers)."
-            ),
-            "parameters": {
-                "type": "object",
                 "properties": {
-                    "artist_field": {"type": "string"},
-                    "split_ampersand": {"type": "boolean"},
-                    "split_comma": {"type": "boolean"},
+                    "text": {
+                        "type": "string"
+                    },
+                    "mode": {
+                        "type": "string"
+                    }
                 },
-                "required": ["artist_field"],
-            },
-        },
+                "required": [
+                    "text"
+                ]
+            }
+        }
     },
     {
         "type": "function",
@@ -414,24 +512,16 @@ TOOLS = [
             "description": "Append text to the persistent agent scratchpad/memory file.",
             "parameters": {
                 "type": "object",
-                "properties": {"text": {"type": "string"}},
-                "required": ["text"],
-
-            "name": "search_musicbrainz_artist",
-            "description": (
-                "Confirm a candidate artist exists as a MusicBrainz artist "
-                "entity. An empty result means the name is unknown — treat "
-                "the split as suspect."
-            ),
-            "parameters": {
-                "type": "object",
                 "properties": {
-                    "name": {"type": "string"},
-                    "limit": {"type": "integer"},
+                    "text": {
+                        "type": "string"
+                    }
                 },
-                "required": ["name"],
-            },
-        },
+                "required": [
+                    "text"
+                ]
+            }
+        }
     },
     {
         "type": "function",
@@ -440,47 +530,105 @@ TOOLS = [
             "description": "Return the last seen tracks (up to 20 by default).",
             "parameters": {
                 "type": "object",
-                "properties": {"limit": {"type": "integer"}},
-                "required": [],
-
-            "name": "verify_artists_on_recording",
-            "description": (
-                "Check each candidate artist is actually credited on the "
-                "MusicBrainz recording. Evidence, not proof — weigh partial "
-                "matches against known collaborations."
-            ),
+                "properties": {
+                    "limit": {
+                        "type": "integer"
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_artist_split",
+            "description": "Mechanically split a malformed artist field into candidate artists (feat./ft./with/vs./x/semicolon markers).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "recording_id": {"type": "string"},
+                    "artist_field": {
+                        "type": "string"
+                    },
+                    "split_ampersand": {
+                        "type": "boolean"
+                    },
+                    "split_comma": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "artist_field"
+                ]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_musicbrainz_artist",
+            "description": "Confirm a candidate artist exists as a MusicBrainz artist entity. An empty result means the name is unknown \u2014 treat the split as suspect.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "limit": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "verify_artists_on_recording",
+            "description": "Check each candidate artist is actually credited on the MusicBrainz recording. Evidence, not proof \u2014 weigh partial matches against known collaborations.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recording_id": {
+                        "type": "string"
+                    },
                     "candidate_artists": {
                         "type": "array",
-                        "items": {"type": "string"},
-                    },
+                        "items": {
+                            "type": "string"
+                        }
+                    }
                 },
-                "required": ["recording_id", "candidate_artists"],
-            },
-        },
+                "required": [
+                    "recording_id",
+                    "candidate_artists"
+                ]
+            }
+        }
     },
     {
         "type": "function",
         "function": {
             "name": "flag_suspicious_artists",
-            "description": (
-                "Heuristic garble/debris flags (short tokens, mojibake, "
-                "casing anomalies) for candidate artists."
-            ),
+            "description": "Heuristic garble/debris flags (short tokens, mojibake, casing anomalies) for candidate artists.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "candidate_artists": {
                         "type": "array",
-                        "items": {"type": "string"},
-                    },
+                        "items": {
+                            "type": "string"
+                        }
+                    }
                 },
-                "required": ["candidate_artists"],
-            },
-        },
+                "required": [
+                    "candidate_artists"
+                ]
+            }
+        }
     },
 ]
 
@@ -642,11 +790,6 @@ LOCAL_TOOLS = {
     "get_staged_change": get_staged_change,
     "list_staged_changes": lambda: list_staged_changes(),
     "web_search": lambda query, max_results=5: web_search(query, max_results),
-
-    "propose_artist_split": propose_artist_split,
-    "search_musicbrainz_artist": search_musicbrainz_artist,
-    "verify_artists_on_recording": verify_artists_on_recording,
-    "flag_suspicious_artists": flag_suspicious_artists,
 }
 
 
