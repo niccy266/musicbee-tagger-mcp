@@ -88,7 +88,7 @@ def verify_recording_mbid(
         top_release = parsed_releases[0]
 
     return {
-        "verified": confidence >= 75.0 and (duration_diff is None or duration_diff <= 6.0),
+        "verified": confidence >= 75.0 and (duration_diff is None or duration_diff <= 15.0),
         "confidence": round(confidence, 1),
         "recording_id": recording_id,
         "mb_title": title,
