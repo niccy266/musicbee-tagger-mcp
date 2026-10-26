@@ -20,8 +20,10 @@ def read_track_metadata(token: str) -> Dict[str, Any]:
     except Exception:
         # File-reader exceptions may include the absolute path.
         return {"error": "Unable to read track metadata"}
+
     metadata.pop("file_path", None)
     return metadata
+
 
 
 def extract_filename_clues(token: str) -> Dict[str, Any]:
@@ -57,6 +59,8 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
         except Exception:
             # File-reader exceptions may include the absolute path.
             briefs.append({"token": token, "error": "Unable to read track metadata"})
+
+
     return briefs
 
 

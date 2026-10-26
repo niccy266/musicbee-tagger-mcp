@@ -57,7 +57,14 @@ class FileRegistry:
         try:
             normalized_token = str(uuid.UUID(token))
         except (TypeError, ValueError, AttributeError):
-            raise KeyError("Unknown file token") from None
+            # Support the short aliases shown to agents when they uniquely
+            # identify one registered token.  This keeps read_track_metadata and
+            # related tools usable if a caller passes an abbreviated token.
+            candidates = self._matching_tokens(token)
+            if len(candidates) == 1:
+                normalized_token = next(iter(candidates))
+            else:
+                raise KeyError("Unknown file token") from None
 
         if normalized_token in self._store:
             return self._store[normalized_token]
@@ -75,6 +82,26 @@ class FileRegistry:
 
         self._store[normalized_token] = path
         return path
+
+    def _matching_tokens(self, prefix: str) -> set[str]:
+        """Return registered full tokens uniquely matching a short prefix."""
+        if not isinstance(prefix, str) or len(prefix.strip()) < 4:
+            return set()
+        needle = prefix.strip().lower()
+        candidates: set[str] = set()
+        for token in self._store:
+            if token.lower().startswith(needle):
+                candidates.add(token)
+        if self.directory is not None:
+            for record_path in self.directory.glob("*.json"):
+                try:
+                    token = str(uuid.UUID(record_path.stem))
+                except ValueError:
+                    continue
+                if token.lower().startswith(needle):
+                    candidates.add(token)
+        return candidates
+
 
     def is_registered(self, token: str) -> bool:
         try:
