@@ -269,6 +269,7 @@ class JobStore:
 
         by_token = {track["token"]: track for track in job["tracks"]}
         released, unchanged = [], []
+        released_tracks = []
         for token in dict.fromkeys(tokens):
             track = by_token.get(token)
             if track is None or track["status"] != "in_progress":
@@ -277,8 +278,16 @@ class JobStore:
             track["status"] = "pending"
             track["error"] = None
             released.append(token)
+            released_tracks.append(track)
 
         if released:
+            # Move released tracks to the end of the queue so problematic
+            # tracks are not retried before other pending work.
+            released_tokens = {track["token"] for track in released_tracks}
+            job["tracks"] = [
+                track for track in job["tracks"]
+                if track["token"] not in released_tokens
+            ] + released_tracks
             try:
                 self._save(job)
             except RuntimeError as error:
