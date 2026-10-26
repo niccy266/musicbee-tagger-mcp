@@ -45,8 +45,12 @@ from musicbee_tagger_mcp.tools.musicbrainz import (  # noqa: E402
     verify_mbid,
 )
 from musicbee_tagger_mcp.tools.tags import (  # noqa: E402
+    amend_staged_changes,
+    get_staged_change,
+    list_staged_changes,
     preview_tags,
     stage_tag_changes,
+    withdraw_staged_change,
 )
 from musicbee_tagger_mcp.tools.text import repair_mojibake  # noqa: E402
 from musicbee_tagger_mcp.job_store import JobStore  # noqa: E402
@@ -97,8 +101,12 @@ Rules:
 - Before a tool call, include a concise visible justification for why it is needed.
 - Use tokens exactly as given; never invent tokens.
 - One file at a time; do not revisit a file you already staged or marked
-  unresolved. Make at most one tool call per turn; never batch calls for
-  multiple files.
+  unresolved, unless you are retracting your own mistake: use
+  withdraw_staged_change (then re-stage) or amend_staged_changes with a
+  path-free reason and the current revision. Make at most one tool call per
+  turn; never batch calls for multiple files.
+- You may use web_search for independent corroboration of artist/title/release
+  clues. Treat search results as research, not verified facts.
 - When every file in the batch is staged or explicitly marked unresolved in
   your final message, call finish_batch with a one-line summary.
 - Be concise in tool arguments; do not repeat file contents back.
@@ -244,6 +252,75 @@ TOOLS = [
                     "notes": {"type": "string"},
                 },
                 "required": ["token", "new_tags"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "withdraw_staged_change",
+            "description": "Retract a staged change you own so it cannot apply; use before re-staging a corrected version.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "stage_id": {"type": "string"},
+                    "expected_revision": {"type": "integer"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["stage_id", "expected_revision", "reason"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "amend_staged_changes",
+            "description": "Amend a pending staged change with corrected tags.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "stage_id": {"type": "string"},
+                    "expected_revision": {"type": "integer"},
+                    "new_tags": {"type": "object"},
+                    "reason": {"type": "string"},
+                    "remove_fields": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["stage_id", "expected_revision", "new_tags", "reason"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_staged_change",
+            "description": "Inspect a staged change by stage_id.",
+            "parameters": {
+                "type": "object",
+                "properties": {"stage_id": {"type": "string"}},
+                "required": ["stage_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_staged_changes",
+            "description": "List all pending staged changes.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for research clues about an artist, release, or track.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "max_results": {"type": "integer"},
+                },
+                "required": ["query"],
             },
         },
     },
@@ -403,6 +480,57 @@ def get_recent_tracks(limit=20, tracks=None):
 list_recent_tracks = get_recent_tracks
 recent_tracks = get_recent_tracks
 get_seen_tracks = get_recent_tracks
+def _web_search(query: str, max_results: int = 5) -> dict:
+    """Best-effort web search using DuckDuckGo's HTML endpoint."""
+    import html
+    import re
+    import urllib.parse
+    import urllib.request
+
+    query = (query or "").strip()
+    if not query:
+        return {"error": "query is required"}
+    if max_results < 1:
+        max_results = 5
+    url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(query)
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; MusicBeeTagger/1.0)"},
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except Exception as error:
+        return {"error": f"web search failed: {type(error).__name__}: {error}"}
+
+    results = []
+    # Result blocks contain a result__a link and result__snippet.
+    for match in re.finditer(
+        r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>.*?'
+        r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>',
+        body,
+        re.S,
+    ):
+        href, title, snippet = match.groups()
+        # DuckDuckGo wraps URLs in a redirect; unwrap uddg param when present.
+        parsed = urllib.parse.urlparse(href)
+        params = urllib.parse.parse_qs(parsed.query)
+        if "uddg" in params:
+            href = params["uddg"][0]
+        title = re.sub(r"<[^>]+>", "", html.unescape(title)).strip()
+        snippet = re.sub(r"<[^>]+>", "", html.unescape(snippet)).strip()
+        if title or href:
+            results.append({"title": title, "url": href, "snippet": snippet})
+        if len(results) >= max_results:
+            break
+    return {"query": query, "results": results}
+
+
+def web_search(query: str, max_results: int = 5) -> dict:
+    """Search the web for research clues about an artist, release, or track."""
+    return _web_search(query, max_results)
+
+
 LOCAL_TOOLS = {
     "read_memory": lambda: read_memory(),
     "write_memory": lambda text="", mode="replace": write_memory(text, mode=mode),
@@ -420,6 +548,11 @@ LOCAL_TOOLS = {
     "search_canonical_release": _search_canonical_release,
     "verify_mbid": _verify_mbid,
     "stage_tag_changes": stage_tag_changes,
+    "amend_staged_changes": amend_staged_changes,
+    "withdraw_staged_change": withdraw_staged_change,
+    "get_staged_change": get_staged_change,
+    "list_staged_changes": lambda: list_staged_changes(),
+    "web_search": lambda query, max_results=5: web_search(query, max_results),
 }
 
 
@@ -964,6 +1097,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         },
     ]
     staged, unresolved = [], []
+    staged_stage_ids = {}
     verified_by_token = {}
 
     turn_cap = max(1, max_turns) * max(1, len(tokens))
@@ -1145,9 +1279,25 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                 if "error" not in result:
                     staged.append(token)
                     state.setdefault("errors", {}).pop(token, None)
+                    if isinstance(result, dict) and result.get("stage_id"):
+                        staged_stage_ids[token] = result["stage_id"]
                     print(f"  staged: {token}", flush=True)
                 else:
                     state.setdefault("errors", {})[token] = str(result["error"])
+            elif name == "withdraw_staged_change":
+                stage_id = args.get("stage_id")
+                token_for_stage = None
+                for tok, sid in staged_stage_ids.items():
+                    if sid == stage_id:
+                        token_for_stage = tok
+                        break
+                if "error" not in result and token_for_stage:
+                    if token_for_stage in staged:
+                        staged.remove(token_for_stage)
+                    if token_for_stage in (state.get("staged") or []):
+                        state["staged"] = [t for t in state["staged"] if t != token_for_stage]
+                    staged_stage_ids.pop(token_for_stage, None)
+                    print(f"  withdrew: {token_for_stage} ({stage_id})", flush=True)
             elif name == "verify_mbid" and isinstance(result, dict):
                 if result.get("verified") is True and float(result.get("confidence", 0)) >= 75.0:
                     verified_by_token[token] = result
