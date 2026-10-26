@@ -343,3 +343,4 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Corrected over-indented MusicBrainz genre auto-inclusion block in `scripts/openrouter_agent_loop.py` so it runs as part of stage verification handling instead of being unreachable inside the release-id assignment.
 - Validation: `py_compile` passed; `tests/test_openrouter_agent_loop.py` passed (4 passed); `git diff --check` passed. No audio files were modified.
 
+
