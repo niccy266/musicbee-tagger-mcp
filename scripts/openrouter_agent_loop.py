@@ -367,7 +367,7 @@ def _search_canonical_release(artist, title, duration_seconds=None):
     )
 
 
-def _verify_mbid(token, mb_recording_id):
+def _verify_mbid(token, mb_recording_id, forensic_score=None, **kwargs):
     metadata = read_track_metadata(token)
     if "error" in metadata:
         return metadata
@@ -377,6 +377,8 @@ def _verify_mbid(token, mb_recording_id):
         expected_artist=tags.get("artist"),
         expected_title=tags.get("title"),
         duration_sec=metadata.get("duration_seconds"),
+        forensic_score=forensic_score,
+        **kwargs,
     )
 
 
