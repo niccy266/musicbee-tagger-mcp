@@ -241,6 +241,7 @@ def test_apply_staged_not_in_mcp_server():
     assert "apply_tags_to_file" not in registered_tool_names
     assert registered_tool_names == {
         "next_batch",
+        "preview_batch",
         "complete_batch",
         "release_batch",
         "job_status",

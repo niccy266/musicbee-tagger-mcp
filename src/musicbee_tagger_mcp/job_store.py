@@ -213,6 +213,24 @@ class JobStore:
         remaining = sum(1 for t in job["tracks"] if t["status"] == "pending")
         return {"batch": claimed, "remaining": remaining, "job_id": job_id}
 
+    def preview_batch(self, job_id: str, size: int = 10) -> Dict[str, Any]:
+        """Preview the next batch without claiming it (non-mutating)."""
+        if not isinstance(size, int) or size < 1 or size > 50:
+            return {"error": "Batch size must be between 1 and 50"}
+        try:
+            job = self.load_job(job_id)
+        except ValueError as error:
+            return {"error": str(error)}
+        preview = [
+            {"token": t["token"], "display_name": t["display_name"]}
+            for t in job["tracks"]
+            if t["status"] == "pending"
+        ][:size]
+        counts = {status: 0 for status in STATUSES}
+        for t in job["tracks"]:
+            counts[t["status"]] = counts.get(t["status"], 0) + 1
+        return {"preview": preview, "remaining": counts["pending"], "job_id": job_id}
+
     def peek_pending(self, job_id: str, size: int = 10) -> List[str]:
         """Return display names of the next pending tracks without claiming them."""
         if not isinstance(size, int) or size < 1 or size > 100:

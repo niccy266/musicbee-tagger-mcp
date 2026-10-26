@@ -21,6 +21,11 @@ def next_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
     return get_job_store().next_batch(job_id, size=size)
 
 
+def preview_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
+    """Preview the next batch of tokens without claiming them."""
+    return get_job_store().preview_batch(job_id, size=size)
+
+
 def complete_batch(job_id: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Report per-token outcomes back to the job."""
     return get_job_store().complete_batch(job_id, results)
@@ -46,6 +51,11 @@ def register_playlist_tools(app) -> None:
     def next_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
         """Get the next batch (default 10) of unprocessed tokens for a job."""
         return get_job_store().next_batch(job_id, size=size)
+
+    @app.tool()
+    def preview_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
+        """Preview the next batch (default 10) without claiming any tracks."""
+        return get_job_store().preview_batch(job_id, size=size)
 
     @app.tool()
     def complete_batch(job_id: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
