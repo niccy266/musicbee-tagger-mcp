@@ -930,61 +930,109 @@ def build_context_block(prior_context="", lookahead=None, previous_tracks=None,
                 + trimmed
             )
     return "\n\n".join(sections)
-    """Build the deduplicated context block injected into a batch user message."""
-    if previous_tracks is None:
-        previous_tracks = _first_not_none(
-            prior_tracks, previous_track_names, kwargs.get("previous"),
-            kwargs.get("prior_track_names"),
-        )
-    if future_tracks is None:
-        future_tracks = _first_not_none(
-            upcoming_tracks, future_track_names, kwargs.get("future"),
-            kwargs.get("upcoming"), kwargs.get("lookahead_tracks"),
-        )
-    if agent_thought is None:
-        agent_thought = _first_not_none(
-            thought, prior_thought, thought_context,
-            kwargs.get("thought"), kwargs.get("prior_thought"),
-            kwargs.get("agent_thought_context"),
-        )
-    if thought_tokens is not None:
-        max_thought_tokens = thought_tokens
-    if thought_token_budget is not None:
-        max_thought_tokens = thought_token_budget
-    if kwargs.get("max_thought_tokens") is not None:
-        max_thought_tokens = kwargs["max_thought_tokens"]
 
-    previous_names = _as_track_name_list(previous_tracks)
-    future_names = _as_track_name_list(future_tracks)
-    if not future_names and lookahead:
-        future_names = _as_track_name_list(lookahead)
 
-    sections = []
-    if previous_names:
-        sections.append(
-            "Previously processed tracks (use for album/series and release consistency):\n"
-            + "\n".join(f"- {name}" for name in previous_names)
-        )
-    if prior_context and str(prior_context).strip():
-        sections.append(
-            "Prior context from earlier batches (compressed plaintext):\n"
-            + str(prior_context).strip()
-        )
-    if future_names:
-        sections.append(
-            "Upcoming files not in this batch (look-ahead; use for album/series detection):\n"
-            + "\n".join(f"- {name}" for name in future_names)
-        )
-    if agent_thought:
-        deduplicated = _deduplicate_thought(str(agent_thought))
-        trimmed = _trim_to_tokens(deduplicated, max_thought_tokens)
-        if trimmed.strip():
-            sections.append(
-                f"Recent agent thought (up to {max_thought_tokens} tokens; "
-                "system prompt and message metadata stripped):\n"
-                + trimmed
-            )
-    return "\n\n".join(sections)
+def _remove_failed_output(context, failed=None, failed_names=None, **kwargs):
+    """Remove failed/unresolved output lines from a context string."""
+    failed = set(failed or failed_names or kwargs.get("failed_files") or [])
+    text = str(context or "").strip()
+    if not text:
+        return ""
+    failed_strs = {str(item).strip() for item in failed if str(item).strip()}
+    lines = text.splitlines()
+    kept = []
+    for line in lines:
+        is_failed = False
+        for ident in failed_strs:
+            if ident and ident in line:
+                is_failed = True
+                break
+        if not is_failed:
+            kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def compact_context(prior_context="", context="", failed=None, failed_names=None,
+                    failed_files=None, max_chars=None, max_context_chars=None,
+                    **kwargs):
+    """Compact prior context by removing failed output and trimming to budget."""
+    text = str(prior_context if prior_context is not None else context or "").strip()
+    if not text:
+        return ""
+    failed_set = set(failed or failed_names or failed_files or kwargs.get("failed") or [])
+    if kwargs.get("unresolved"):
+        failed_set.update(kwargs["unresolved"])
+    if kwargs.get("failed_by_file"):
+        failed_set.update(kwargs["failed_by_file"])
+    compacted = _remove_failed_output(text, failed=failed_set)
+    budget = max_chars if max_chars is not None else max_context_chars
+    if budget is None:
+        budget = kwargs.get("context_chars")
+    if budget is not None:
+        try:
+            budget = int(budget)
+        except (TypeError, ValueError):
+            budget = None
+    if budget and len(compacted) > budget:
+        compacted = compacted[-budget:]
+    return compacted.strip()
+
+
+def compact_prior_context(*args, **kwargs):
+    return compact_context(*args, **kwargs)
+
+
+def review_scratchpad(memory="", scratchpad=None, notes=None, text=None, **kwargs):
+    """Scan scratchpad items and return the important ones, ordered by importance."""
+    source = memory if memory is not None else scratchpad
+    if source is None:
+        source = notes if notes is not None else text
+    if source is None:
+        source = kwargs.get("memory") or kwargs.get("scratchpad") or ""
+    text_value = str(source or "").strip()
+    if not text_value:
+        return ""
+    lines = text_value.splitlines()
+    scored = []
+    important_keywords = {
+        "important", "critical", "album", "artist", "genre", "release",
+        "verified", "canonical", "note", "finding", "issue", "error",
+    }
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        score = len(stripped)
+        lower = stripped.lower()
+        if any(kw in lower for kw in important_keywords):
+            score += 100
+        if stripped.startswith(("-", "*", "#", ">")):
+            score += 25
+        scored.append((score, stripped))
+    if not scored:
+        return ""
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return "\n".join(item[1] for item in scored).strip()
+
+
+def scan_scratchpad(*args, **kwargs):
+    return review_scratchpad(*args, **kwargs)
+
+
+def review_memory(*args, **kwargs):
+    return review_scratchpad(*args, **kwargs)
+
+
+def scan_memory(*args, **kwargs):
+    return review_scratchpad(*args, **kwargs)
+
+
+def review_memory_items(*args, **kwargs):
+    return review_scratchpad(*args, **kwargs)
+
+
+def remove_failed_output(*args, **kwargs):
+    return _remove_failed_output(*args, **kwargs)
 
 
 # Public aliases for tests and callers that use alternate helper names.
@@ -1523,6 +1571,17 @@ def main():
 
     done = set(state.get("staged_by_file", [])) if args.resume else set()
 
+    # Scan and review importance of scratchpad items before starting a batch.
+    _scratchpad_raw = read_memory()
+    _scratchpad_reviewed = review_scratchpad(_scratchpad_raw)
+    if _scratchpad_reviewed and _scratchpad_reviewed != _scratchpad_raw.strip():
+        write_memory(_scratchpad_reviewed)
+    state["memory"] = _scratchpad_reviewed or _scratchpad_raw
+    if run_log:
+        run_log.write("scratchpad_reviewed", batch=0,
+                      original_chars=len(_scratchpad_raw or ""),
+                      reviewed_chars=len(_scratchpad_reviewed or ""))
+
     consecutive_incomplete = 0
     batch_number = 0
     while True:
@@ -1670,8 +1729,12 @@ def main():
             f"summary={batch_state.get('summary', '')}"
         )
         state["context"] = (state.get("context", "") + "\n" + context_line).strip()
-        if len(state["context"]) > args.context_chars:
-            state["context"] = state["context"][-args.context_chars:]
+        # Compact the context: remove failed output and trim to budget.
+        _failed_for_context = set(state.get("failed_by_file", []) or [])
+        state["context"] = compact_context(
+            state["context"], failed=_failed_for_context,
+            max_chars=args.context_chars,
+        )
         state.setdefault("staged_by_file", []).extend(sorted(set(staged_names) - done))
         state.setdefault("failed_by_file", []).extend(
             sorted(set(unresolved_names) - set(state.get("failed_by_file", [])))
