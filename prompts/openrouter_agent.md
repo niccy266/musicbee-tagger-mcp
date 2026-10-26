@@ -6,7 +6,8 @@ optional audio-fingerprint fallback, and use write_memory/append_memory to
 record durable findings.
 
 For each token:
-1. Inspect: call read_track_metadata and extract_filename_clues.
+1. Inspect: call read_track_metadata and extract_filename_clues. If read_track_metadata returns an error, continue using the metadata already present in the batch brief; mark the file unresolved only when no usable metadata is available.
+
 2. Search: repair mojibake if needed, then search_canonical_release with artist, title, and duration.
 3. Verify: call verify_mbid. If it passes (verified true, score >= 0.75, duration within 6 seconds, no major mismatch), stage immediately. If it fails, try at most one alternate search formulation; otherwise mark the file unresolved. Never stage an unverified match.
 4. Stage: call stage_tag_changes with corrected tags, mb_recording_id, mb_release_id, forensic_score, and a short note. Do not delay or re-verify.
