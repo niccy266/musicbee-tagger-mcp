@@ -3,11 +3,29 @@
 import sys
 from typing import TextIO
 
+import uuid
+
+from .playlist import parse_m3u_playlist
 from .file_registry import get_registry
 from .job_store import get_job_store
 from .tools.files import register_playlist
 
 
+def _progress_bar(output_stream: TextIO, current: int, total: int) -> None:
+    """Render a compact, in-place registration progress bar."""
+    if total <= 0:
+        return
+    width = 30
+    filled = int(width * current / total)
+    bar = "#" * filled + "-" * (width - filled)
+    print(
+        f"\rRegistering: [{bar}] {current}/{total}",
+        end="",
+        file=output_stream,
+        flush=True,
+    )
+    if current >= total:
+        print(file=output_stream, flush=True)
 def run(
     input_stream: TextIO = sys.stdin,
     output_stream: TextIO = sys.stdout,
@@ -35,19 +53,31 @@ def run(
         print("No playlist path was entered.", file=output_stream)
         return 1
 
-    result = register_playlist(playlist_path, get_registry())
+    playlist_name = playlist_path.replace("\\", "/").rsplit("/", 1)[-1]
+    job_id = str(uuid.uuid4())
+    get_job_store().create_job([], playlist_name=playlist_name, skipped=0, job_id=job_id)
+    print(
+        f"Job id: {job_id} (registration in progress)",
+        file=output_stream,
+        flush=True,
+    )
+
+    result = register_playlist(
+        playlist_path,
+        get_registry(),
+        get_job_store(),
+        job_id,
+        progress_callback=lambda current, total: _progress_bar(
+            output_stream, current, total
+        ),
+    )
     if "error" in result:
         print(f"Unable to register playlist: {result['error']}.", file=output_stream)
         return 1
 
-    job = get_job_store().create_job(
-        result["registered"],
-        playlist_name=result["playlist_name"],
-        skipped=len(result["skipped"]),
-    )
-    job_id = job["job_id"]
+    registered_count = len(result["registered"])
     print(
-        f"Registered {job['registered']} audio file(s) as playlist job "
+        f"Registered {registered_count} audio file(s) as playlist job "
         f"{job_id}.",
         file=output_stream,
     )
