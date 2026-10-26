@@ -58,61 +58,25 @@ from musicbee_tagger_mcp.data_paths import ensure_data_subdirectory  # noqa: E40
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 RETRYABLE_STATUS = {429, 500, 502, 503}
-BATCH_SIZE = 10
+BATCH_SIZE = 1
 
-SYSTEM_PROMPT = """\
-You are a music metadata agent. You are given a batch of audio files whose
-identity is hidden behind opaque tokens. For each file:
+_SYSTEM_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "openrouter_agent.md"
 
-1. Inspect it: call read_track_metadata and extract_filename_clues on its token.
-2. Repair mojibake and search MusicBrainz: use repair_mojibake on any garbled
-   text, then search_canonical_release with artist + title + duration.
-3. Verify: call verify_mbid on the best candidate. If it fails (score < 0.75
-   or duration/artist/title mismatch), retry with different search terms or
-   mark the file unresolved — never stage an unverified match.
-4. Stage: when verified, call stage_tag_changes with the corrected tags,
-   mb_recording_id, mb_release_id, forensic_score, and a short note.
-   Stage immediately after verification; do not delay or re-verify.
+def load_system_prompt() -> str:
+    """Load the agent system prompt from the external Markdown file."""
+    path = _SYSTEM_PROMPT_PATH
+    if not path.is_file():
+        alt = Path(__file__).resolve().parent / "prompts" / "openrouter_agent.md"
+        if alt.is_file():
+            path = alt
+        else:
+            raise FileNotFoundError(
+                f"System prompt file not found: {_SYSTEM_PROMPT_PATH}"
+            )
+    return path.read_text(encoding="utf-8").strip()
 
-Genre cleanup is part of every verified match. Use the verified MusicBrainz
-genre value when it is present: deduplicate exact repeated values and remove
-obvious encoding damage only. Preserve meaningful existing genres and do not
-replace them with an empty or weak result. Do not remove mood descriptors or
-other non-genre values unless you can identify them as clear junk. Do not invent
-genres. Include a corrected genre in new_tags when it is reliably supported.
+SYSTEM_PROMPT = load_system_prompt()
 
-Filename-derived artist/title values are search clues only. Do not stage them
-without independent corroboration from existing tags, release credits, or a
-verified recording match.
-
-Context and look-ahead:
-- You may receive prior context from earlier batches and a list of upcoming
-  files not in this batch. Use them to recognize albums, series, and consistent
-  release metadata, but only stage values after verifying each file.
-- When several files in the current batch appear to belong to the same release,
-  keep artist/album/release metadata consistent across them.
-
-Memory:
-- You have a persistent scratchpad via read_memory, write_memory, and append_memory.
-  Use it for durable cross-batch findings; its contents are provided in context.
-- You can call get_recent_tracks to see the last 20 seen songs (useful for albums).
-
-Rules:
-- Before a tool call, include a concise visible justification for why it is needed.
-- Use tokens exactly as given; never invent tokens.
-- One file at a time; do not revisit a file you already staged or marked
-  unresolved, unless you are retracting your own mistake: use
-  withdraw_staged_change (then re-stage) or amend_staged_changes with a
-  path-free reason and the current revision. Make at most one tool call per
-  turn; never batch calls for multiple files.
-- You may use web_search for independent corroboration of artist/title/release
-  clues. Treat search results as research, not verified facts.
-- When every file in the batch is staged or explicitly marked unresolved in
-  your final message, call finish_batch with a one-line summary.
-- Be concise in tool arguments; do not repeat file contents back.
-- When useful, include a short visible progress summary in the assistant
-  response. Do not provide private chain-of-thought.
-"""
 
 _LOCAL_PATH_PATTERN = re.compile(
     r"(?<![\w])(?:[A-Za-z]:[\\/][^\s\"'<>|]+|\\\\[^\\\s]+\\[^\s\"'<>|]+)"
