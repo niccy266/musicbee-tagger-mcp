@@ -784,6 +784,9 @@ def main():
                         help="Maximum characters of prior-batch context to retain")
     parser.add_argument("--max-batches", type=int, default=None,
                         help="Stop after this many batches (useful for a trial run)")
+    parser.add_argument("--max-consecutive-incomplete", type=int, default=3,
+                        help="Stop after this many consecutive incomplete batches; 0 disables the limit")
+
     parser.add_argument("--max-turns", type=int, default=15,
                         help="Model turns allowed per file in a batch; batches loop until complete")
     parser.add_argument("--state", type=Path, default=Path("agent_state.json"))
@@ -831,6 +834,7 @@ def main():
 
     done = set(state.get("staged_by_file", [])) if args.resume else set()
 
+    consecutive_incomplete = 0
     batch_number = 0
     while True:
         if not debug_checkpoint(
@@ -966,8 +970,23 @@ def main():
         )
 
         if unprocessed:
-            print("Stopped after an incomplete batch; released tracks can be retried later.")
-            break
+            consecutive_incomplete += 1
+            print(
+                f"Incomplete batch: {len(unprocessed)} returned to pending "
+                f"(consecutive incomplete: {consecutive_incomplete})."
+            )
+            if (
+                args.max_consecutive_incomplete
+                and consecutive_incomplete >= args.max_consecutive_incomplete
+            ):
+                print(
+                    "Stopping after repeated incomplete batches; "
+                    "released tracks can be retried later."
+                )
+                break
+            continue
+
+        consecutive_incomplete = 0
 
         if args.max_batches is not None and batch_number >= args.max_batches:
             print(f"Stopped after requested limit of {args.max_batches} batch(es).")
