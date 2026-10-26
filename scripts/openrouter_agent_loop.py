@@ -53,6 +53,7 @@ from musicbee_tagger_mcp.tools.tags import (  # noqa: E402
     withdraw_staged_change,
 )
 from musicbee_tagger_mcp.tools.text import repair_mojibake  # noqa: E402
+from musicbee_tagger_mcp.tools.acrcloud import identify_acrcloud  # noqa: E402
 from musicbee_tagger_mcp.job_store import JobStore  # noqa: E402
 from musicbee_tagger_mcp.data_paths import ensure_data_subdirectory  # noqa: E402
 
@@ -359,6 +360,34 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "identify_acrcloud",
+            "description": "Identify a registered track using ACRCloud audio fingerprinting (opt-in fallback). Returns identification evidence only; never stages tags.",
+            "parameters": {
+                "type": "object",
+                "properties": {"token": {"type": "string"}},
+                "required": ["token"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tools",
+            "description": "List all tools available to the agent.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_all_tools",
+            "description": "List all tools available to the agent.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 def _search_canonical_release(artist, title, duration_seconds=None):
@@ -499,6 +528,34 @@ def web_search(query: str, max_results: int = 5) -> dict:
     return _web_search(query, max_results)
 
 
+class _ToolNameList(list):
+    """List of tool names that also supports dict-style access."""
+
+    def __getitem__(self, key):
+        if key == "tools":
+            return self
+        return super().__getitem__(key)
+
+
+def list_tools():
+    """Return the names of all tools available to the agent."""
+    names = sorted(
+        {
+            entry.get("function", {}).get("name")
+            for entry in TOOLS
+            if entry.get("function", {}).get("name")
+        }
+    )
+    return _ToolNameList(names)
+
+
+list_all_tools = list_tools
+
+
+def _identify_acrcloud(token):
+    return identify_acrcloud(token)
+
+
 LOCAL_TOOLS = {
     "read_memory": lambda: read_memory(),
     "write_memory": lambda text="", mode="replace": write_memory(text, mode=mode),
@@ -521,6 +578,9 @@ LOCAL_TOOLS = {
     "get_staged_change": get_staged_change,
     "list_staged_changes": lambda: list_staged_changes(),
     "web_search": lambda query, max_results=5: web_search(query, max_results),
+    "identify_acrcloud": lambda token: _identify_acrcloud(token),
+    "list_tools": lambda: list_tools(),
+    "list_all_tools": lambda: list_all_tools(),
 }
 
 
@@ -1165,7 +1225,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
             token = args.get("token")
             token_tools = {
                 "read_track_metadata", "extract_filename_clues", "verify_mbid",
-                "stage_tag_changes", "mark_unresolved",
+                "stage_tag_changes", "mark_unresolved", "identify_acrcloud",
             }
             if name in token_tools and token not in tokens:
                 result = {"error": "Token is not part of the active batch."}

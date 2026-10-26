@@ -343,3 +343,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Corrected over-indented MusicBrainz genre auto-inclusion block in `scripts/openrouter_agent_loop.py` so it runs as part of stage verification handling instead of being unreachable inside the release-id assignment.
 - Validation: `py_compile` passed; `tests/test_openrouter_agent_loop.py` passed (4 passed); `git diff --check` passed. No audio files were modified.
 
+### 2026-10-26 — Expose all agent tools including ACRCloud and memory listing
+- Added `identify_acrcloud` to the OpenRouter agent tool set and local dispatch, and added `list_tools`/`list_all_tools` so the agent can discover every available tool.
+- Updated the system prompt to state that the agent may use all tools, including `identify_acrcloud`, `write_memory`/`append_memory`, and `list_tools`.
+- Validation: `py_compile` passed; `tests/test_openrouter_agent_loop.py` passed (4 passed); `tests/test_secure_pipeline.py` passed (15 passed). No audio files were modified.
+
