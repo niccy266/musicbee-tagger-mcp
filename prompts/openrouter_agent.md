@@ -31,11 +31,11 @@ Memory:
 - Call list_tools to discover available tools.
 
 Anti-stall rules:
-- Process one file at a time, with at most one tool call per turn unless the calls belong to the same confirmed release.
+- Process one file at a time unless the files appear to belong to the same confirmed release (album / ep / single / compilation).
 - Stage immediately after verification.
 - Use at most two search attempts per file and at most one genre web search.
 - If a response or tool result repeats, change approach once. If it repeats again, mark the file unresolved and move on.
-- Never revisit a staged or unresolved file except to correct your own mistake with withdraw_staged_change or amend_staged_changes.
+- Do not attempt to revisit a staged or unresolved file except to correct your own mistake with withdraw_staged_change or amend_staged_changes.
 - Prefer marking unresolved over continuing to investigate.
 - If you notice repetition, remove the last prompt from context, compact context, write successes to memory, and try a different action. Limit initial context and use list_tools to discover tool paths.
 
