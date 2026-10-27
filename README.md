@@ -1,4 +1,4 @@
-﻿# MusicBee Tagger MCP
+# MusicBee Tagger MCP
 
 MusicBee Tagger MCP is a local stdio MCP server for investigating and proposing
 audio metadata corrections. It reads audio metadata, searches and verifies
@@ -62,7 +62,7 @@ Alternatively, download and extract a Windows release bundle, then run its
 installer while supplying the included wheel:
 
    ```powershell
-   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.4-py3-none-any.whl
+   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.5-py3-none-any.whl
    ```
 
    Before upgrading an existing installation, close MCP clients using the
@@ -210,11 +210,11 @@ no local audio or playlist paths in titles or details.
 
 ## Claude Desktop MCP Bundle
 
-The release builder creates `dist\musicbee-tagger-mcp-0.4.4.mcpb` for Claude
+The release builder creates `dist\musicbee-tagger-mcp-0.4.5.mcpb` for Claude
 Desktop on macOS and Linux, and builds
-`dist\musicbee-tagger-mcp-0.4.4-windows.mcpb` on Windows. Install the
+`dist\musicbee-tagger-mcp-0.4.5-windows.mcpb` on Windows. Install the
 Windows-specific bundle in Claude Desktop through **Settings > Extensions >
-Advanced settings > Install Extensionâ€¦**. It contains a self-contained server
+Advanced settings > Install Extension…**. It contains a self-contained server
 executable, so Claude does not need to set up `uv`, find Python on `PATH`, or
 move temporary files between drives. Build Windows release assets on Windows
 with `python -m pip install -e ".[release]"` before running

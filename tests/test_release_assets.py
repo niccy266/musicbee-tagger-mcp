@@ -304,7 +304,7 @@ def test_windows_mcpb_must_be_built_on_windows(tmp_path, monkeypatch):
     monkeypatch.setattr(release_builder.sys, "platform", "linux")
 
     try:
-        build_windows_mcpb_archive(tmp_path / "windows.mcpb", "0.4.4")
+        build_windows_mcpb_archive(tmp_path / "windows.mcpb", "0.4.5")
     except RuntimeError as error:
         assert "must be built on Windows" in str(error)
     else:

@@ -167,7 +167,7 @@ class ACRCloudProvider:
             data=body,
             headers={
                 "Content-Type": f"multipart/form-data; boundary={boundary}",
-                "User-Agent": "musicbee-tagger-mcp/0.4.4",
+                "User-Agent": "musicbee-tagger-mcp/0.4.5",
             },
             method=http_method,
         )
