@@ -104,7 +104,7 @@ def test_batch_brief_sanitizes_metadata_errors(tmp_path, tmp_audio, monkeypatch)
 
     result = inspection.get_batch_brief([token])
 
-    assert result == [{"token": token, "error": "Unable to read track metadata"}]
+    assert result == [{"token": token, "error": "parse_error"}]
     assert str(tmp_path) not in json.dumps(result)
 
 

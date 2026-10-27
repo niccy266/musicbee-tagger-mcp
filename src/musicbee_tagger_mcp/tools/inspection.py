@@ -7,6 +7,17 @@ from ..filename_parser import extract_clues_from_filename
 from ..metadata_reader import read_audio_metadata
 
 
+def _read_error_reason(exc: Exception) -> str:
+    """Map a metadata-read failure to a path-safe reason code."""
+    if isinstance(exc, FileNotFoundError):
+        return "file_missing"
+    if isinstance(exc, PermissionError):
+        return "permission_denied"
+    if isinstance(exc, ValueError):
+        return "unsupported_format"
+    return "parse_error"
+
+
 def read_track_metadata(token: str) -> Dict[str, Any]:
     """Read metadata for a registered track without returning its path."""
     try:
@@ -17,9 +28,9 @@ def read_track_metadata(token: str) -> Dict[str, Any]:
         return {"error": "Unknown file token"}
     try:
         metadata = read_audio_metadata(str(path))
-    except Exception:
+    except Exception as exc:
         # File-reader exceptions may include the absolute path.
-        return {"error": "Unable to read track metadata"}
+        return {"error": _read_error_reason(exc)}
 
     metadata.pop("file_path", None)
     return metadata
@@ -47,18 +58,23 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
     for token in tokens:
         try:
             path = registry.resolve(token)
+        except KeyError:
+            briefs.append({"token": token, "error": "unknown_token"})
+            continue
+        try:
             metadata = read_audio_metadata(str(path))
-            briefs.append({
-                "token": token,
-                "display_name": path.name,
-                "duration_seconds": metadata.get("duration_seconds"),
-                "format": metadata.get("format"),
-                "tags": metadata.get("tags", {}),
-                "filename_clues": extract_clues_from_filename(path.name),
-            })
-        except Exception:
+        except Exception as exc:
             # File-reader exceptions may include the absolute path.
-            briefs.append({"token": token, "error": "Unable to read track metadata"})
+            briefs.append({"token": token, "error": _read_error_reason(exc)})
+            continue
+        briefs.append({
+            "token": token,
+            "display_name": path.name,
+            "duration_seconds": metadata.get("duration_seconds"),
+            "format": metadata.get("format"),
+            "tags": metadata.get("tags", {}),
+            "filename_clues": extract_clues_from_filename(path.name),
+        })
 
 
     return briefs
