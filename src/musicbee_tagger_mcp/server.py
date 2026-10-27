@@ -1,7 +1,11 @@
 """MCP application assembly and stdio entrypoint."""
 
+import os
+import sys
+
 from mcp.server.mcpserver import MCPServer
 
+from . import __version__
 from .tools import register_tools
 from .tools.inspection import (
     extract_filename_clues,
@@ -25,6 +29,12 @@ register_tools(app)
 
 def main() -> None:
     """Run the MCP server over stdio for local desktop clients."""
+    print(
+        f"musicbee-tagger-mcp {__version__} starting; "
+        f"data_dir={os.environ.get('MUSICBEE_TAGGER_DATA_DIR', '(default)')}",
+        file=sys.stderr,
+        flush=True,
+    )
     app.run(transport="stdio")
 
 
