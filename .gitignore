@@ -71,3 +71,4 @@ agent_state*.json
 musicbee-mcpb-*/
 .pytest-tmp/
 
+token_ACRcloud_key
