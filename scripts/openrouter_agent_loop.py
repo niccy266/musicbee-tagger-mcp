@@ -892,12 +892,16 @@ LOCAL_TOOLS = {
     "list_staged_changes": lambda: list_staged_changes(),
     "web_search": lambda query, max_results=5: web_search(query, max_results),
     "identify_acrcloud": lambda token: _identify_acrcloud(token),
+    "propose_artist_split": lambda artist_field, split_ampersand=False, split_comma=False: propose_artist_split(artist_field, split_ampersand=split_ampersand, split_comma=split_comma),
+    "search_musicbrainz_artist": lambda name, limit=5: search_musicbrainz_artist(name, limit),
+    "verify_artists_on_recording": lambda recording_id, candidate_artists: verify_artists_on_recording(recording_id, candidate_artists),
+    "flag_suspicious_artists": lambda candidate_artists: flag_suspicious_artists(candidate_artists),
     "list_tools": lambda: list_tools(),
     "list_all_tools": lambda: list_all_tools(),
 }
 
 
-def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
+def call_openrouter(messages, model, api_key, temperature=0.2, retries=5,
                    run_log=None, stream=True, tools=None):
     """One chat completion with tool support, via the openai SDK pointed at
     OpenRouter (https://openrouter.ai/docs/quickstart#using-the-client-sdks).
@@ -908,11 +912,15 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
     used by the separate context-compaction call.
     """
     from openai import APIStatusError, APITimeoutError, OpenAI
+    try:
+        import httpx
+    except Exception:  # pragma: no cover - optional dependency
+        httpx = None
 
     client = OpenAI(
         api_key=api_key,
         base_url=OPENROUTER_BASE,
-        timeout=120,
+        timeout=(httpx.Timeout(120.0, read=60.0) if httpx is not None else 120),
         default_headers={
             "HTTP-Referer": "https://github.com/niccy266/musicbee-tagger-mcp",
             "X-Title": "musicbee-tagger-agent",
@@ -1094,7 +1102,42 @@ def call_openrouter(messages, model, api_key, temperature=0.2, retries=3,
                     error=str(error)[:500],
                 )
             if retryable and attempt < retries - 1:
-                time.sleep(2 ** attempt)
+                if status == 429:
+                    wait_seconds = 60
+                    response = getattr(error, "response", None)
+                    headers = getattr(response, "headers", None) if response is not None else None
+                    reset_raw = None
+                    if headers is not None:
+                        try:
+                            reset_raw = headers.get("x-ratelimit-reset") or headers.get("X-RateLimit-Reset")
+                        except Exception:
+                            reset_raw = None
+                    if reset_raw:
+                        try:
+                            wait_seconds = max(5, int(float(reset_raw) / 1000.0 - time.time()) + 5)
+                        except (TypeError, ValueError):
+                            wait_seconds = 60
+                    wait_seconds = min(wait_seconds, 3600)
+                    print(
+                        f"OpenRouter rate limited (429); sleeping {wait_seconds} seconds before retry.",
+                        flush=True,
+                    )
+                    if run_log:
+                        try:
+                            run_log.write(
+                                "model_rate_limited",
+                                model=model,
+                                attempt=attempt + 1,
+                                wait_seconds=wait_seconds,
+                            )
+                        except Exception:
+                            pass
+                    time.sleep(wait_seconds)
+                elif status is None:
+                    print("OpenRouter request timed out; sleeping 60 seconds before retry.", flush=True)
+                    time.sleep(60)
+                else:
+                    time.sleep(2 ** attempt)
                 continue
             detail = str(error)[:300]
             raise RuntimeError(f"OpenRouter error {status or 'timeout'}: {detail}")
@@ -2223,229 +2266,261 @@ def main():
     consecutive_incomplete = 0
     batch_number = 0
     while True:
-        if not debug_checkpoint(
-            args.debug, f"Claim the next batch of up to {args.batch_size} files?",
-            run_log,
-        ):
-            print("Stopped before claiming another batch.")
-            break
-        claim = jobs.next_batch(job_id, size=args.batch_size)
-        if "error" in claim:
-            sys.exit(claim["error"])
-        if not claim["batch"]:
-            break
-        batch_number += 1
-        tokens = [entry["token"] for entry in claim["batch"]]
-        names = [entry["display_name"] for entry in claim["batch"]]
-        lookahead_names = jobs.peek_pending(job_id, size=max(0, args.lookahead))
-        _INTERRUPT_CONTEXT["tokens"] = tokens
-        state.setdefault("seen_tracks", [])
-        for name in names:
-            if name not in state["seen_tracks"]:
-                state["seen_tracks"].append(name)
-        RECENT_TRACKS.clear()
-        RECENT_TRACKS.extend(state["seen_tracks"])
+        try:
+            if not debug_checkpoint(
+                args.debug, f"Claim the next batch of up to {args.batch_size} files?",
+                run_log,
+            ):
+                print("Stopped before claiming another batch.")
+                break
+            claim = jobs.next_batch(job_id, size=args.batch_size)
+            if "error" in claim:
+                detail = _sanitize_log(str(claim["error"]))
+                print(f"Job claim failed: {detail}", flush=True)
+                if run_log:
+                    try:
+                        run_log.write("job_claim_error", error=detail)
+                    except Exception:
+                        pass
+                time.sleep(5)
+                continue
+            if not claim["batch"]:
+                break
+            batch_number += 1
+            tokens = [entry["token"] for entry in claim["batch"]]
+            names = [entry["display_name"] for entry in claim["batch"]]
+            lookahead_names = jobs.peek_pending(job_id, size=max(0, args.lookahead))
+            _INTERRUPT_CONTEXT["tokens"] = tokens
+            state.setdefault("seen_tracks", [])
+            for name in names:
+                if name not in state["seen_tracks"]:
+                    state["seen_tracks"].append(name)
+            RECENT_TRACKS.clear()
+            RECENT_TRACKS.extend(state["seen_tracks"])
 
-        # Skip a claimed batch when every display name was already reported as
-        # failed in a previous run, so we do not re-send it to the model.
-        skip_batch = bool(names) and all(
-            name in set(state.get("failed_by_file", [])) for name in names
-        )
-        if skip_batch:
-            print(f"Batch {batch_number} skipped: all tokens already reported as failed.")
-            run_log.write(
-                "batch_skipped",
-                batch=batch_number,
-                reason="All tokens already reported as failed",
-                files=names,
+            # Skip a claimed batch when every display name was already reported as
+            # failed in a previous run, so we do not re-send it to the model.
+            skip_batch = bool(names) and all(
+                name in set(state.get("failed_by_file", [])) for name in names
             )
+            if skip_batch:
+                print(f"Batch {batch_number} skipped: all tokens already reported as failed.")
+                run_log.write(
+                    "batch_skipped",
+                    batch=batch_number,
+                    reason="All tokens already reported as failed",
+                    files=names,
+                )
 
-        batch_state = {
-            "batch": batch_number,
-            "files": names,
-            "tokens": tokens,
-            "staged": [],
-            "unresolved": [],
-            "finished": False,
-        }
-        _INTERRUPT_CONTEXT["batch_state"] = batch_state
-        if skip_batch:
-            batch_state["unresolved"] = list(tokens)
-            batch_state["errors"] = {
-                token: "Reported as failed in a previous run" for token in tokens
+            batch_state = {
+                "batch": batch_number,
+                "files": names,
+                "tokens": tokens,
+                "staged": [],
+                "unresolved": [],
+                "finished": False,
             }
-            batch_state["finished"] = True
-            batch_state["summary"] = "Skipped: all tokens already reported as failed"
+            _INTERRUPT_CONTEXT["batch_state"] = batch_state
+            if skip_batch:
+                batch_state["unresolved"] = list(tokens)
+                batch_state["errors"] = {
+                    token: "Reported as failed in a previous run" for token in tokens
+                }
+                batch_state["finished"] = True
+                batch_state["summary"] = "Skipped: all tokens already reported as failed"
 
-        print(f"Batch {batch_number} ({claim['remaining']} after): {', '.join(names)}")
-        run_log.write("batch_claimed", batch=batch_number, files=names,
-                      token_count=len(tokens), pending_after_claim=claim["remaining"])
+            print(f"Batch {batch_number} ({claim['remaining']} after): {', '.join(names)}")
+            run_log.write("batch_claimed", batch=batch_number, files=names,
+                          token_count=len(tokens), pending_after_claim=claim["remaining"])
 
-        if skip_batch:
-            pass
-        elif debug_checkpoint(
-            args.debug,
-            f"Submit batch {batch_number} metadata to OpenRouter model {args.model}?",
-            run_log,
-        ):
             batch_messages = []
-            try:
-                batch_messages = run_batch(
-                    tokens, args.model, api_key, args.max_turns, batch_state,
-                    args.state, run_log=run_log, debug=args.debug,
-                    prior_context=state.get("context", ""),
-                    lookahead=lookahead_names,
-                    previous_tracks=list(dict.fromkeys(
-                        (state.get("staged_by_file") or [])
-                        + (state.get("failed_by_file") or [])
-                    )),
-                    future_tracks=lookahead_names,
-                    agent_thought=state.get("agent_thought", ""),
-                    memory=state.get("memory") if state.get("memory") is not None else read_memory(),
-                    max_thought_tokens=args.thought_tokens,
-                )
-            except Exception as error:
-                detail = _sanitize_log(f"{type(error).__name__}: {error}")
-                run_log.write("batch_error", batch=batch_number, error=detail)
-                batch_state["summary"] = "Agent run failed"
-                batch_state["finished"] = False
-                batch_state.setdefault("errors", {}).update({
-                    token: str(detail)[:300]
-                    for token in tokens
-                    if token not in batch_state.get("staged", [])
-                    and token not in batch_state.get("unresolved", [])
-                })
-        else:
-            batch_state["summary"] = "Stopped before sending the batch to OpenRouter"
-            batch_state["finished"] = False
-            released = jobs.release_batch(job_id, tokens)
-            run_log.write("batch_released", batch=batch_number,
-                          reason="Debug stop before model submission", result=released)
-            print(f"Released {len(released.get('released', []))} files to pending.")
-            break
 
-        new_thought = extract_agent_thought(batch_messages)
-        if new_thought:
-            state["agent_thought"] = _trim_to_tokens(
-                _deduplicate_thought(
-                    (state.get("agent_thought", "") + "\n" + new_thought).strip()
-                ),
-                args.thought_tokens,
-            )
-
-        errors = batch_state.get("errors", {})
-        completed_tokens = set(batch_state["staged"]) | set(batch_state["unresolved"])
-        results = [
-            {
-                "token": token,
-                "success": token in batch_state["staged"],
-                "error": errors.get(token, "Agent did not stage or resolve this file"),
-            }
-            for token in tokens if token in completed_tokens
-        ]
-        completion = jobs.complete_batch(job_id, results)
-        unprocessed = [token for token in tokens if token not in completed_tokens]
-        will_skip_stuck = (
-            bool(unprocessed)
-            and args.max_consecutive_incomplete
-            and (consecutive_incomplete + 1) >= args.max_consecutive_incomplete
-        )
-        if will_skip_stuck:
-            release_result = {"released": [], "unchanged": list(unprocessed)}
-        else:
-            release_result = jobs.release_batch(job_id, unprocessed) if unprocessed else {
-                "released": [], "unchanged": [],
-            }
-        run_log.write("batch_completed", batch=batch_number,
-                      outcomes=completion,
-                      released=release_result,
-                      staged_count=len(batch_state["staged"]),
-                      unresolved_count=len(batch_state["unresolved"]),
-                      finished=batch_state["finished"])
-
-        staged_names = [
-            names[i] for i, tok in enumerate(tokens) if tok in batch_state["staged"]
-        ]
-        unresolved_names = [
-            names[i] for i, tok in enumerate(tokens) if tok in batch_state.get("unresolved", [])
-        ]
-        context_line = (
-            f"Batch {batch_number}: staged={staged_names}; "
-            f"unresolved={unresolved_names}; "
-            f"summary={batch_state.get('summary', '')}"
-        )
-        state["context"] = (state.get("context", "") + "\n" + context_line).strip()
-        # Compact the context: remove failed output and trim to budget.
-        _failed_for_context = set(state.get("failed_by_file", []) or [])
-        if getattr(args, "no_compact_context", False):
-            state["context"] = compact_context(
-                state["context"], failed=_failed_for_context,
-                max_chars=args.context_chars,
-            )
-        else:
-            _compaction_model = getattr(args, "compaction_model", None) or args.model
-            if api_key:
-                state["context"] = compact_context_with_openrouter(
-                    state["context"], model=_compaction_model, api_key=api_key,
-                    failed=_failed_for_context, max_chars=args.context_chars,
-                    run_log=run_log,
-                )
+            if skip_batch:
+                pass
+            elif debug_checkpoint(
+                args.debug,
+                f"Submit batch {batch_number} metadata to OpenRouter model {args.model}?",
+                run_log,
+            ):
+                batch_messages = []
+                try:
+                    batch_messages = run_batch(
+                        tokens, args.model, api_key, args.max_turns, batch_state,
+                        args.state, run_log=run_log, debug=args.debug,
+                        prior_context=state.get("context", ""),
+                        lookahead=lookahead_names,
+                        previous_tracks=list(dict.fromkeys(
+                            (state.get("staged_by_file") or [])
+                            + (state.get("failed_by_file") or [])
+                        )),
+                        future_tracks=lookahead_names,
+                        agent_thought=state.get("agent_thought", ""),
+                        memory=state.get("memory") if state.get("memory") is not None else read_memory(),
+                        max_thought_tokens=args.thought_tokens,
+                    )
+                except Exception as error:
+                    detail = _sanitize_log(f"{type(error).__name__}: {error}")
+                    run_log.write("batch_error", batch=batch_number, error=detail)
+                    batch_state["summary"] = "Agent run failed"
+                    batch_state["finished"] = False
+                    batch_state.setdefault("errors", {}).update({
+                        token: str(detail)[:300]
+                        for token in tokens
+                        if token not in batch_state.get("staged", [])
+                        and token not in batch_state.get("unresolved", [])
+                    })
             else:
+                batch_state["summary"] = "Stopped before sending the batch to OpenRouter"
+                batch_state["finished"] = False
+                released = jobs.release_batch(job_id, tokens)
+                run_log.write("batch_released", batch=batch_number,
+                              reason="Debug stop before model submission", result=released)
+                print(f"Released {len(released.get('released', []))} files to pending.")
+                break
+
+            new_thought = extract_agent_thought(batch_messages)
+            if new_thought:
+                state["agent_thought"] = _trim_to_tokens(
+                    _deduplicate_thought(
+                        (state.get("agent_thought", "") + "\n" + new_thought).strip()
+                    ),
+                    args.thought_tokens,
+                )
+
+            errors = batch_state.get("errors", {})
+            completed_tokens = set(batch_state["staged"]) | set(batch_state["unresolved"])
+            results = [
+                {
+                    "token": token,
+                    "success": token in batch_state["staged"],
+                    "error": errors.get(token, "Agent did not stage or resolve this file"),
+                }
+                for token in tokens if token in completed_tokens
+            ]
+            completion = jobs.complete_batch(job_id, results)
+            unprocessed = [token for token in tokens if token not in completed_tokens]
+            will_skip_stuck = (
+                bool(unprocessed)
+                and args.max_consecutive_incomplete
+                and (consecutive_incomplete + 1) >= args.max_consecutive_incomplete
+            )
+            if will_skip_stuck:
+                release_result = {"released": [], "unchanged": list(unprocessed)}
+            else:
+                release_result = jobs.release_batch(job_id, unprocessed) if unprocessed else {
+                    "released": [], "unchanged": [],
+                }
+            run_log.write("batch_completed", batch=batch_number,
+                          outcomes=completion,
+                          released=release_result,
+                          staged_count=len(batch_state["staged"]),
+                          unresolved_count=len(batch_state["unresolved"]),
+                          finished=batch_state["finished"])
+
+            staged_names = [
+                names[i] for i, tok in enumerate(tokens) if tok in batch_state["staged"]
+            ]
+            unresolved_names = [
+                names[i] for i, tok in enumerate(tokens) if tok in batch_state.get("unresolved", [])
+            ]
+            context_line = (
+                f"Batch {batch_number}: staged={staged_names}; "
+                f"unresolved={unresolved_names}; "
+                f"summary={batch_state.get('summary', '')}"
+            )
+            state["context"] = (state.get("context", "") + "\n" + context_line).strip()
+            # Compact the context: remove failed output and trim to budget.
+            _failed_for_context = set(state.get("failed_by_file", []) or [])
+            if getattr(args, "no_compact_context", False):
                 state["context"] = compact_context(
                     state["context"], failed=_failed_for_context,
                     max_chars=args.context_chars,
                 )
-        state.setdefault("staged_by_file", []).extend(sorted(set(staged_names) - done))
-        state.setdefault("failed_by_file", []).extend(
-            sorted(set(unresolved_names) - set(state.get("failed_by_file", [])))
-        )
-        state["memory"] = read_memory()
-        _memory_metadata = memory_file_metadata()
-        state["memory_path"] = _memory_metadata["path"]
-        state["memory_mtime"] = _memory_metadata.get("mtime")
-        state["memory_sha256"] = _memory_metadata.get("sha256")
-        save_state(args.state, state)
-
-        print(
-            f"Batch {batch_number} result: {len(batch_state['staged'])} staged, "
-            f"{len(batch_state['unresolved'])} unresolved, "
-            f"{len(unprocessed)} returned to pending."
-        )
-
-        if unprocessed:
-            consecutive_incomplete += 1
-            print(
-                f"Incomplete batch: {len(unprocessed)} returned to pending "
-                f"(consecutive incomplete: {consecutive_incomplete})."
+            else:
+                _compaction_model = getattr(args, "compaction_model", None) or args.model
+                if api_key:
+                    state["context"] = compact_context_with_openrouter(
+                        state["context"], model=_compaction_model, api_key=api_key,
+                        failed=_failed_for_context, max_chars=args.context_chars,
+                        run_log=run_log,
+                    )
+                else:
+                    state["context"] = compact_context(
+                        state["context"], failed=_failed_for_context,
+                        max_chars=args.context_chars,
+                    )
+            state.setdefault("staged_by_file", []).extend(sorted(set(staged_names) - done))
+            state.setdefault("failed_by_file", []).extend(
+                sorted(set(unresolved_names) - set(state.get("failed_by_file", [])))
             )
-            if (
-                args.max_consecutive_incomplete
-                and consecutive_incomplete >= args.max_consecutive_incomplete
-            ):
-                skip_results = [
-                    {
-                        "token": token,
-                        "success": False,
-                        "error": "Skipped after repeated incomplete batches.",
-                    }
-                    for token in unprocessed
-                ]
-                jobs.complete_batch(job_id, skip_results)
+            state["memory"] = read_memory()
+            _memory_metadata = memory_file_metadata()
+            state["memory_path"] = _memory_metadata["path"]
+            state["memory_mtime"] = _memory_metadata.get("mtime")
+            state["memory_sha256"] = _memory_metadata.get("sha256")
+            save_state(args.state, state)
+
+            print(
+                f"Batch {batch_number} result: {len(batch_state['staged'])} staged, "
+                f"{len(batch_state['unresolved'])} unresolved, "
+                f"{len(unprocessed)} returned to pending."
+            )
+
+            if unprocessed:
+                consecutive_incomplete += 1
                 print(
-                    f"Skipped {len(unprocessed)} stuck track(s) after "
-                    f"{consecutive_incomplete} consecutive incomplete batches; "
-                    "continuing with remaining work."
+                    f"Incomplete batch: {len(unprocessed)} returned to pending "
+                    f"(consecutive incomplete: {consecutive_incomplete})."
                 )
-                consecutive_incomplete = 0
+                if (
+                    args.max_consecutive_incomplete
+                    and consecutive_incomplete >= args.max_consecutive_incomplete
+                ):
+                    skip_results = [
+                        {
+                            "token": token,
+                            "success": False,
+                            "error": "Skipped after repeated incomplete batches.",
+                        }
+                        for token in unprocessed
+                    ]
+                    jobs.complete_batch(job_id, skip_results)
+                    print(
+                        f"Skipped {len(unprocessed)} stuck track(s) after "
+                        f"{consecutive_incomplete} consecutive incomplete batches; "
+                        "continuing with remaining work."
+                    )
+                    consecutive_incomplete = 0
+                    continue
+                print(f"Released {len(release_result.get('released', []))} files to pending.")
                 continue
-            print(f"Released {len(release_result.get('released', []))} files to pending.")
+
+            consecutive_incomplete = 0
+
+            if args.max_batches is not None and batch_number >= args.max_batches:
+                print(f"Stopped after requested limit of {args.max_batches} batch(es).")
+                break
+
+        except Exception as error:
+            detail = _sanitize_log(f"{type(error).__name__}: {error}")
+            print(f"Batch {batch_number} failed: {detail}", flush=True)
+            try:
+                sys.stderr.write(f"Batch {batch_number} failed: {detail}\n")
+            except Exception:
+                pass
+            if run_log:
+                try:
+                    run_log.write("batch_loop_error", batch=batch_number, error=detail)
+                except Exception:
+                    pass
+            try:
+                _tokens = locals().get("tokens")
+                if _tokens:
+                    jobs.release_batch(job_id, _tokens)
+            except Exception:
+                pass
+            time.sleep(5)
             continue
-
-        consecutive_incomplete = 0
-
-        if args.max_batches is not None and batch_number >= args.max_batches:
-            print(f"Stopped after requested limit of {args.max_batches} batch(es).")
-            break
 
     status = jobs.job_status(job_id)
     counts = status["counts"]

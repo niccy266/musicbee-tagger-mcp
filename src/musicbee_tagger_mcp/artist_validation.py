@@ -16,7 +16,7 @@ import musicbrainzngs
 
 from .artist_split import split_artists
 
-musicbrainzngs.set_useragent("musicbee-tagger-mcp", "0.4.3", "niccy266@gmail.com")
+musicbrainzngs.set_useragent("musicbee-tagger-mcp", "0.4.5", "niccy266@gmail.com")
 
 
 def propose_split(
