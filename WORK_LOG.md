@@ -358,3 +358,42 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Wired post-run compaction into the main batch loop, with `--compaction-model` and `--no-compact-context` options.
 - Fixed `write_successes_to_memory` deduplication so repeated successes are not appended with new timestamps.
 - Validation: full suite passed (167 passed, 1 skipped).
+
+### 2026-10-27 — Fix read_track_metadata short-token resolution
+- Added short-token (6-char) resolution to `file_registry.py` so tracks can be looked up by abbreviated tokens
+- Added short-token handling in `tools/inspection.py`
+- Added `tests/test_file_registry_short_tokens.py` with coverage for short-token registration and lookup
+
+### 2026-10-27 — Guide agent to continue when track metadata read fails
+- Updated `prompts/openrouter_agent.md` system prompt to guide the agent to skip stuck tracks and continue the batch loop instead of halting when a track metadata read fails
+
+### 2026-10-27 — Add diagnostics for unexpected OpenRouter run termination
+- Added run-termination diagnostics in `scripts/openrouter_agent_loop.py` to detect and report unexpected OpenRouter agent run endings
+- Added diagnostic-related patterns to `.gitignore`
+
+### 2026-10-27 — Harden MCP tag tools against unknown registry tokens
+- Hardened `tools/tags.py` to handle unknown/unset registry tokens gracefully instead of erroring
+
+### 2026-10-27 — Add token_ACRcloud_key to .gitignore
+- Added `token_ACRcloud_key` to `.gitignore` so the ACRCloud secret file is never committed
+
+### 2026-10-27 — Add path-safe reason codes to token metadata reads
+- Added path-safe reason codes to `tools/inspection.py` token metadata reads so callers can distinguish safe vs. unsafe token resolution
+- Updated `tests/test_secure_pipeline.py` accordingly
+
+### 2026-10-27 — Log server version and configured data dir on startup
+- Added startup logging in `server.py` that reports the server version and configured data directory
+
+### 2026-10-27 — Bump release version to 0.4.5
+- Bumped package version to 0.4.5 across `README.md`, `docs/index.html`, `pyproject.toml`, `.claude-plugin/plugin.json`, `release/mcpb/manifest.json`, `src/musicbee_tagger_mcp/__init__.py`, `src/musicbee_tagger_mcp/acrcloud.py`, `src/musicbee_tagger_mcp/musicbrainz_api.py`, `tests/test_release_assets.py`
+
+### 2026-10-27 — Expose split tools in OpenRouter agent dispatch
+- Refactored `scripts/openrouter_agent_loop.py` to expose split/individual tools in the agent dispatch table, replacing the monolithic tool approach
+- Minor update to `artist_validation.py`
+
+### 2026-10-27 — Fix ACRCloud secret file credential parsing
+- Rewrote `ACRCloudConfig.from_env()` secret-file fallback to parse `token_ACRcloud_key` as `key=value` pairs, mapping `accessKey`→`access_key`, `secretKey`→`access_secret`, and `host`→`host` as three separate credentials per the ACRCloud docs
+- Extracted `_load_secret_file()` helper supporting both `key=value` lines and JSON object formats, with `ACRCLOUD_SECRET_FILE` override
+- Env vars continue to take precedence over file values; missing file returns empty defaults (unconfigured)
+- Added tests: `test_config_from_secret_file_key_value`, `test_config_from_secret_file_env_vars_take_precedence`, `test_config_from_secret_file_missing_returns_defaults`
+- Validation: all 11 tests in `tests/test_acrcloud.py` passed (including 3 new); `acrcloud.py` and `test_acrcloud.py` pass `ast.parse` syntax check

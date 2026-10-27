@@ -50,7 +50,7 @@ def test_batch_logs_tools_and_requires_verified_candidate_before_staging(
         "tags": {"title": "Song", "artist": "Artist"},
         "duration_seconds": 180.0,
     })
-    monkeypatch.setattr(agent, "verify_mbid", lambda **_kwargs: {
+    monkeypatch.setattr(agent, "evaluate_match", lambda **_kwargs: {
         "verified": True, "confidence": 91.0, "recording_id": recording_id,
         "mb_title": "Song", "mb_artist": "Artist", "genre": "Rock; Indie",
         "top_release": {"release_id": release_id},
@@ -60,7 +60,7 @@ def test_batch_logs_tools_and_requires_verified_candidate_before_staging(
         staged_calls.append(kwargs) or {"stage_id": "stage-1"}
     ))
     responses = iter([
-        _response(_tool_call("verify_mbid", {"token": token,
+        _response(_tool_call("evaluate_match", {"token": token,
                                                 "mb_recording_id": recording_id})),
         _response(_tool_call("stage_tag_changes", {
             "token": token, "new_tags": {"title": "Song", "genre": "Rock; Indie"},

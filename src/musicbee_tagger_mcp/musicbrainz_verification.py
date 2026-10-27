@@ -1,4 +1,4 @@
-"""Direct MusicBrainz recording-ID verification gate."""
+"""MusicBrainz recording match evaluation scoring function."""
 
 from typing import Any, Dict, List, Optional
 
@@ -24,7 +24,7 @@ def _coerce_forensic_score(value):
         return None
 
 
-def verify_recording_mbid(
+def evaluate_match(
     recording_id: str,
     expected_artist: Optional[str] = None,
     expected_title: Optional[str] = None,
@@ -76,17 +76,17 @@ def verify_recording_mbid(
             duration_match = 0.5
             mismatches.append(f"Duration difference is notable ({duration_diff}s)")
         else:
-            duration_match = 0.0
+            duration_match = 0.2
             mismatches.append(
                 f"Duration mismatch: local is {duration_sec}s, MB is {duration}s "
                 f"(diff {duration_diff}s)"
             )
-    if expected_title and title_similarity < 0.65:
+    if expected_title and title_similarity < 0.5:
         mismatches.append(
             f"Title similarity is low ({title_similarity:.2f}): "
             f"expected '{expected_title}', got '{title}'"
         )
-    if expected_artist and artist_similarity < 0.60:
+    if expected_artist and artist_similarity < 0.45:
         mismatches.append(
             f"Artist similarity is low ({artist_similarity:.2f}): "
             f"expected '{expected_artist}', got '{artist}'"
@@ -120,7 +120,7 @@ def verify_recording_mbid(
         top_release = parsed_releases[0]
 
     return {
-        "verified": confidence >= 75.0 and (duration_diff is None or duration_diff <= 15.0),
+        "verified": confidence >= 50.0 and (duration_diff is None or duration_diff <= 15.0),
         "confidence": round(confidence, 1),
         "recording_id": recording_id,
         "mb_title": title,
@@ -135,3 +135,7 @@ def verify_recording_mbid(
         "mismatches": mismatches,
         "forensic_score": forensic_score,
     }
+
+
+# Backward-compatible alias.
+verify_recording_mbid = evaluate_match

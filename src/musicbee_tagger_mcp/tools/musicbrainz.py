@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from ..musicbrainz_client import search_recordings_forensic, verify_recording_mbid
+from ..musicbrainz_client import evaluate_match as verify_recording_mbid, search_recordings_forensic
 
 
 def search_canonical_release(
@@ -16,7 +16,7 @@ def search_canonical_release(
     return search_recordings_forensic(artist, title, duration_sec, clue, limit)
 
 
-def verify_mbid(
+def evaluate_match(
     recording_id: str,
     expected_artist: Optional[str] = None,
     expected_title: Optional[str] = None,
@@ -24,7 +24,7 @@ def verify_mbid(
     forensic_score: Optional[float] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    """Verify a recording candidate against local title, artist, and duration."""
+    """Evaluate a recording candidate against local title, artist, and duration."""
     return verify_recording_mbid(
         recording_id, expected_artist, expected_title, duration_sec,
         forensic_score=forensic_score, **kwargs,
@@ -33,7 +33,7 @@ def verify_mbid(
 
 def register_musicbrainz_tools(app) -> None:
     app.tool()(search_canonical_release)
-    app.tool()(verify_mbid)
+    app.tool()(evaluate_match)
 
 
 def propose_artist_split(
@@ -69,6 +69,9 @@ def register_split_tools(app) -> None:
     app.tool()(verify_artists_on_recording)
     app.tool()(flag_suspicious_artists)
 
+
+# Backward-compatible alias.
+verify_mbid = evaluate_match
 
 from ..artist_validation import (  # noqa: E402,F401
     propose_split,

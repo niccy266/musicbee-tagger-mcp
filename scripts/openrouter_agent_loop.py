@@ -21,6 +21,8 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
+import threading
 import hashlib
 import json
 import os
@@ -46,8 +48,8 @@ from musicbee_tagger_mcp.tools.musicbrainz import (  # noqa: E402
     propose_artist_split,
     search_canonical_release,
     search_musicbrainz_artist,
+    evaluate_match,
     verify_artists_on_recording,
-    verify_mbid,
 )
 from musicbee_tagger_mcp.tools.tags import (  # noqa: E402
     amend_staged_changes,
@@ -82,6 +84,9 @@ def load_system_prompt() -> str:
     return path.read_text(encoding="utf-8").strip()
 
 SYSTEM_PROMPT = load_system_prompt()
+
+# Backward-compatible alias.
+verify_mbid = evaluate_match
 
 
 
@@ -215,8 +220,8 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "verify_mbid",
-            "description": "Verify a MusicBrainz candidate against the file (duration/artist/title). Only verified matches may be staged.",
+            "name": "evaluate_match",
+            "description": "Evaluate a MusicBrainz candidate against the file (duration/artist/title). Returns a match score; proposals are allowed for human review.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -616,12 +621,12 @@ def _search_canonical_release(artist, title, duration_seconds=None):
     )
 
 
-def _verify_mbid(token, mb_recording_id, forensic_score=None, **kwargs):
+def _evaluate_match(token, mb_recording_id, forensic_score=None, **kwargs):
     metadata = read_track_metadata(token)
     if "error" in metadata:
         return metadata
     tags = metadata.get("tags", {})
-    return verify_mbid(
+    return evaluate_match(
         recording_id=mb_recording_id,
         expected_artist=tags.get("artist"),
         expected_title=tags.get("title"),
@@ -884,7 +889,8 @@ LOCAL_TOOLS = {
     "extract_filename_clues": lambda token: extract_filename_clues(token),
     "repair_mojibake": lambda text: repair_mojibake(text),
     "search_canonical_release": _search_canonical_release,
-    "verify_mbid": _verify_mbid,
+    "evaluate_match": _evaluate_match,
+    "verify_mbid": _evaluate_match,
     "stage_tag_changes": stage_tag_changes,
     "amend_staged_changes": amend_staged_changes,
     "withdraw_staged_change": withdraw_staged_change,
@@ -1623,6 +1629,134 @@ def recover_from_loop(messages=None, staged=None, *args, **kwargs):
     })
     return cleaned
 
+# --------------------------------------------------------------------------- #
+# Duplicate-sentence analysis (parallel overthinking guard)
+# --------------------------------------------------------------------------- #
+
+
+def _split_sentences(text):
+    """Split *text* into normalized sentences for duplicate detection."""
+    if not text:
+        return []
+    # Split on sentence-ending punctuation, keeping the delimiter.
+    raw = re.split(r"(?<=[.!?])\s+", str(text))
+    sentences = []
+    for chunk in raw:
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        # Normalize: lowercase, collapse whitespace, strip trailing punctuation.
+        normalized = re.sub(r"\s+", " ", chunk.lower()).strip(" .!?")
+        if normalized:
+            sentences.append(normalized)
+    return sentences
+
+
+def detect_duplicate_sentences(text, min_sentence_length=8, duplicate_threshold=0.30):
+    """Analyze *text* for duplicate sentences.
+
+    Returns a dict with:
+        - ``total_sentences``: number of sentences found
+        - ``unique_sentences``: number of distinct sentences
+        - ``duplicate_count``: number of sentences that are duplicates
+        - ``duplicate_ratio``: fraction of sentences that are duplicates
+        - ``max_repeat``: maximum number of times any single sentence repeats
+        - ``is_overthinking``: True when duplication exceeds threshold
+        - ``repeated_sentences``: list of sentences repeated more than once
+    """
+    sentences = _split_sentences(text)
+    total = len(sentences)
+    if total == 0:
+        return {
+            "total_sentences": 0,
+            "unique_sentences": 0,
+            "duplicate_count": 0,
+            "duplicate_ratio": 0.0,
+            "max_repeat": 0,
+            "is_overthinking": False,
+            "repeated_sentences": [],
+        }
+
+    # Filter out very short sentences (likely noise).
+    meaningful = [s for s in sentences if len(s) >= min_sentence_length]
+    if not meaningful:
+        meaningful = sentences
+
+    counts = {}
+    for s in meaningful:
+        counts[s] = counts.get(s, 0) + 1
+
+    unique = len(counts)
+    duplicate_count = sum(c - 1 for c in counts.values() if c > 1)
+    duplicate_ratio = duplicate_count / len(meaningful) if meaningful else 0.0
+    max_repeat = max(counts.values()) if counts else 0
+    repeated = [s for s, c in counts.items() if c > 1]
+
+    is_overthinking = (
+        duplicate_ratio >= duplicate_threshold
+        or max_repeat >= 3
+        or (len(meaningful) >= 4 and duplicate_count >= 2)
+    )
+
+    return {
+        "total_sentences": total,
+        "unique_sentences": unique,
+        "duplicate_count": duplicate_count,
+        "duplicate_ratio": round(duplicate_ratio, 3),
+        "max_repeat": max_repeat,
+        "is_overthinking": is_overthinking,
+        "repeated_sentences": repeated[:10],
+    }
+
+
+class DuplicateSentenceAnalyzer:
+    """Parallel analyzer that checks agent output for duplicate sentences.
+
+    Runs ``detect_duplicate_sentences`` in a background thread so the main
+    loop can submit text for analysis without blocking.  Results are
+    retrieved via :meth:`result`.
+    """
+
+    def __init__(self, text="", max_workers=1):
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        self._future = None
+        self._text = text
+        if text:
+            self.submit(text)
+
+    def submit(self, text):
+        """Submit *text* for duplicate-sentence analysis."""
+        if self._future is not None and not self._future.done():
+            self._future.cancel()
+        self._text = text
+        self._future = self._executor.submit(detect_duplicate_sentences, text)
+        return self._future
+
+    def result(self, timeout=None):
+        """Return the analysis result, waiting up to *timeout* seconds."""
+        if self._future is None:
+            return detect_duplicate_sentences(self._text)
+        try:
+            return self._future.result(timeout=timeout)
+        except (concurrent.futures.TimeoutError, concurrent.futures.CancelledError):
+            return detect_duplicate_sentences(self._text)
+
+    def shutdown(self, wait=True):
+        self._executor.shutdown(wait=wait)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.shutdown(wait=True)
+        return False
+
+
+def _run_duplicate_sentence_check(text):
+    """Convenience wrapper used by the parallel process path."""
+    return detect_duplicate_sentences(text)
+
+
 def run_batch(tokens, model, api_key, max_turns, state, state_path,
               run_log=None, debug=False, prior_context="", lookahead=None,
               previous_tracks=None, prior_tracks=None, previous_track_names=None,
@@ -1747,6 +1881,11 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
     staged_stage_ids = {}
     verified_by_token = {}
 
+    # Parallel duplicate-sentence analyzer: runs in a background thread so
+    # overthinking (repeated sentences) is detected without blocking the main
+    # loop.  The analyzer is consulted on every assistant turn.
+    _duplicate_analyzer = DuplicateSentenceAnalyzer()
+
     turn_cap = max(1, max_turns) * max(1, len(tokens))
     for turn in range(1, turn_cap + 1):
         if not debug_checkpoint(
@@ -1759,6 +1898,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
             state.update(summary="Stopped at debug checkpoint", staged=staged,
                          unresolved=unresolved, finished=False)
             save_state(state_path, state)
+            _duplicate_analyzer.shutdown(wait=False)
             return messages
         response = call_openrouter(messages, model, api_key, run_log=run_log)
         message = response["choices"][0]["message"]
@@ -1770,11 +1910,23 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
             _last_assistant_content = _assistant_content
             _repeated_content_count = 0
 
+        # Submit the assistant content to the parallel duplicate-sentence
+        # analyzer so overthinking loops are caught even when the overall
+        # text differs between turns.
+        _duplicate_result = None
+        if _assistant_content:
+            _duplicate_analyzer.submit(_assistant_content)
+            _duplicate_result = _duplicate_analyzer.result(timeout=2.0)
+
         tool_calls = message.get("tool_calls") or []
+        _is_overthinking = (
+            _repeated_content_count >= 1
+            or (_duplicate_result is not None and _duplicate_result.get("is_overthinking", False))
+        )
         if (
             not tool_calls
             and _assistant_content
-            and _repeated_content_count >= 1
+            and _is_overthinking
         ):
             if not _recovery_used:
                 _recovery_used = True
@@ -1810,6 +1962,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                     staged=staged, unresolved=unresolved,
                 )
             print("  procrastination loop detected; skipping remaining files", flush=True)
+            _duplicate_analyzer.shutdown(wait=False)
             return messages
         if not tool_calls:
             if (message.get("content") or "").strip():
@@ -1845,7 +1998,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                 if "token" in args:
                     args["token"] = token
             token_tools = {
-                "read_track_metadata", "extract_filename_clues", "verify_mbid",
+                "read_track_metadata", "extract_filename_clues", "evaluate_match",
                 "stage_tag_changes", "mark_unresolved", "identify_acrcloud",
             }
             if name in token_tools and token not in tokens:
@@ -1995,7 +2148,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                         state["staged"] = [t for t in state["staged"] if t != token_for_stage]
                     staged_stage_ids.pop(token_for_stage, None)
                     print(f"  withdrew: {token_for_stage} ({stage_id})", flush=True)
-            elif name == "verify_mbid" and isinstance(result, dict):
+            elif name == "evaluate_match" and isinstance(result, dict):
                 if result.get("verified") is True and float(result.get("confidence", 0)) >= 75.0:
                     verified_by_token[token] = result
                 else:
@@ -2015,6 +2168,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
 
         if abort_batch:
             save_state(state_path, state)
+            _duplicate_analyzer.shutdown(wait=False)
             return messages
 
         save_state(state_path, state)
@@ -2037,6 +2191,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         run_log.write("batch_iteration_cap", batch=state.get("batch"),
                       staged=staged, unresolved=unresolved,
                       errors=state.get("errors", {}))
+    _duplicate_analyzer.shutdown(wait=False)
     return messages
 
 

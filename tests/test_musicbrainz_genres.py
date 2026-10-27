@@ -40,6 +40,6 @@ def test_verification_returns_recording_and_release_genres(monkeypatch):
         }},
     )
 
-    result = musicbrainz_verification.verify_recording_mbid("recording-1")
+    result = musicbrainz_verification.evaluate_match("recording-1")
 
     assert result["genre"] == "Rock; Indie"

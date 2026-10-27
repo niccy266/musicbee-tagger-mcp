@@ -62,6 +62,7 @@ def test_config_defaults_and_invalid_timeout(monkeypatch):
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("ACRCLOUD_TIMEOUT", "not-a-number")
+    monkeypatch.setenv("ACRCLOUD_SECRET_FILE", "nonexistent_secret_file_xyz")
 
     config = ACRCloudConfig.from_env()
     assert config.access_key == ""
@@ -220,3 +221,56 @@ def test_identify_audio_and_file(tmp_path):
     assert result["status"] == "unconfigured"
     result = identify_file(audio, config=config)
     assert result["status"] == "unconfigured"
+
+
+def test_config_from_secret_file_key_value(tmp_path, monkeypatch):
+    secret_file = tmp_path / "token_ACRcloud_key"
+    secret_file.write_text(
+        "accessKey=f184f0ba1ceb7c14f885adb960ef6cb4\n"
+        "secretKey=46U9bCQsvIG4llbHHh3y3WjFXVjQIG6eSKKHhwVP\n"
+        "host=identify-us-west-2.acrcloud.com\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ACRCLOUD_SECRET_FILE", str(secret_file))
+    for name in (
+        "ACRCLOUD_ACCESS_KEY",
+        "ACRCLOUD_ACCESS_SECRET",
+        "ACRCLOUD_HOST",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    config = ACRCloudConfig.from_env()
+    assert config.access_key == "f184f0ba1ceb7c14f885adb960ef6cb4"
+    assert config.access_secret == "46U9bCQsvIG4llbHHh3y3WjFXVjQIG6eSKKHhwVP"
+    assert config.host == "identify-us-west-2.acrcloud.com"
+    assert config.is_configured() is True
+
+
+def test_config_from_secret_file_env_vars_take_precedence(tmp_path, monkeypatch):
+    secret_file = tmp_path / "token_ACRcloud_key"
+    secret_file.write_text(
+        "accessKey=file-access-key\nsecretKey=file-access-secret\n", encoding="utf-8"
+    )
+    monkeypatch.setenv("ACRCLOUD_SECRET_FILE", str(secret_file))
+    monkeypatch.setenv("ACRCLOUD_ACCESS_KEY", "env-access-key")
+    monkeypatch.setenv("ACRCLOUD_ACCESS_SECRET", "env-access-secret")
+
+    config = ACRCloudConfig.from_env()
+    assert config.access_key == "env-access-key"
+    assert config.access_secret == "env-access-secret"
+
+
+def test_config_from_secret_file_missing_returns_defaults(monkeypatch):
+    monkeypatch.setenv("ACRCLOUD_SECRET_FILE", "nonexistent_secret_file_xyz")
+    for name in (
+        "ACRCLOUD_ACCESS_KEY",
+        "ACRCLOUD_ACCESS_SECRET",
+        "ACRCLOUD_HOST",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    config = ACRCloudConfig.from_env()
+    assert config.access_key == ""
+    assert config.access_secret == ""
+    assert config.host == ""
+    assert config.is_configured() is False

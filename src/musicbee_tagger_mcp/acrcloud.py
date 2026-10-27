@@ -19,6 +19,55 @@ DEFAULT_SIGNATURE_VERSION = "1"
 MAX_SAMPLE_BYTES = 1_000_000
 
 
+def _load_secret_file() -> Dict[str, str]:
+    """Load ACRCloud credentials from the secret file.
+
+    ACRCloud requires three separate credentials: host, access_key, access_secret.
+    The secret file (default: token_ACRcloud_key, overridable via ACRCLOUD_SECRET_FILE)
+    may use key=value lines, e.g.:
+
+        accessKey=f184f0ba...
+        secretKey=46U9bCQs...
+        host=identify-us-west-2.acrcloud.com
+
+    A JSON object is also accepted as a fallback. Returns an empty dict if the
+    file cannot be read or parsed.
+    """
+    secret_file = os.environ.get("ACRCLOUD_SECRET_FILE", "token_ACRcloud_key")
+    candidate_paths = [secret_file]
+    # Also check relative to this module's package root.
+    try:
+        candidate_paths.append(
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), secret_file)
+        )
+    except Exception:
+        pass
+    for path in candidate_paths:
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                raw = handle.read()
+        except (FileNotFoundError, OSError, IOError):
+            continue
+        creds: Dict[str, str] = {}
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, value = line.split("=", 1)
+                creds[key.strip()] = value.strip()
+        if creds:
+            return creds
+        try:
+            data = json.loads(raw)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(data, dict):
+            return {str(k): str(v) for k, v in data.items()}
+        return {}
+    return {}
+
+
 @dataclass(frozen=True)
 class ACRCloudConfig:
     access_key: str = ""
@@ -47,6 +96,24 @@ class ACRCloudConfig:
             or ""
         ).strip()
         region = (os.environ.get("ACRCLOUD_REGION") or "").strip()
+        # Fallback: read credentials from secret file if any are missing.
+        # ACRCloud requires three separate credentials: host, access_key, access_secret.
+        if not access_key or not access_secret or not host:
+            file_creds = _load_secret_file()
+            if not access_key:
+                access_key = (
+                    file_creds.get("accessKey", "")
+                    or file_creds.get("access_key", "")
+                    or ""
+                ).strip()
+            if not access_secret:
+                access_secret = (
+                    file_creds.get("secretKey", "")
+                    or file_creds.get("secret_key", "")
+                    or ""
+                ).strip()
+            if not host:
+                host = file_creds.get("host", "").strip()
         timeout_raw = os.environ.get("ACRCLOUD_TIMEOUT", "20")
         try:
             timeout = float(timeout_raw)
