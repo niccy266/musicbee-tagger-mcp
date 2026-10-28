@@ -104,7 +104,12 @@ def test_batch_brief_sanitizes_metadata_errors(tmp_path, tmp_audio, monkeypatch)
 
     result = inspection.get_batch_brief([token])
 
-    assert result == [{"token": token, "error": "parse_error"}]
+    assert result == [{
+        "token": token,
+        "error_code": "E_INTERNAL",
+        "error": "internal error",
+        "function": "get_batch_brief",
+    }]
     assert str(tmp_path) not in json.dumps(result)
 
 
@@ -122,7 +127,11 @@ def test_preview_errors_do_not_expose_registered_paths(tmp_audio, monkeypatch):
 
     result = tags.preview_tags(token, {"title": "New title"})
 
-    assert result == {"error": "Unable to preview tag changes"}
+    assert result == {
+        "error_code": "E_AUDIO_READ_FAILED",
+        "error": "access denied by filesystem",
+        "function": "preview_tags",
+    }
     assert str(tmp_audio.parent) not in json.dumps(result)
 
 
@@ -143,7 +152,11 @@ def test_stage_errors_do_not_expose_registered_paths(tmp_audio, monkeypatch):
 
     result = tags.stage_tag_changes(token, {"title": "New title"})
 
-    assert result == {"error": "Unable to stage tag changes"}
+    assert result == {
+        "error_code": "E_STAGING_FAILED",
+        "error": "unable to stage tag changes",
+        "function": "stage_tag_changes",
+    }
     assert str(tmp_audio.parent) not in json.dumps(result)
 
 
