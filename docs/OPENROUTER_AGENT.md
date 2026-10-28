@@ -16,9 +16,18 @@ chat completions endpoint with function calling.
    the model with a system prompt adapted from the `musicbee-investigator`
    skill.
 4. The model decides which tools to call. The loop executes them locally:
-   - `read_track_metadata`, `extract_filename_clues`, `repair_mojibake`
-   - `search_canonical_release`, `verify_mbid` (the mandatory gate)
-   - `stage_tag_changes` (manifest only — no audio writes)
+   - inspection: `read_track_metadata`, `extract_filename_clues`,
+     `get_batch_brief`
+   - identity: `search_canonical_release`, `verify_mbid` (the mandatory gate),
+     `identify_acrcloud`, `web_search`
+   - text: `repair_mojibake`
+   - artist splits: `propose_artist_split`, `search_musicbrainz_artist`,
+     `verify_artists_on_recording`, `flag_suspicious_artists`
+   - staging: `preview_tags`, `stage_tag_changes` (manifest only — no audio
+     writes)
+   - batch/queue: `next_batch`, `complete_batch`, `release_batch`,
+     `job_status`, `list_jobs`, `enqueue_batch_operation`,
+     `list_batch_operations`, `update_batch_operation`
 5. A verified recording is required by the local harness before it permits
    `stage_tag_changes`. Failed verification can be retried or explicitly marked
    unresolved.
@@ -39,6 +48,13 @@ python scripts/openrouter_agent_loop.py [job_id] \
     --model openrouter/free --batch-size 10 --max-batches 3 --max-turns 15 \
     --debug --resume
 ```
+
+Context compaction is on by default and trims failures, failure mentions and
+repeated messages from the history mid-run; `--compaction-model` runs that
+summarisation through a separate (typically cheaper) OpenRouter model, and
+`--no-compact-context` disables compaction entirely. `--context-chars` bounds
+how much of each tool result stays in context and `--thought-tokens` bounds the
+visible summary budget.
 
 Logs default to the private application data directory's `agent_logs` folder.
 `--max-consecutive-incomplete` (default 3; use 0 to disable) controls how many incomplete batches may occur before stuck tracks are skipped; otherwise released tracks are retried on later iterations.

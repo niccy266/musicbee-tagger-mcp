@@ -2,7 +2,16 @@
 
 from typing import Any, Dict, List, Optional
 
-from ..musicbrainz_client import evaluate_match as verify_recording_mbid, search_recordings_forensic
+from ..artist_validation import (
+    heuristic_flags,
+    propose_split,
+    search_artist,
+    verify_artist_credit,
+)
+from ..musicbrainz_client import (
+    evaluate_match as verify_recording_mbid,
+    search_recordings_forensic,
+)
 
 
 def search_canonical_release(
@@ -16,7 +25,7 @@ def search_canonical_release(
     return search_recordings_forensic(artist, title, duration_sec, clue, limit)
 
 
-def evaluate_match(
+def verify_mbid(
     recording_id: str,
     expected_artist: Optional[str] = None,
     expected_title: Optional[str] = None,
@@ -31,9 +40,14 @@ def evaluate_match(
     )
 
 
+# `evaluate_match` is the internal name used by the agent loop; `verify_mbid`
+# is the published MCP tool name used by the manifest, skill and prompt.
+evaluate_match = verify_mbid
+
+
 def register_musicbrainz_tools(app) -> None:
     app.tool()(search_canonical_release)
-    app.tool()(evaluate_match)
+    app.tool()(verify_mbid)
 
 
 def propose_artist_split(
@@ -68,14 +82,3 @@ def register_split_tools(app) -> None:
     app.tool()(search_musicbrainz_artist)
     app.tool()(verify_artists_on_recording)
     app.tool()(flag_suspicious_artists)
-
-
-# Backward-compatible alias.
-verify_mbid = evaluate_match
-
-from ..artist_validation import (  # noqa: E402,F401
-    propose_split,
-    search_artist,
-    verify_artist_credit,
-    heuristic_flags,
-)

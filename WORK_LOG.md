@@ -397,3 +397,12 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Env vars continue to take precedence over file values; missing file returns empty defaults (unconfigured)
 - Added tests: `test_config_from_secret_file_key_value`, `test_config_from_secret_file_env_vars_take_precedence`, `test_config_from_secret_file_missing_returns_defaults`
 - Validation: all 11 tests in `tests/test_acrcloud.py` passed (including 3 new); `acrcloud.py` and `test_acrcloud.py` pass `ast.parse` syntax check
+
+### 2026-10-28 — Verify merges, fix tool-surface regression, tidy leftovers
+- Audited all remote branches: five `codex/*` branches were never merged (the last agent left them unmerged; no master work was displaced). Merged `workflow-trigger`, `websearch-fixes`, `artist-split-fixes`, `installer-process-shutdown`, `local-docs` into master.
+- Fixed a released-tool regression: the server registered the renamed `evaluate_match` wrapper, so the published `verify_mbid` tool had disappeared from the MCP surface while the mcpb manifest, investigator skill, agent prompt and pinned tests all still called `verify_mbid`. `musicbrainz.py` now registers `verify_mbid` and keeps `evaluate_match` as the loop's internal alias.
+- Merged `codex/batch-ergonomics` (#47 duplicate registration, #40 non-claiming `preview_batch`), resolving the `file_registry.py` conflict by keeping both the short-token matcher and `token_for_path`, and re-applying the branch's `register()` dedupe on top.
+- Removed session scratch files `_fix_loop.py` and `CLAUDE_RULES.md`.
+- Documented the agent loop's compaction/context flags (`--compaction-model`, `--no-compact-context`, `--context-chars`, `--thought-tokens`) and the full tool surface in `docs/OPENROUTER_AGENT.md`.
+- Dropped a duplicated `web_search` entry in the pinned tool set in `tests/test_secure_pipeline.py`.
+- Validation: 175 passed, 2 skipped.
