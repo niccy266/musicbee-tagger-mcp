@@ -1,5 +1,6 @@
 """CLI-only service for applying staged manifests to audio files."""
 
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -36,12 +37,15 @@ class StagedChangeApplier:
             )
             manifest["applied"] = True
             manifest["applied_at"] = datetime.now(timezone.utc).isoformat()
+            backup_path = result.get("backup_created")
+            manifest["backup_path"] = backup_path
             return {
                 "status": "applied",
                 "stage_id": stage_id,
                 "display_name": manifest["display_name"],
                 "fields_written": result.get("fields_written", []),
-                "backup_created": result.get("backup_created") is not None,
+                "backup_created": backup_path is not None,
+                "backup_path": backup_path,
             }
 
         _, result = self.store.transact(stage_id, apply_locked)
@@ -110,6 +114,52 @@ class StagedChangeApplier:
         manifest = self.store.mutate(stage_id, update)
         return {"status": "archived", "stage_id": stage_id,
                 "display_name": manifest["display_name"], "reason": reason}
+
+    def revert(self, stage_id: str) -> dict:
+        """Restore the original audio file from its .bak backup.
+
+        Only works on stages that were applied with a backup. After a
+        successful revert the manifest is marked ``reverted`` so it won't
+        appear again in the revertable list.
+        """
+        def update(manifest: dict) -> dict:
+            if not manifest.get("applied"):
+                raise ValueError("Only applied stages can be reverted.")
+            if manifest.get("reverted"):
+                return {"status": "already_reverted", "stage_id": stage_id,
+                        "display_name": manifest["display_name"]}
+            backup_path = manifest.get("backup_path")
+            if not backup_path:
+                raise ValueError("No backup path stored for this stage; cannot revert.")
+            backup = Path(backup_path)
+            if not backup.is_file():
+                raise FileNotFoundError(
+                    f"Backup file not found: {backup_path}. It may have been deleted."
+                )
+            original_path = Path(manifest["absolute_path"])
+            if not original_path.is_file():
+                raise FileNotFoundError(
+                    f"Original audio file not found: {original_path}."
+                )
+            # Restore the backup over the current (modified) file
+            shutil.copy2(backup, original_path)
+
+            now = datetime.now(timezone.utc).isoformat()
+            manifest["reverted"] = True
+            manifest["reverted_at"] = now
+            manifest.setdefault("history", []).append({
+                "action": "reverted",
+                "at": now,
+                "reason": "User reverted applied staged changes from backup.",
+            })
+            return {
+                "status": "reverted",
+                "stage_id": stage_id,
+                "display_name": manifest["display_name"],
+            }
+
+        _, result = self.store.transact(stage_id, update)
+        return result
 
 
 _applier: Optional[StagedChangeApplier] = None

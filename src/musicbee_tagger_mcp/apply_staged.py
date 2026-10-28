@@ -8,6 +8,9 @@ Usage:
     python -m musicbee_tagger_mcp.apply_staged --all
     python -m musicbee_tagger_mcp.apply_staged --all --dry-run
     python -m musicbee_tagger_mcp.apply_staged --list
+    python -m musicbee_tagger_mcp.apply_staged --list-applied
+    python -m musicbee_tagger_mcp.apply_staged --revert --stage-id <uuid>
+    python -m musicbee_tagger_mcp.apply_staged --undo --stage-id <uuid>
 """
 
 import argparse
@@ -16,7 +19,7 @@ import os
 from pathlib import Path
 import sys
 
-from .staged_review import cmd_list, print_review
+from .staged_review import cmd_list, print_review, _print_diff
 from .staged_apply import get_staged_applier
 from .staging import get_staging_manager
 
@@ -104,6 +107,67 @@ def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> str
     return "applied"
 
 
+def cmd_revert_one(applier, stage_id: str) -> str:
+    """Revert an applied staged change by restoring its .bak backup."""
+    try:
+        manifest = applier.load(stage_id)
+    except FileNotFoundError:
+        logger.error("Staged manifest %s is missing; cannot revert.", stage_id)
+        print(f"\n[ERROR] Stage {stage_id} is missing.")
+        return "missing_stage"
+    if not manifest.get("applied"):
+        status = []
+        if manifest.get("reverted"):
+            status.append("already reverted")
+        if manifest.get("withdrawn"):
+            status.append("withdrawn")
+        if manifest.get("failed"):
+            status.append("failed")
+        if manifest.get("archived"):
+            status.append("archived")
+        print(f"\n[SKIP] {stage_id} is {', '.join(status) or 'not applied'}; cannot revert.")
+        return "not_applied"
+    backup_path = manifest.get("backup_path")
+    if not backup_path:
+        print(f"\n[SKIP] {stage_id} has no backup path stored; cannot revert.")
+        return "no_backup"
+    backup = Path(backup_path)
+    if not backup.is_file():
+        print(f"\n[ERROR] Backup file not found: {backup_path}; cannot revert.")
+        return "no_backup_file"
+
+    display_name = manifest.get("display_name", stage_id)
+    print()
+    print(f"Revert preview for {stage_id}:")
+    print(f"  file: {display_name}")
+    print(f"  backup: {backup_path}")
+    print()
+    print("This will restore the original .bak backup over the current file,")
+    print("undoing all tag changes that were applied.")
+    answer = input(
+        "\nEnter=revert/restore backup, q=quit [Enter/q]: "
+    ).strip().lower()
+    if answer == "q":
+        print("Quitting revert.")
+        return "quit"
+    if answer not in {"", "y", "yes"}:
+        print("Unrecognized choice; revert aborted.")
+        return "pending"
+
+    try:
+        result = applier.revert(stage_id)
+    except FileNotFoundError as exc:
+        logger.error("Revert failed for %s: %s", stage_id, exc)
+        print(f"\n[ERROR] {exc}")
+        return "error"
+    if result.get("status") == "already_reverted":
+        print(f"\n[SKIP] {stage_id} has already been reverted.")
+        return "already_reverted"
+    print(f"\n✓ Reverted {stage_id}: {display_name}")
+    print(f"  Restored from backup: {backup_path}")
+    return "reverted"
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -115,9 +179,15 @@ def main() -> None:
                     "This is the only code path that writes tags.",
     )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--stage-id", metavar="UUID", help="Apply a specific staged change.")
+    group.add_argument("--stage-id", metavar="UUID", help="Apply or revert a specific staged change.")
     group.add_argument("--all", action="store_true", help="Apply all pending staged changes.")
     group.add_argument("--list", action="store_true", help="List all pending staged changes.")
+    group.add_argument("--list-applied", action="store_true",
+                       help="List all applied changes that can be reverted (have a .bak backup).")
+    group.add_argument("--revert", action="store_true",
+                       help="Revert an applied staged change by restoring its .bak backup.")
+    group.add_argument("--undo", action="store_true",
+                       help="Alias for --revert.")
 
     parser.add_argument("--dry-run", action="store_true",
                         help="Show what would be applied without writing anything.")
@@ -132,11 +202,39 @@ def main() -> None:
         cmd_list(staging)
         return
 
+    if args.list_applied:
+        applied = staging.store.list_applied_with_backup()
+        if not applied:
+            print("No applied changes with backups available for revert.")
+            return
+        print(f"{len(applied)} applied change(s) available for revert:\n")
+        for entry in applied:
+            print(f"  stage_id   : {entry['stage_id']}")
+            print(f"  file       : {entry['display_name']}")
+            if entry.get("applied_at"):
+                print(f"  applied_at : {entry['applied_at']}")
+            if entry.get("backup_path"):
+                print(f"  backup     : {entry['backup_path']}")
+            if entry.get("notes"):
+                print(f"  reason     : {entry['notes']}")
+            print(f"  changes    :")
+            _print_diff(entry.get("diff_summary", []), include_title=False, indent="    ")
+            print()
+        return
+
+    is_revert = args.revert or args.undo
+
     if args.stage_id:
+        if is_revert:
+            cmd_revert_one(applier, args.stage_id)
+            return
         cmd_apply_one(applier, args.stage_id, dry_run=args.dry_run, no_backup=args.no_backup)
         return
 
     if args.all:
+        if is_revert:
+            print("ERROR: --revert/--undo requires --stage-id; cannot revert all at once.")
+            return
         pending = staging.list_pending()
         if not pending:
             print("No pending staged changes.")

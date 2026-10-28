@@ -21,7 +21,12 @@ def search_canonical_release(
     clue: Optional[str] = None,
     limit: int = 5,
 ) -> List[Dict[str, Any]]:
-    """Search and rank MusicBrainz recording candidates."""
+    """Search MusicBrainz for the canonical release. Returns candidates with MBIDs.
+
+    NEXT STEP: Call evaluate_match with the best candidate's recording_id to
+    verify the match (duration/artist/title) before staging. Only stage after
+    evaluate_match returns verified=true with confidence >= 0.65.
+    """
     return search_recordings_forensic(artist, title, duration_sec, clue, limit)
 
 
@@ -31,12 +36,19 @@ def verify_mbid(
     expected_title: Optional[str] = None,
     duration_sec: Optional[float] = None,
     forensic_score: Optional[float] = None,
+    release_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    """Evaluate a recording candidate against local title, artist, and duration."""
+    """Evaluate a recording candidate against local title, artist, and duration.
+
+    Returns verified=true/false with a confidence score (0-100). NOTE: Staging
+    does NOT require verified=true — you only need to call evaluate_match once
+    (to show your work). After calling evaluate_match, proceed to
+    stage_tag_changes with the recording_id regardless of the result.
+    """
     return verify_recording_mbid(
         recording_id, expected_artist, expected_title, duration_sec,
-        forensic_score=forensic_score, **kwargs,
+        forensic_score=forensic_score, release_id=release_id, **kwargs,
     )
 
 

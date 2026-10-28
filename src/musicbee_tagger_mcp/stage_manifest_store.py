@@ -149,3 +149,30 @@ class StageManifestStore:
                 item["stage_id"],
             ),
         )
+
+    def list_applied_with_backup(self) -> List[dict]:
+        """Return path-free summaries of applied manifests that have a backup.
+
+        These are the changes that can be reverted via :meth:`revert`.
+        """
+        applied = []
+        for path in sorted(self.directory.glob("*.json")):
+            try:
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+                if (
+                    manifest.get("applied", False)
+                    and not manifest.get("reverted", False)
+                    and manifest.get("backup_path")
+                ):
+                    applied.append({
+                        "stage_id": manifest["stage_id"],
+                        "display_name": manifest["display_name"],
+                        "applied_at": manifest.get("applied_at"),
+                        "backup_path": manifest.get("backup_path"),
+                        "diff_summary": manifest.get("diff", []),
+                        "forensic_score": manifest.get("forensic_score"),
+                        "notes": manifest.get("notes", ""),
+                    })
+            except Exception:
+                continue
+        return sorted(applied, key=lambda item: item.get("applied_at", "") or "")

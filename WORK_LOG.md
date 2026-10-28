@@ -318,6 +318,17 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Replaced outdated operation-claim API names with the registered batch queue tools (`enqueue_batch_operation`, `list_batch_operations`, and `update_batch_operation`) and clarified cross-restart visibility for agents sharing a data directory.
 - Validation: 14 focused queue tests passed; `git diff --check` passed.
 
+### 2026-10-26 — HTTPS Dockerized MCP connector (two-container sandbox)
+- Added `Dockerfile.mcp`: HTTPS MCP server container, non-root user (uid 10001), read-only root filesystem, `/staging` and `/data` writable, `/audio` mounted read-only, exposes only port 8443, drops all capabilities, no-new-privileges.
+- Added `Dockerfile.apply`: apply agent container, non-root user (uid 10002), no network, no exposed ports, `/staging` read-only, `/audio` read-write (only path that can modify audio files).
+- Added `docker-compose.yml`: orchestrates both containers with shared `musicbee-staging` volume; MCP writes staged manifests, apply reads and applies to real audio; MCP container can reach MusicBrainz API, apply container is fully offline.
+- Added `scripts/https_mcp_server.py`: HTTPS wrapper that runs the stdio MCP server as a subprocess and bridges HTTPS JSON-RPC (StreamableHTTP-compatible `/mcp` endpoint) to its stdio pipe; self-signed cert generation via `cryptography` or `openssl` fallback; TLS 1.2 minimum; health check at `/health`.
+- Added `scripts/entrypoint_mcp.sh` and `scripts/entrypoint_apply.sh`: fix volume ownership on startup, then launch the HTTPS server or sleep infinity (apply container triggered via `docker compose exec`).
+- Added `.env.example`: `MUSICBEE_AUDIO_DIR`, `MCP_HTTPS_PORT`, `SECRET_COMMAND_TOKEN`, `MUSICBEE_TAGGER_DATA_DIR`.
+- Added `claude_desktop_config.example.json`: Claude Desktop HTTP MCP server config pointing at `https://localhost:8443/mcp`.
+- Security model: MCP container never writes audio files (read-only mount); apply container is the sole write path and is triggered only by a secret user command (`docker compose exec musicbee-apply musicbee-tagger-apply --all` with `SECRET_COMMAND_TOKEN`); shared staging volume is the only cross-container data path.
+- Validation: all new files parse correctly (Python AST for https_mcp_server.py, YAML for docker-compose.yml); `git diff --check` passed.
+
 ### 2026-10-25 — Update agent-loop model example
 - Changed the documented default model in `scripts/openrouter_agent_loop.py` to `openrouter/free`.
 - Validation: using the project virtual environment with `K:\bin` added to the test process PATH, the full suite passed (108 passed, 1 skipped). Pytest needed a workspace basetemp and `MUSICBEE_TAGGER_DATA_DIR` override for sandbox write access.
@@ -397,6 +408,30 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Env vars continue to take precedence over file values; missing file returns empty defaults (unconfigured)
 - Added tests: `test_config_from_secret_file_key_value`, `test_config_from_secret_file_env_vars_take_precedence`, `test_config_from_secret_file_missing_returns_defaults`
 - Validation: all 11 tests in `tests/test_acrcloud.py` passed (including 3 new); `acrcloud.py` and `test_acrcloud.py` pass `ast.parse` syntax check
+
+### 2026-10-27 — Standardized MCP error codes with path-free reporting
+- Added `src/musicbee_tagger_mcp/error_codes.py` with stable `E_*` error codes (`E_UNKNOWN_TOKEN`, `E_FILE_NOT_FOUND`, `E_PERMISSION_DENIED`, `E_UNSUPPORTED_FORMAT`, `E_STAGING_FAILED`, `E_STAGE_NOT_FOUND`, `E_STAGE_CONFLICT`, `E_AUDIO_READ_FAILED`, `E_PROVIDER_FAILED`, `E_INTERNAL`, etc.)
+- Added `make_error()` and `error_from_exception()` helpers that return `{"error_code", "error", "function?"}` dicts with automatic filesystem path stripping (Windows `C:\...` and POSIX `/...` replaced with `[path]`)
+- Updated `tools/inspection.py`: `read_track_metadata`, `extract_filename_clues`, `get_batch_brief` now return error codes with function names
+- Updated `tools/tags.py`: `preview_tags`, `stage_tag_changes`, `get_staged_change`, `amend_staged_changes`, `withdraw_staged_change` now return error codes with function names
+- Updated `tools/acrcloud.py`: `identify_acrcloud` returns `E_UNKNOWN_TOKEN`, `E_AUDIO_READ_FAILED`, `E_PROVIDER_NOT_CONFIGURED` with function name
+- Updated `tools/text.py`: `web_search` returns `E_PROVIDER_FAILED` with function name
+- Added `tests/test_error_codes.py` (18 tests): error code mapping, path stripping, function name reporting, `extract_filename_clues` error handling
+- Updated `tests/test_secure_pipeline.py` assertions to match new error code format
+- Validation: all 18 new error code tests passed; full suite 185 passed, 4 skipped, 2 pre-existing failures (ffmpeg missing, tool name mismatch); no regressions
+
+### 2026-10-28 — Fix agent NameError crashes and improve tool descriptions
+
+- Fixed `NameError: compact_context_with_openrouter` by moving `__main__` block to end of file.
+- Fixed `NameError: staged` in `main()` (changed to `staged_names`).
+- Fixed `NameError: seen` in `review_scratchpad()` (added `seen = set()`).
+- Freed alias assignments from string literal.
+- Staging no longer requires `verified=true` — only requires `evaluate_match` called once.
+- Improved MCP tool descriptions with NEXT STEP / PREREQUISITE guidance.
+- Added `release_id` parameter to `evaluate_match` for release membership validation (issue #43).
+- Added missing `error_codes.py` module.
+- Updated test expectations for new error format.
+- All 6 CI jobs pass on PR #58.
 
 ### 2026-10-28 — Verify merges, fix tool-surface regression, tidy leftovers
 - Audited all remote branches: five `codex/*` branches were never merged (the last agent left them unmerged; no master work was displaced). Merged `workflow-trigger`, `websearch-fixes`, `artist-split-fixes`, `installer-process-shutdown`, `local-docs` into master.

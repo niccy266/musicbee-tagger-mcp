@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "musicbee-tagger-mcp": {
+      "type": "http",
+      "url": "https://localhost:8443/mcp",
+      "headers": {
+        "User-Agent": "Claude-Desktop"
+      },
+      "timeout": 30
+    }
+  }
+}

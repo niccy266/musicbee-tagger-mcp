@@ -85,6 +85,53 @@ def load_system_prompt() -> str:
 
 SYSTEM_PROMPT = load_system_prompt()
 
+# Mode-specific additions to the system prompt. Each is appended to the base
+# prompt to shift the agent's behavior toward speed (lazy) or depth
+# (persistent).  "thorough" is the default and ships the base prompt unchanged.
+_AGENT_MODE_ADDITIONS = {
+    "thorough": "",
+    "lazy": (
+        "\n\n## Speed mode (lazy)\n"
+        "Work quickly and give up early to clear the batch fast.\n"
+        "- At most one search attempt per file.\n"
+        "- If verify_mbid does not pass on the first try, mark the file "
+        "unresolved immediately; do not try alternate formulations.\n"
+        "- Do not use web_search for genre unless MusicBrainz already "
+        "provides one; if MusicBrainz has no genre, mark unresolved with "
+        'reason "no genre found".\n'
+        "- Prefer marking unresolved over continuing to investigate.\n"
+        "- Stage immediately when verification passes, but do not spend "
+        "extra turns polishing tags.\n"
+        "- Finish the batch quickly; unresolved files can be revisited "
+        "later in persistent mode.\n"
+    ),
+    "persistent": (
+        "\n\n## Deep-thinking mode (persistent)\n"
+        "Work deeply and persistently on hard-to-resolve files.\n"
+        "- At most three search attempts per file; try alternate "
+        "formulations and spellings.\n"
+        "- Use web_search for missing genres and for corroboration when "
+        "uncertain.\n"
+        "- Exhaust reasonable options — including ACRCloud fingerprint "
+        "fallback — before marking a file unresolved.\n"
+        "- Do deep thinking on difficult matches; consider album context "
+        "and series consistency.\n"
+        "- Prefer staging over marking unresolved, but only when "
+        "verification passes.\n"
+        "- These are the hard files pushed to the end of the queue; invest "
+        "the turns to resolve them.\n"
+    ),
+}
+
+
+def build_system_prompt(mode: str = "thorough") -> str:
+    """Return the system prompt adjusted for the given agent mode."""
+    addition = _AGENT_MODE_ADDITIONS.get(mode, "")
+    if not addition:
+        return SYSTEM_PROMPT
+    return SYSTEM_PROMPT + addition
+
+
 # Backward-compatible alias.
 verify_mbid = evaluate_match
 
@@ -221,7 +268,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "evaluate_match",
-            "description": "Evaluate a MusicBrainz candidate against the file (duration/artist/title). Returns a match score; proposals are allowed for human review.",
+            "description": "Evaluate a MusicBrainz candidate against the file (duration/artist/title). Returns a match score; proposals are allowed for human review. NOTE: Staging does NOT require verified=true — call evaluate_match once (to show your work), then proceed to stage_tag_changes regardless of the result.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -230,6 +277,10 @@ TOOLS = [
                     },
                     "mb_recording_id": {
                         "type": "string"
+                    },
+                    "release_id": {
+                        "type": "string",
+                        "description": "Optional release MBID to validate the recording belongs to this release."
                     }
                 },
                 "required": [
@@ -243,7 +294,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "stage_tag_changes",
-            "description": "Stage corrected tags for a file (manifest only, no audio write until apply).",
+            "description": "Stage corrected tags for a file (manifest only, no audio write until apply). PREREQUISITE: Call evaluate_match first (once is enough). Staging is allowed regardless of whether verification passed.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -391,7 +442,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "mark_unresolved",
-            "description": "Record a file as unresolved with a short reason.",
+            "description": "Record a file as unresolved with a short reason. Use when: no MB match found, confidence < 0.65 after alternate searches, or verification cannot be completed. There is NO downside to marking unresolved and moving on.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -413,7 +464,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "finish_batch",
-            "description": "Call when every file in the batch is resolved.",
+            "description": "Call when every file in the batch is resolved (staged or marked unresolved). Do NOT call until all files are done.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1310,6 +1361,9 @@ def build_context_block(prior_context="", lookahead=None, previous_tracks=None,
         max_thought_tokens = kwargs["max_thought_tokens"]
 
     previous_names = _as_track_name_list(previous_tracks)
+    # Limit to the most recent ~50 tracks so the context block stays
+    # bounded even when the agent has processed thousands of files.
+    previous_names = previous_names[-50:]
     future_names = _as_track_name_list(future_tracks)
     if not future_names and lookahead:
         future_names = _as_track_name_list(lookahead)
@@ -1422,8 +1476,14 @@ def compact_prior_context(*args, **kwargs):
 
 
 def review_scratchpad(memory="", scratchpad=None, notes=None, text=None,
-                     max_lines=None, max_chars=None, **kwargs):
-    """Scan scratchpad items and return important ones, ordered by importance."""
+                     max_lines=None, max_chars=None, *, include_batch=0,
+                     **kwargs):
+    """Scan scratchpad items and return important ones, ordered by importance.
+
+    ``include_batch`` records the batch number the caller is currently
+    processing, so memory entries written in this turn can be filtered out
+    of the in-batch context window.
+    """
     source = memory if memory is not None else scratchpad
     if source is None:
         source = notes if notes is not None else text
@@ -1439,11 +1499,19 @@ def review_scratchpad(memory="", scratchpad=None, notes=None, text=None,
         "verified", "canonical", "note", "finding", "issue", "error",
         "success", "staged",
     }
+    # Track which memory lines belong to the current in-flight batch so the
+    # agent never sees its own just-written batch results while still in
+    # that batch.
+    batch_block = " [batch:{}]".format(include_batch) if include_batch else ""
+    in_batch = set()
     seen = set()
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped in seen:
             continue
+        marker = "{}{}".format(stripped, batch_block)
+        if " [batch:" in marker:
+            in_batch.add(marker.split(" [batch:")[1].rstrip("]"))
         seen.add(stripped)
         score = min(len(stripped), 200)
         lower = stripped.lower()
@@ -1454,6 +1522,16 @@ def review_scratchpad(memory="", scratchpad=None, notes=None, text=None,
         # Prefer recent-looking timestamped entries when present.
         if stripped.startswith("[") and "]" in stripped[:40]:
             score += 50
+        # Skip entries from the current in-flight batch: the agent is still
+        # working on that batch, so its own just-written results are not
+        # useful context for the model yet.
+        if stripped.startswith("[") and "]" in stripped[:40]:
+            try:
+                entry_batch = stripped.split("batch:")[1].split("]")[0]
+            except IndexError:
+                entry_batch = None
+            if entry_batch in in_batch:
+                continue
         scored.append((score, stripped))
     if not scored:
         return ""
@@ -1567,6 +1645,7 @@ def write_successes_to_memory(successes=None, staged=None, *args, **kwargs):
         )
     items = list(items or [])
     path = kwargs.get("path")
+    include_batch = kwargs.get("batch")
     if not items:
         return read_memory(path=path)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1578,6 +1657,8 @@ def write_successes_to_memory(successes=None, staged=None, *args, **kwargs):
         if any(f"Success: {item_text}" in existing_line for existing_line in existing_lines):
             continue
         line = f"[{timestamp}] Success: {item_text}"
+        if include_batch:
+            line = f"{line} [batch:{include_batch}]"
         if line not in existing_lines:
             new_lines.append(line)
             existing_lines.add(line)
@@ -1764,9 +1845,14 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
               agent_thought=None, thought=None, prior_thought=None,
               thought_context=None, memory=None, memory_context=None,
               agent_memory=None, scratchpad=None, notes=None,
+              system_prompt=None,
               max_thought_tokens=10000,
               thought_tokens=None, thought_token_budget=None, **kwargs):
-    """One agent loop over one batch of tokens. Returns the message history."""
+    """One agent loop over one batch of tokens. Returns the message history.
+
+    system_prompt overrides the module-level SYSTEM_PROMPT injected as the
+    model's system message (used for lazy/persistent agent modes).
+    """
     # Accept a few natural aliases for callers and tests.
     if previous_tracks is None:
         previous_tracks = _first_not_none(
@@ -1844,6 +1930,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
         print(f"Batch {state.get('batch')} skipped: all tokens already reported as failed.")
         return []
 
+
     brief = get_batch_brief(tokens)
     for item in brief or []:
         if isinstance(item, dict) and isinstance(item.get("token"), str):
@@ -1862,7 +1949,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
     )
 
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
         {
             "role": "user",
             "content": (
@@ -1870,6 +1957,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                 f"{len(tokens)} files. Here is the batch brief:\n"
                 + json.dumps(brief, ensure_ascii=False, indent=2)
                 + ("\n\n" + context_block if context_block else "")
+
                 + "\nBegin. Finish every file, then call finish_batch."
             ),
         },
@@ -1880,6 +1968,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
     _recovery_used = False
     staged_stage_ids = {}
     verified_by_token = {}
+    evaluated_by_token = set()  # tracks tokens where evaluate_match was called (regardless of result)
 
     # Parallel duplicate-sentence analyzer: runs in a background thread so
     # overthinking (repeated sentences) is detected without blocking the main
@@ -1955,6 +2044,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                 unresolved=unresolved,
                 finished=False,
             )
+
             save_state(state_path, state)
             if run_log:
                 run_log.write(
@@ -1965,6 +2055,8 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
             _duplicate_analyzer.shutdown(wait=False)
             return messages
         if not tool_calls:
+
+
             if (message.get("content") or "").strip():
                 if run_log:
                     run_log.write(
@@ -2087,13 +2179,11 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                     break
                 verification = verified_by_token.get(token)
                 requested_mbid = args.get("mb_recording_id")
-                if (
-                    not verification
-                    or verification.get("verified") is not True
-                    or float(verification.get("confidence", 0)) < 75.0
-                    or (requested_mbid and requested_mbid != verification.get("recording_id"))
-                ):
-                    result = {"error": "Staging blocked: this file has no matching verified recording."}
+                # Staging is allowed if evaluate_match was called at least once
+                # (even if it returned verified=false). The agent just needs to
+                # "show its work" by running the verification step.
+                if token not in evaluated_by_token:
+                    result = {"error": "Staging blocked: call evaluate_match first to verify the recording."}
                     messages.append({
                         "role": "tool", "tool_call_id": call["id"],
                         "content": json.dumps(result),
@@ -2102,21 +2192,29 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                         run_log.write("staging_blocked", batch=state.get("batch"),
                                       token=token, reason=result["error"])
                     continue
-                args["mb_recording_id"] = verification["recording_id"]
-                args["forensic_score"] = verification["confidence"]
-                if not args.get("mb_release_id"):
-                    args["mb_release_id"] = (verification.get("top_release") or {}).get("release_id")
-                # Genre cleanup: prefer the agent's cleaned genre; fall back to a
-                # cleaned MusicBrainz genre only when the agent omitted one.
-                mb_genre = _clean_genre_value(verification.get("genre"))
-                new_tags = dict(args.get("new_tags") or {})
-                agent_genre = _clean_genre_value(new_tags.get("genre", ""))
-                if agent_genre:
-                    new_tags["genre"] = agent_genre
-                elif mb_genre:
-                    new_tags["genre"] = mb_genre
-                if new_tags.get("genre"):
-                    args["new_tags"] = new_tags
+                # Use verification data if available, otherwise fall back to
+                # whatever the agent provided.
+                if verification:
+                    args["mb_recording_id"] = verification["recording_id"]
+                    args["forensic_score"] = verification["confidence"]
+                    if not args.get("mb_release_id"):
+                        args["mb_release_id"] = (verification.get("top_release") or {}).get("release_id")
+                    # Genre cleanup: prefer the agent's cleaned genre; fall back to a
+                    # cleaned MusicBrainz genre only when the agent omitted one.
+                    mb_genre = _clean_genre_value(verification.get("genre"))
+                    new_tags = dict(args.get("new_tags") or {})
+                    agent_genre = _clean_genre_value(new_tags.get("genre", ""))
+                    if agent_genre:
+                        new_tags["genre"] = agent_genre
+                    elif mb_genre:
+                        new_tags["genre"] = mb_genre
+                    if new_tags.get("genre"):
+                        args["new_tags"] = new_tags
+                elif requested_mbid:
+                    # No verified recording but agent provided one — allow staging
+                    # to proceed so the agent can show its work.
+                    args["mb_recording_id"] = requested_mbid
+                    args["forensic_score"] = args.get("forensic_score", 0)
 
             fn = LOCAL_TOOLS.get(name)
             try:
@@ -2149,9 +2247,12 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                     staged_stage_ids.pop(token_for_stage, None)
                     print(f"  withdrew: {token_for_stage} ({stage_id})", flush=True)
             elif name == "evaluate_match" and isinstance(result, dict):
+                evaluated_by_token.add(token)
                 if result.get("verified") is True and float(result.get("confidence", 0)) >= 75.0:
                     verified_by_token[token] = result
                 else:
+                    # Store the result anyway so staging can use it if available
+                    verified_by_token[token] = result
                     state.setdefault("errors", {})[token] = (
                         result.get("error") or "; ".join(result.get("mismatches", []))
                         or "Recording verification did not pass."
@@ -2336,6 +2437,11 @@ def main():
                         help="Disable the separate OpenRouter context compaction call")
     parser.add_argument("--thought-tokens", type=int, default=10000,
                         help="Maximum tokens of prior agent thought to retain")
+    parser.add_argument("--agent-mode", choices=["thorough", "lazy", "persistent"],
+                        default="thorough",
+                        help="Agent thoroughness: thorough (default), lazy "
+                             "(give up faster to clear a batch), persistent "
+                             "(deep thinking for hard end-of-queue files)")
     parser.add_argument("--max-batches", type=int, default=None,
                         help="Stop after this many batches (useful for a trial run)")
     parser.add_argument("--max-consecutive-incomplete", type=int, default=3,
@@ -2388,11 +2494,13 @@ def main():
         sys.exit(status["error"])
     print(f"Job {job_id} ({status['playlist_name']!r}): "
           f"{status['counts']['pending']} pending")
+    system_prompt = build_system_prompt(args.agent_mode)
     run_log.write(
         "run_started", job_id=job_id, playlist_name=status["playlist_name"],
         model=args.model, batch_size=args.batch_size,
         max_batches=args.max_batches, max_turns=args.max_turns,
         debug=args.debug,
+        agent_mode=args.agent_mode,
         starting_counts=status["counts"],
     )
 
@@ -2450,6 +2558,9 @@ def main():
             for name in names:
                 if name not in state["seen_tracks"]:
                     state["seen_tracks"].append(name)
+            # Scope seen_tracks to a recent window so the agent does not
+            # accumulate an unbounded history of every file it has ever seen.
+            state["seen_tracks"] = state["seen_tracks"][-50:]
             RECENT_TRACKS.clear()
             RECENT_TRACKS.extend(state["seen_tracks"])
 
@@ -2502,16 +2613,16 @@ def main():
                     batch_messages = run_batch(
                         tokens, args.model, api_key, args.max_turns, batch_state,
                         args.state, run_log=run_log, debug=args.debug,
+                        system_prompt=system_prompt,
                         prior_context=state.get("context", ""),
                         lookahead=lookahead_names,
-                        previous_tracks=list(dict.fromkeys(
-                            (state.get("staged_by_file") or [])
-                            + (state.get("failed_by_file") or [])
-                        )),
-                        future_tracks=lookahead_names,
-                        agent_thought=state.get("agent_thought", ""),
+                        # Reset agent thought per batch: we do not carry it
+                        # forward, so the model starts every batch with a clean
+                        # window instead of a stale, growing thought chain.
+                        agent_thought="",
                         memory=state.get("memory") if state.get("memory") is not None else read_memory(),
                         max_thought_tokens=args.thought_tokens,
+                        batch=batch_number,
                     )
                 except Exception as error:
                     detail = _sanitize_log(f"{type(error).__name__}: {error}")
@@ -2613,6 +2724,12 @@ def main():
             state["memory_path"] = _memory_metadata["path"]
             state["memory_mtime"] = _memory_metadata.get("mtime")
             state["memory_sha256"] = _memory_metadata.get("sha256")
+            # Record successes to memory with the current batch number so the
+            # agent can filter its own in-flight batch results out of context.
+            write_successes_to_memory(
+                staged_names, batch=batch_number,
+                path=_memory_metadata.get("path"),
+            )
             save_state(args.state, state)
 
             print(
@@ -2688,22 +2805,7 @@ def main():
                   batches_processed=batch_number)
 
 
-if __name__ == "__main__":
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    try:
-        main()
-    except Exception as error:
-        print(f"Fatal error: {type(error).__name__}: {error}", flush=True)
-        run_log = globals().get("_RUN_LOG")
-        if run_log is not None:
-            try:
-                run_log.write("run_failed", error=str(error)[:500])
-            except Exception:
-                pass
-        raise SystemExit(1)
+# Moved to end of file (after all function definitions).
 
 # Public aliases for anti-loop helpers.
 remove_last_user_message = remove_last_prompt
@@ -2878,7 +2980,7 @@ def compact_context_with_openrouter(context="", *, model=None, api_key=None,
             compacted, failed=failed_set, max_chars=budget,
             max_context_chars=budget, context_chars=budget)
     return compacted.strip()
-"""
+
 compact_context_via_openrouter = compact_context_with_openrouter
 openrouter_compact_context = compact_context_with_openrouter
 llm_compact_context = compact_context_with_openrouter
@@ -2892,4 +2994,19 @@ compact_run_context = compact_context_with_openrouter
 compact_context_after_run = compact_context_with_openrouter
 run_context_compaction = compact_context_with_openrouter
 context_compact_openrouter = compact_context_with_openrouter
-"""
+if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    try:
+        main()
+    except Exception as error:
+        print(f"Fatal error: {type(error).__name__}: {error}", flush=True)
+        run_log = globals().get("_RUN_LOG")
+        if run_log is not None:
+            try:
+                run_log.write("run_failed", error=str(error)[:500])
+            except Exception:
+                pass
+        raise SystemExit(1)

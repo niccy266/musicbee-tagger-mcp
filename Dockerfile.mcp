@@ -1,0 +1,51 @@
+# Dockerfile.mcp — MusicBee Tagger MCP server over HTTPS (sandboxed, read-only root)
+# Build: docker build -f Dockerfile.mcp -t musicbee-mcp .
+# Run as part of docker-compose; not meant to run standalone.
+FROM python:3.14-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MUSICBEE_TAGGER_DATA_DIR=/data \
+    MCP_TRANSPORT=https \
+    MCP_HOST=0.0.0.0 \
+    MCP_PORT=8443
+
+# Install runtime dependencies only (no dev tools).
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+        "mcp>=2.0.0" \
+        "mutagen>=1.47.0" \
+        "musicbrainzngs>=0.7.1" \
+        "ftfy>=6.2.0" \
+        "openai>=1.40.0" \
+        "tabulate[widechars]>=0.9.0" \
+        "cryptography>=42.0.0"
+
+# Non-privileged user for the MCP server.
+RUN useradd --uid 10001 --create-home --shell /bin/false mcpuser
+
+WORKDIR /app
+
+# Copy package source.
+COPY src/ ./src/
+COPY pyproject.toml ./
+COPY scripts/ ./scripts/
+
+# Install the package in editable mode so the data dir env var is respected.
+RUN pip install --no-cache-dir -e ".[dev]"
+
+# Staging directory (shared with the apply container via docker-compose volume).
+# The MCP container can WRITE here (staged manifests) but cannot write audio files.
+RUN mkdir -p /staging /data /certs && \
+    chown -R mcpuser:mcpuser /staging /data /certs /app
+
+# Drop all capabilities; root filesystem is read-only except /staging and /data.
+USER mcpuser
+
+# Expose only the HTTPS MCP endpoint.
+EXPOSE 8443
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1', 8443)); s.close()" || exit 1
+
+ENTRYPOINT ["/app/scripts/entrypoint_mcp.sh"]
