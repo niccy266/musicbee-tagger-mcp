@@ -6,6 +6,7 @@ import re
 import urllib.parse
 import urllib.request
 
+from ..error_codes import E_PROVIDER_FAILED, make_error
 from ..mojibake import fix_mojibake
 
 
@@ -15,7 +16,11 @@ def repair_mojibake(text: str) -> Dict[str, Any]:
 
 
 def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
-    """Search the web for research clues about an artist, release, or track."""
+    """Search the web for research clues about an artist, release, or track.
+
+    Use for genre lookup or corroboration when MusicBrainz has no genre.
+    NEXT STEP: Use the genre found here to include in stage_tag_changes.
+    """
     query = (query or "").strip()
     if not query:
         return {"error": "query is required"}
@@ -32,7 +37,11 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         with urllib.request.urlopen(request, timeout=15) as response:
             body = response.read().decode("utf-8", errors="replace")
     except Exception as error:
-        return {"error": f"web search failed: {type(error).__name__}: {error}"}
+        return make_error(
+            E_PROVIDER_FAILED,
+            f"web search failed: {type(error).__name__}",
+            function="web_search",
+        )
 
     results = []
     for match in re.finditer(

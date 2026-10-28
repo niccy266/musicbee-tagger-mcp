@@ -2,35 +2,41 @@
 
 from typing import Any, Dict, List
 
+from ..error_codes import (
+    E_FILE_NOT_FOUND,
+    E_PERMISSION_DENIED,
+    E_PARSE_ERROR,
+    E_UNSUPPORTED_FORMAT,
+    E_UNKNOWN_TOKEN,
+    error_from_exception,
+    make_error,
+)
 from ..file_registry import get_registry
 from ..filename_parser import extract_clues_from_filename
 from ..metadata_reader import read_audio_metadata
 
 
-def _read_error_reason(exc: Exception) -> str:
-    """Map a metadata-read failure to a path-safe reason code."""
-    if isinstance(exc, FileNotFoundError):
-        return "file_missing"
-    if isinstance(exc, PermissionError):
-        return "permission_denied"
-    if isinstance(exc, ValueError):
-        return "unsupported_format"
-    return "parse_error"
-
-
 def read_track_metadata(token: str) -> Dict[str, Any]:
-    """Read metadata for a registered track without returning its path."""
+    """Read metadata for a registered track without returning its path.
+
+    NEXT STEP: Call extract_filename_clues and search_canonical_release to
+    find a matching MusicBrainz recording for verification.
+    """
     try:
         path = get_registry().resolve(token)
     except KeyError:
         # Tokens may be unknown to this server process's registry/data dir.
         # Keep the response path-free and avoid an unhandled MCP tool error.
-        return {"error": "Unknown file token"}
+        return make_error(
+            E_UNKNOWN_TOKEN,
+            "unknown or unregistered token",
+            function="read_track_metadata",
+        )
     try:
         metadata = read_audio_metadata(str(path))
     except Exception as exc:
         # File-reader exceptions may include the absolute path.
-        return {"error": _read_error_reason(exc)}
+        return error_from_exception(exc, function="read_track_metadata")
 
     metadata.pop("file_path", None)
     return metadata
@@ -47,8 +53,17 @@ def extract_filename_clues(token: str) -> Dict[str, Any]:
     try:
         entry = get_registry().resolve(token)
     except KeyError:
-        return {"error": "Unknown file token"}
-    return extract_clues_from_filename(entry.name)
+        return make_error(
+            E_UNKNOWN_TOKEN,
+            "unknown or unregistered token",
+            function="extract_filename_clues",
+        )
+    try:
+        return extract_clues_from_filename(entry.name)
+    except Exception as exc:
+        # Filename parsing should not fail, but if it does, report it
+        # path-free with the tool's function name.
+        return error_from_exception(exc, function="extract_filename_clues")
 
 
 def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
@@ -59,13 +74,29 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
         try:
             path = registry.resolve(token)
         except KeyError:
-            briefs.append({"token": token, "error": "unknown_token"})
+            # Token is not registered in this server's file registry.
+            # Return a consistent structure (matching successful entries)
+            # so the agent can handle it uniformly — mark it unresolved
+            # rather than leaving the model with an incomplete entry.
+            briefs.append({
+                "token": token,
+                "display_name": None,
+                "duration_seconds": None,
+                "format": None,
+                "tags": {},
+                "filename_clues": {},
+                "error_code": E_UNKNOWN_TOKEN,
+                "error": "unknown or unregistered token",
+                "function": "get_batch_brief",
+            })
             continue
         try:
             metadata = read_audio_metadata(str(path))
         except Exception as exc:
             # File-reader exceptions may include the absolute path.
-            briefs.append({"token": token, "error": _read_error_reason(exc)})
+            briefs.append(error_from_exception(exc, function="get_batch_brief"))
+            briefs[-1]["token"] = token
+            briefs[-1]["display_name"] = path.name
             continue
         briefs.append({
             "token": token,

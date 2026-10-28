@@ -438,7 +438,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "mark_unresolved",
-            "description": "Record a file as unresolved with a short reason.",
+            "description": "Record a file as unresolved with a short reason. Use when: no MB match found, confidence < 0.65 after alternate searches, or verification cannot be completed. There is NO downside to marking unresolved and moving on.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -460,7 +460,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "finish_batch",
-            "description": "Call when every file in the batch is resolved.",
+            "description": "Call when every file in the batch is resolved (staged or marked unresolved). Do NOT call until all files are done.",
             "parameters": {
                 "type": "object",
                 "properties": {

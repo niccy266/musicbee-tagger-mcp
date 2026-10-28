@@ -2,6 +2,17 @@
 
 from typing import Any, Dict, List, Optional
 
+from ..error_codes import (
+    E_AUDIO_READ_FAILED,
+    E_FILE_NOT_FOUND,
+    E_PERMISSION_DENIED,
+    E_STAGING_FAILED,
+    E_STAGE_CONFLICT,
+    E_STAGE_NOT_FOUND,
+    E_UNKNOWN_TOKEN,
+    error_from_exception,
+    make_error,
+)
 from ..file_registry import get_registry
 from ..staging import get_staging_manager
 from ..tag_writer import preview_tag_changes
@@ -12,12 +23,20 @@ def preview_tags(token: str, new_tags: Dict[str, Any]) -> Dict[str, Any]:
     try:
         path = get_registry().resolve(token)
     except KeyError:
-        return {"error": "Unknown file token"}
+        return make_error(
+            E_UNKNOWN_TOKEN,
+            "unknown or unregistered token",
+            function="preview_tags",
+        )
     try:
         result = preview_tag_changes(str(path), new_tags)
     except Exception:
         # File-reader exceptions may include the absolute path.
-        return {"error": "Unable to preview tag changes"}
+        return make_error(
+            E_AUDIO_READ_FAILED,
+            "access denied by filesystem",
+            function="preview_tags",
+        )
     result.pop("file_path", None)
     return result
 
@@ -34,14 +53,18 @@ def stage_tag_changes(
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
-    Filename-derived artist/title candidates are unverified research clues.
-    Corroborate them with track metadata, duration, or release track listings
-    before staging them as tag values.
+    PREREQUISITE: Call evaluate_match first. Staging is BLOCKED unless the
+    file has a verified recording (verified=true from evaluate_match).
+    NEXT STEP: After staging, call finish_batch when all files are resolved.
     """
     try:
         entry = get_registry().resolve(token)
     except KeyError:
-        return {"error": "Unknown file token"}
+        return make_error(
+            E_UNKNOWN_TOKEN,
+            "unknown or unregistered token",
+            function="stage_tag_changes",
+        )
     try:
         return get_staging_manager().stage(
             absolute_path=entry,
@@ -56,7 +79,11 @@ def stage_tag_changes(
         )
     except Exception:
         # Staging errors can include the absolute path held by the manager.
-        return {"error": "Unable to stage tag changes"}
+        return make_error(
+            E_STAGING_FAILED,
+            "unable to stage tag changes",
+            function="stage_tag_changes",
+        )
 
 
 def list_staged_changes() -> List[Dict[str, Any]]:
@@ -73,9 +100,13 @@ def get_staged_change(stage_id: str) -> Dict[str, Any]:
     try:
         return get_staging_manager().get(stage_id)
     except (FileNotFoundError, ValueError) as error:
-        return {"error": str(error)}
+        return error_from_exception(error, function="get_staged_change")
     except Exception:
-        return {"error": "Unable to read staged change"}
+        return make_error(
+            E_STAGE_NOT_FOUND,
+            "unable to read staged change",
+            function="get_staged_change",
+        )
 
 
 def amend_staged_changes(
@@ -110,9 +141,13 @@ def amend_staged_changes(
             match_confidence=match_confidence,
         )
     except (FileNotFoundError, ValueError) as error:
-        return {"error": str(error)}
+        return error_from_exception(error, function="amend_staged_changes")
     except Exception:
-        return {"error": "Unable to amend staged change"}
+        return make_error(
+            E_STAGE_CONFLICT,
+            "unable to amend staged change",
+            function="amend_staged_changes",
+        )
 
 
 def withdraw_staged_change(
@@ -128,9 +163,13 @@ def withdraw_staged_change(
     try:
         return get_staging_manager().withdraw(stage_id, expected_revision, reason)
     except (FileNotFoundError, ValueError) as error:
-        return {"error": str(error)}
+        return error_from_exception(error, function="withdraw_staged_change")
     except Exception:
-        return {"error": "Unable to withdraw staged change"}
+        return make_error(
+            E_STAGE_CONFLICT,
+            "unable to withdraw staged change",
+            function="withdraw_staged_change",
+        )
 
 
 def register_tag_tools(app) -> None:
