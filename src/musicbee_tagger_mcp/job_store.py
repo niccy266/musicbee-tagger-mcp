@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from .data_paths import ensure_data_subdirectory
 
-STATUSES = ("pending", "in_progress", "done", "failed", "skipped")
+STATUSES = ("pending", "in_progress", "done", "failed", "skipped", "unresolved", "needs_review", "partial")
 
 
 def default_jobs_dir() -> Path:
@@ -264,7 +264,13 @@ class JobStore:
             if track is None or track["status"] != "in_progress":
                 unknown.append(token)
                 continue
-            track["status"] = "done" if result.get("success") else "failed"
+            # Support unresolved/partial outcomes: if result includes a "status"
+            # field, use it; otherwise fall back to success/failed.
+            requested_status = result.get("status")
+            if requested_status in ("unresolved", "needs_review", "partial"):
+                track["status"] = requested_status
+            else:
+                track["status"] = "done" if result.get("success") else "failed"
             track["error"] = (
                 str(result.get("error"))[:200] if not result.get("success") else None
             )
@@ -321,10 +327,15 @@ class JobStore:
             return {"error": str(error)}
         counts = {status: 0 for status in STATUSES}
         failed = []
+        unresolved = []
         for track in job["tracks"]:
             counts[track["status"]] = counts.get(track["status"], 0) + 1
             if track["status"] == "failed":
                 failed.append(
+                    {"display_name": track["display_name"], "error": track["error"]}
+                )
+            elif track["status"] in ("unresolved", "needs_review", "partial"):
+                unresolved.append(
                     {"display_name": track["display_name"], "error": track["error"]}
                 )
         return {
@@ -333,6 +344,7 @@ class JobStore:
             "counts": counts,
             "skipped": job.get("skipped", 0),
             "failed": failed,
+            "unresolved": unresolved,
         }
 
 
