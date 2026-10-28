@@ -27,6 +27,13 @@ def search_recordings_forensic(
     limit: int = 5,
 ) -> List[Dict[str, Any]]:
     """Search recordings and rank matches by service score and duration."""
+    # Normalize case: MusicBrainz search can miss all-caps or all-lowercase
+    # titles. Convert to title case for better matching.
+    if title:
+        title = title.strip().title() if title.isupper() or title.islower() else title.strip()
+    if artist:
+        artist = artist.strip().title() if artist.isupper() or artist.islower() else artist.strip()
+
     parts = []
     if artist:
         parts.append(f'artist:"{artist}"')
@@ -42,7 +49,12 @@ def search_recordings_forensic(
         return [{"error": f"MusicBrainz query error: {error}"}]
 
     candidates = []
+    _variant_keywords = ("isolated", "sped up", "slowed", "reverb", "nightcore", "8d audio", "bass boosted")
     for recording in results.get("recording-list", []):
+        rec_title = recording.get("title", "")
+        # Skip variant editions (isolated vocals, sped-up, etc.)
+        if any(kw in rec_title.lower() for kw in _variant_keywords):
+            continue
         length = recording.get("length")
         duration_score, duration_note = calculate_duration_score(
             duration_sec, int(length) if length else None
