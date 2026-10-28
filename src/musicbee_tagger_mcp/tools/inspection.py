@@ -96,7 +96,6 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
             # File-reader exceptions may include the absolute path.
             briefs.append(error_from_exception(exc, function="get_batch_brief"))
             briefs[-1]["token"] = token
-            briefs[-1]["display_name"] = path.name
             continue
         briefs.append({
             "token": token,
