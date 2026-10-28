@@ -60,6 +60,7 @@ evaluate_match = verify_mbid
 def register_musicbrainz_tools(app) -> None:
     app.tool()(search_canonical_release)
     app.tool()(verify_mbid)
+    app.tool()(get_release_tracklist)
 
 
 def propose_artist_split(
@@ -74,6 +75,48 @@ def propose_artist_split(
 def search_musicbrainz_artist(name: str, limit: int = 5) -> List[Dict[str, Any]]:
     """Confirm a candidate artist exists on MusicBrainz (with disambiguation)."""
     return search_artist(name, limit)
+
+
+def get_release_tracklist(release_id: str) -> Dict[str, Any]:
+    """Return a release's full tracklist with disc, track number, title, duration.
+
+    Given a release MBID, returns the release identity (title, artist, date)
+    and a list of tracks with disc number, track number, title, and duration.
+    """
+    from .musicbrainz_api import musicbrainzngs
+    try:
+        data = musicbrainzngs.get_release_by_id(
+            release_id, includes=["recordings", "media", "artist-credits"]
+        )
+    except Exception as error:
+        return {"error": f"Failed to fetch release {release_id}: {error}"}
+
+    release = data.get("release", {})
+    tracks = []
+    for medium in release.get("medium-list", []):
+        disc_number = medium.get("position", 1)
+        for track in medium.get("track-list", []):
+            recording = track.get("recording", {})
+            length = recording.get("length") or track.get("length")
+            duration = round(int(length) / 1000, 2) if length else None
+            tracks.append({
+                "disc_number": disc_number,
+                "track_number": track.get("number"),
+                "title": recording.get("title", track.get("title", "")),
+                "artist": recording.get("artist-credit-phrase", ""),
+                "duration_seconds": duration,
+            })
+
+    artist_credit = release.get("artist-credit-phrase", "")
+    return {
+        "release_id": release_id,
+        "title": release.get("title", ""),
+        "artist": artist_credit,
+        "date": release.get("date", ""),
+        "country": release.get("country", ""),
+        "total_tracks": len(tracks),
+        "tracklist": tracks,
+    }
 
 
 def verify_artists_on_recording(
