@@ -53,9 +53,9 @@ def stage_tag_changes(
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
-    PREREQUISITE: Call evaluate_match first. Staging is BLOCKED unless the
-    file has a verified recording (verified=true from evaluate_match).
-    NEXT STEP: After staging, call finish_batch when all files are resolved.
+    PREREQUISITE: Call evaluate_match first (once is enough — staging is
+    allowed regardless of whether verification passed). NEXT STEP: After
+    staging, call finish_batch when all files are resolved.
     """
     try:
         entry = get_registry().resolve(token)

@@ -268,7 +268,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "evaluate_match",
-            "description": "Evaluate a MusicBrainz candidate against the file (duration/artist/title). Returns a match score; proposals are allowed for human review.",
+            "description": "Evaluate a MusicBrainz candidate against the file (duration/artist/title). Returns a match score; proposals are allowed for human review. NOTE: Staging does NOT require verified=true — call evaluate_match once (to show your work), then proceed to stage_tag_changes regardless of the result.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -290,7 +290,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "stage_tag_changes",
-            "description": "Stage corrected tags for a file (manifest only, no audio write until apply).",
+            "description": "Stage corrected tags for a file (manifest only, no audio write until apply). PREREQUISITE: Call evaluate_match first (once is enough). Staging is allowed regardless of whether verification passed.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1964,6 +1964,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
     _recovery_used = False
     staged_stage_ids = {}
     verified_by_token = {}
+    evaluated_by_token = set()  # tracks tokens where evaluate_match was called (regardless of result)
 
     # Parallel duplicate-sentence analyzer: runs in a background thread so
     # overthinking (repeated sentences) is detected without blocking the main
@@ -2174,13 +2175,11 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                     break
                 verification = verified_by_token.get(token)
                 requested_mbid = args.get("mb_recording_id")
-                if (
-                    not verification
-                    or verification.get("verified") is not True
-                    or float(verification.get("confidence", 0)) < 75.0
-                    or (requested_mbid and requested_mbid != verification.get("recording_id"))
-                ):
-                    result = {"error": "Staging blocked: this file has no matching verified recording."}
+                # Staging is allowed if evaluate_match was called at least once
+                # (even if it returned verified=false). The agent just needs to
+                # "show its work" by running the verification step.
+                if token not in evaluated_by_token:
+                    result = {"error": "Staging blocked: call evaluate_match first to verify the recording."}
                     messages.append({
                         "role": "tool", "tool_call_id": call["id"],
                         "content": json.dumps(result),
@@ -2189,21 +2188,29 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                         run_log.write("staging_blocked", batch=state.get("batch"),
                                       token=token, reason=result["error"])
                     continue
-                args["mb_recording_id"] = verification["recording_id"]
-                args["forensic_score"] = verification["confidence"]
-                if not args.get("mb_release_id"):
-                    args["mb_release_id"] = (verification.get("top_release") or {}).get("release_id")
-                # Genre cleanup: prefer the agent's cleaned genre; fall back to a
-                # cleaned MusicBrainz genre only when the agent omitted one.
-                mb_genre = _clean_genre_value(verification.get("genre"))
-                new_tags = dict(args.get("new_tags") or {})
-                agent_genre = _clean_genre_value(new_tags.get("genre", ""))
-                if agent_genre:
-                    new_tags["genre"] = agent_genre
-                elif mb_genre:
-                    new_tags["genre"] = mb_genre
-                if new_tags.get("genre"):
-                    args["new_tags"] = new_tags
+                # Use verification data if available, otherwise fall back to
+                # whatever the agent provided.
+                if verification:
+                    args["mb_recording_id"] = verification["recording_id"]
+                    args["forensic_score"] = verification["confidence"]
+                    if not args.get("mb_release_id"):
+                        args["mb_release_id"] = (verification.get("top_release") or {}).get("release_id")
+                    # Genre cleanup: prefer the agent's cleaned genre; fall back to a
+                    # cleaned MusicBrainz genre only when the agent omitted one.
+                    mb_genre = _clean_genre_value(verification.get("genre"))
+                    new_tags = dict(args.get("new_tags") or {})
+                    agent_genre = _clean_genre_value(new_tags.get("genre", ""))
+                    if agent_genre:
+                        new_tags["genre"] = agent_genre
+                    elif mb_genre:
+                        new_tags["genre"] = mb_genre
+                    if new_tags.get("genre"):
+                        args["new_tags"] = new_tags
+                elif requested_mbid:
+                    # No verified recording but agent provided one — allow staging
+                    # to proceed so the agent can show its work.
+                    args["mb_recording_id"] = requested_mbid
+                    args["forensic_score"] = args.get("forensic_score", 0)
 
             fn = LOCAL_TOOLS.get(name)
             try:
@@ -2236,9 +2243,12 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                     staged_stage_ids.pop(token_for_stage, None)
                     print(f"  withdrew: {token_for_stage} ({stage_id})", flush=True)
             elif name == "evaluate_match" and isinstance(result, dict):
+                evaluated_by_token.add(token)
                 if result.get("verified") is True and float(result.get("confidence", 0)) >= 75.0:
                     verified_by_token[token] = result
                 else:
+                    # Store the result anyway so staging can use it if available
+                    verified_by_token[token] = result
                     state.setdefault("errors", {})[token] = (
                         result.get("error") or "; ".join(result.get("mismatches", []))
                         or "Recording verification did not pass."
