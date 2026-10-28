@@ -141,6 +141,9 @@ def print_review(manifest: dict, stage_id: str) -> None:
     print(f"\nOriginal title: {_display_value(title)}")
     print(f"File           : {manifest['display_name']}")
     print(f"Stage ID       : {stage_id}")
+    notes = manifest.get("notes", "")
+    if notes:
+        print(f"\nReason: {notes}")
     score = manifest.get("forensic_score")
     if score is not None:
         print(f"MusicBrainz score: {score:.1f}")
@@ -165,6 +168,8 @@ def cmd_list(staging) -> None:
         print(f"  created    : {entry['created_at']}")
         if (score := entry.get("forensic_score")) is not None:
             print(f"  MB score   : {score:.1f}")
+        if (notes := entry.get("notes")):
+            print(f"  reason     : {notes}")
         print("  changes    :")
         _print_diff(entry.get("diff_summary", []), include_title=False, indent="    ")
         print()

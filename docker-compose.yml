@@ -1,0 +1,99 @@
+# docker-compose.yml — MusicBee Tagger MCP with HTTPS + two-container sandboxing.
+#
+# Container 1: musicbee-mcp  — HTTPS MCP server, read-only root, writes staged
+#                            manifests to /staging.  Exposes HTTPS on 8443.
+# Container 2: musicbee-apply — Apply agent, no network, writes tagged audio files
+#                            under /audio, reads staged manifests from /staging.
+#
+# Usage:
+#   cp .env.example .env
+#   # Edit .env: set MUSICBEE_AUDIO_DIR to your local audio folder.
+#   docker compose up -d
+#   # Claude Desktop connects to https://localhost:8443/mcp
+#   # To apply staged changes:
+#   docker compose exec musicbee-apply musicbee-tagger-apply --all
+#
+# Security:
+#   - musicbee-mcp: read-only root fs, /staging writable, /data writable,
+#     /audio mounted read-only, no outbound network except MusicBrainz API.
+#   - musicbee-apply: no network, /staging read-only, /audio read-write.
+
+services:
+  musicbee-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: musicbee-mcp
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MCP_HTTPS_PORT:-8443}:8443"
+    environment:
+      - MUSICBEE_TAGGER_DATA_DIR=/data
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8443
+      - SECRET_COMMAND_TOKEN=${SECRET_COMMAND_TOKEN:-changeme}
+    volumes:
+      # Audio files: read-only — MCP server must never write audio.
+      - ${MUSICBEE_AUDIO_DIR:-./audio}:/audio:ro
+      # Shared staging directory — MCP writes, apply reads.
+      - musicbee-staging:/staging:rw
+      # Private data dir (registrations, queue, state).
+      - musicbee-data:/data:rw
+      # Certificates for HTTPS.
+      - musicbee-certs:/certs:ro
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+      - /run:noexec,nosuid,size=10m
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN   # needed for entrypoint to fix ownership on mounted volumes
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - musicbee-internal
+    depends_on:
+      - musicbee-apply
+
+  musicbee-apply:
+    build:
+      context: .
+      dockerfile: Dockerfile.apply
+    container_name: musicbee-apply
+    restart: "no"
+    environment:
+      - MUSICBEE_TAGGER_DATA_DIR=/data
+    volumes:
+      # Audio files: read-write — apply agent is the ONLY path that modifies tags.
+      - ${MUSICBEE_AUDIO_DIR:-./audio}:/audio:rw
+      # Shared staging directory — read-only; apply agent only reads manifests here.
+      - musicbee-staging:/staging:ro
+      # Private data dir.
+      - musicbee-data:/data:rw
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+      - /run:noexec,nosuid,size=10m
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - musicbee-internal
+    # No ports exposed — not network-facing.
+
+volumes:
+  musicbee-staging:
+  musicbee-data:
+  musicbee-certs:
+
+networks:
+  musicbee-internal:
+    driver: bridge
+    # Internal network: apply container cannot reach the internet.
+    # MCP container can reach MusicBrainz API via Docker's default DNS.

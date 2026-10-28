@@ -27,6 +27,7 @@ def evaluate_match(
     expected_title: Optional[str] = None,
     duration_sec: Optional[float] = None,
     forensic_score: Optional[float] = None,
+    release_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Evaluate a recording candidate against local title, artist, and duration.
@@ -38,7 +39,7 @@ def evaluate_match(
     """
     return verify_recording_mbid(
         recording_id, expected_artist, expected_title, duration_sec,
-        forensic_score=forensic_score, **kwargs,
+        forensic_score=forensic_score, release_id=release_id, **kwargs,
     )
 
 

@@ -277,6 +277,10 @@ TOOLS = [
                     },
                     "mb_recording_id": {
                         "type": "string"
+                    },
+                    "release_id": {
+                        "type": "string",
+                        "description": "Optional release MBID to validate the recording belongs to this release."
                     }
                 },
                 "required": [

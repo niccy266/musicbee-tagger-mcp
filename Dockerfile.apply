@@ -1,0 +1,41 @@
+# Dockerfile.apply — Apply agent container (write to real audio files, read from staging)
+# Build: docker build -f Dockerfile.apply -t musicbee-apply .
+# Run as part of docker-compose; triggered by secret user command via docker exec.
+FROM python:3.14-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MUSICBEE_TAGGER_DATA_DIR=/data
+
+# Install runtime dependencies only.
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+        "mutagen>=1.47.0" \
+        "musicbrainzngs>=0.7.1" \
+        "ftfy>=6.2.0"
+
+# Non-privileged user for the apply agent.
+RUN useradd --uid 10002 --create-home --shell /bin/false applyuser
+
+WORKDIR /app
+
+# Copy package source.
+COPY src/ ./src/
+COPY pyproject.toml ./
+
+RUN pip install --no-cache-dir -e ".[dev]"
+
+# The apply container needs WRITE access to the real audio directory (/audio)
+# and READ access to the shared staging directory (/staging).
+RUN mkdir -p /staging /data /audio && \
+    chown -R applyuser:applyuser /staging /data /audio /app
+
+USER applyuser
+
+# No ports exposed — this container is not network-facing.
+EXPOSE 0
+
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "from pathlib import Path; assert Path('/staging').is_dir()" || exit 1
+
+ENTRYPOINT ["/app/scripts/entrypoint_apply.sh"]

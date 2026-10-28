@@ -30,6 +30,7 @@ def evaluate_match(
     expected_title: Optional[str] = None,
     duration_sec: Optional[float] = None,
     forensic_score: Optional[float] = None,
+    release_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Compare an identified recording with expected tags and local duration."""
@@ -105,6 +106,12 @@ def evaluate_match(
 
     parsed_releases = []
     top_release = None
+    release_match = None
+    if release_id:
+        release_match = any(
+            release.get("id") == release_id
+            for release in recording.get("release-list", [])
+        )
     for release in recording.get("release-list", []):
         info = {
             "release_id": release.get("id"),
@@ -119,8 +126,13 @@ def evaluate_match(
     if top_release is None and parsed_releases:
         top_release = parsed_releases[0]
 
+    if release_id and release_match is False:
+        mismatches.append(
+            f"Recording is not part of release {release_id}"
+        )
+
     return {
-        "verified": confidence >= 50.0 and (duration_diff is None or duration_diff <= 15.0),
+        "verified": confidence >= 50.0 and (duration_diff is None or duration_diff <= 15.0) and (release_match is not False),
         "confidence": round(confidence, 1),
         "recording_id": recording_id,
         "mb_title": title,
@@ -134,6 +146,7 @@ def evaluate_match(
         "genre": "; ".join(genres),
         "mismatches": mismatches,
         "forensic_score": forensic_score,
+        "release_match": release_match,
     }
 
 
