@@ -2660,6 +2660,7 @@ def main():
                     "token": token,
                     "success": token in batch_state["staged"],
                     "error": errors.get(token, "Agent did not stage or resolve this file"),
+                    "status": "unresolved" if token in batch_state.get("unresolved", []) else None,
                 }
                 for token in tokens if token in completed_tokens
             ]
