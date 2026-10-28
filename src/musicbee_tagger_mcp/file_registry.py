@@ -38,6 +38,10 @@ class FileRegistry:
         p = Path(path).expanduser().resolve()
         if not p.is_file():
             raise FileNotFoundError("File not found")
+        existing = self.token_for_path(p)
+        if existing is not None:
+            return {"token": existing, "display_name": p.name,
+                    "already_registered": True}
         token = str(uuid.uuid4())
         self._store[token] = p
         if self.directory is not None:
@@ -102,6 +106,24 @@ class FileRegistry:
                     candidates.add(token)
         return candidates
 
+
+    def token_for_path(self, path: Path) -> Optional[str]:
+        """Return the token already registered for this path, if any."""
+        resolved = Path(path).expanduser().resolve()
+        for token, registered in self._store.items():
+            if registered == resolved:
+                return token
+        if self.directory is not None:
+            for record_path in self.directory.glob("*.json"):
+                try:
+                    token = str(uuid.UUID(record_path.stem))
+                    record = json.loads(record_path.read_text(encoding="utf-8"))
+                    if token not in self._store and Path(record["path"]) == resolved:
+                        self._store[token] = resolved
+                        return token
+                except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    continue
+        return None
 
     def is_registered(self, token: str) -> bool:
         try:

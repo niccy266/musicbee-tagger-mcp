@@ -274,3 +274,31 @@ def test_registered_playlist_tools_dispatch_to_job_store(tmp_path, monkeypatch):
     assert app.tools["job_status"]("not-a-valid-job-id") == {
         "error": "Unknown job id"
     }
+
+
+def test_preview_batch_does_not_claim(env):
+    """#40: preview_batch reports the next batch without mutating state."""
+    reg, jobs, tmp_path = env
+    playlist = _playlist(tmp_path, count=3)
+    import io as _io
+    code, text, _ = _register_cli(env, playlist, _io.StringIO())
+    assert code == 0
+    (job_id,) = [line.split()[-1].rstrip(".") for line in text.splitlines() if "playlist job" in line]
+
+    result = jobs.preview_batch(job_id, size=2)
+    assert len(result["preview"]) == 2
+    assert result["remaining"] == 3
+    # Nothing claimed: a following next_batch still starts at track 0.
+    batch = jobs.next_batch(job_id, size=2)
+    assert batch["batch"][0]["display_name"] == result["preview"][0]["display_name"]
+    assert batch["remaining"] == 1
+
+
+def test_preview_batch_rejects_bad_size(env):
+    reg, jobs, tmp_path = env
+    playlist = _playlist(tmp_path, count=1)
+    import io as _io
+    code, text, _ = _register_cli(env, playlist, _io.StringIO())
+    (job_id,) = [line.split()[-1].rstrip(".") for line in text.splitlines() if "playlist job" in line]
+    assert "error" in jobs.preview_batch(job_id, size=0)
+    assert "error" in jobs.preview_batch(job_id, size=99)
