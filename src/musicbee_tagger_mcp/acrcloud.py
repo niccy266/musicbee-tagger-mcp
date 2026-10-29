@@ -388,6 +388,17 @@ def _normalize_response(payload, *, provider, duration_sec):
         except (TypeError, ValueError):
             confidence = None
     mb_recording_id = None
+    composers = item.get("composers") or item.get("composer") or []
+    if isinstance(composers, str):
+        composer = composers
+    elif isinstance(composers, dict):
+        composer = composers.get("name")
+    else:
+        composer = ", ".join(
+            str(entry.get("name") if isinstance(entry, dict) else entry)
+            for entry in composers
+            if (entry.get("name") if isinstance(entry, dict) else entry)
+        )
     external = item.get("external_metadata") or {}
     mb_entries = external.get("musicbrainz") or []
     if mb_entries:
@@ -409,6 +420,7 @@ def _normalize_response(payload, *, provider, duration_sec):
         "acr_id": item.get("acrid"),
         "musicbrainz_recording_id": mb_recording_id,
         "release_date": item.get("release_date"),
+        "composer": composer or None,
         "genres": [
             genre.get("name")
             for genre in (item.get("genres") or [])
