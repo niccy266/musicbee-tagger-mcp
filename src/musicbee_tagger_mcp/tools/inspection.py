@@ -59,7 +59,7 @@ def extract_filename_clues(token: str) -> Dict[str, Any]:
             function="extract_filename_clues",
         )
     try:
-        return extract_clues_from_filename(str(path))
+        return extract_clues_from_filename(str(entry))
     except Exception as exc:
         # Filename parsing should not fail, but if it does, report it
         # path-free with the tool's function name.
