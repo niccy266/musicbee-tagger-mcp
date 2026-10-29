@@ -60,7 +60,6 @@ def identify_acrcloud(token: str) -> Dict[str, Any]:
         filename=path.name,
         duration_sec=duration,
     )
-    result.pop("raw", None)
     return result
 
 
