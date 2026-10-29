@@ -60,9 +60,9 @@ E_INTERNAL = "E_INTERNAL"
 _EXCEPTION_TO_CODE: dict[type[BaseException], str] = {
     FileNotFoundError: E_FILE_NOT_FOUND,
     PermissionError: E_PERMISSION_DENIED,
-    ValueError: E_UNSUPPORTED_FORMAT,
-    SyntaxError: E_PARSE_ERROR,
     UnicodeError: E_PARSE_ERROR,
+    SyntaxError: E_PARSE_ERROR,
+    ValueError: E_UNSUPPORTED_FORMAT,
     KeyError: E_UNKNOWN_TOKEN,
 }
 
@@ -108,7 +108,7 @@ def make_error(
         import re
 
         safe_message = re.sub(r"[A-Za-z]:\\.*", "[path]", safe_message)
-        safe_message = re.sub(r"(?<!\S)/[^\s]+", "[path]", safe_message)
+        safe_message = re.sub(r"(?<!\S)/[^\s/]+$", "[path]", safe_message)
 
     result: dict = {"error_code": code, "error": safe_message}
     if function is not None:

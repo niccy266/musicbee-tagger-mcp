@@ -16,6 +16,7 @@ import pytest
 from musicbee_tagger_mcp.error_codes import (
     E_AUDIO_READ_FAILED,
     E_FILE_NOT_FOUND,
+    E_INVALID_INPUT,
     E_INTERNAL,
     E_PARSE_ERROR,
     E_PERMISSION_DENIED,

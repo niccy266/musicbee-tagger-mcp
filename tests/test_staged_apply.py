@@ -69,5 +69,6 @@ def test_cli_applier_marks_manifest_applied_without_exposing_path(tmp_path):
         "display_name": audio.name,
         "fields_written": ["title"],
         "backup_created": True,
+        "backup_path": "track.ogg.bak",
     }
     assert applier.load(staged["stage_id"])["applied"] is True
