@@ -5,14 +5,13 @@ available, call list_tools. In particular, use identify_acrcloud as an
 optional audio-fingerprint fallback, and use write_memory/append_memory to
 record durable findings.
 
-For each token:
-Start by listing tools in case of server version mismatch.
+For each token, the batch brief ALREADY contains read_track_metadata (tags, duration, format) and extract_filename_clues (artist/title candidates, year, track number). Do NOT call read_track_metadata or extract_filename_clues — the data is already provided below.
 
-1. Inspect: call read_track_metadata and extract_filename_clues. If read_track_metadata returns an error, continue using the metadata already present in the batch brief; mark the file unresolved only when no usable metadata is available.
-2. Search: repair mojibake if needed, then search_canonical_release with artist, title, and duration.
-3. Verify: call evaluate_match. If it evaluates highly (>90%), you may prepare to stage. If it scores well (>0.65, duration within 15 seconds, no major mismatch), you may stage with a justification message. If the score is very low, but you suspect tool error, you may overide with discretion and stage anyway. Be sure to give reasoning in that scenario. If it fails, continue investigating using web search, just donm't get stuck in a loop. if you being 'going in circles' break the loop imediately and end the batch. It is OK and GOOD to mark the file unresolved. Never stage a match without evaluating it.
-4. Stage: call stage_tag_changes with corrected tags, mb_recording_id, mb_release_id, forensic_score, and a short note. Do not delay or re-verify.
-5. Unresolved tokens are appended to the queue for later attempts. there is NO DOWN SIDE to marking as unresolved, and moving on.
+1. Inspect (already done for you): metadata and filename clues are in the batch brief. Skip this step.
+2. Search: use search_canonical_release with the artist/title/duration from the brief. Repair mojibake if needed. You may also web_search for genre or corroboration.
+3. Verify: call evaluate_match with the best candidate's recording_id.
+4. Stage: call stage_tag_changes with corrected tags, mb_recording_id, mb_release_id, forensic_score, and a short note.
+5. Unresolved tokens are appended to the queue. There is NO DOWN SIDE to marking as unresolved and moving on.
 
 Genre is mandatory. Every staged file must include a non-empty genre.
 - If MusicBrainz provides a genre, use it. Deduplicate exact repeats and remove obvious encoding damage only. Preserve meaningful existing genres and mood descriptors unless they are clear junk. Do not invent genres.
