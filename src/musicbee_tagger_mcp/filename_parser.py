@@ -8,6 +8,7 @@ Operates on display names only (no directory paths).
 """
 
 import re
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 
@@ -21,7 +22,9 @@ AUDIO_EXTS = {".mp3", ".ogg", ".flac", ".m4a", ".wav", ".aac", ".wma", ".aiff", 
 
 def clean_stem(filename: str) -> str:
     """Strip extension and normalize whitespace."""
-    stem = filename
+    # Accept either a bare filename or a relative/absolute path; only the
+    # final component is treated as the filename stem.
+    stem = str(filename).replace("\\", "/").rsplit("/", 1)[-1]
     for ext in AUDIO_EXTS:
         if stem.lower().endswith(ext):
             stem = stem[:-len(ext)]
@@ -42,6 +45,13 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
     """
     raw_stem = clean_stem(filename)
 
+    # Preserve up to two levels of (relative) folder context as hints without
+    # exposing an absolute path.  This keeps country/year clues from layouts
+    # such as "Country/Year/track.mp3".
+    _parts = [part for part in str(filename).replace("\\", "/").split("/") if part]
+    folder_parts = _parts[-3:-1] if len(_parts) >= 2 else []
+    relative_path_hint = "/".join(folder_parts + [_parts[-1]]) if _parts else str(filename)
+
     # 1. Extract bracketed segments
     brackets = BRACKET_REGEX.findall(raw_stem)
     cleaned_stem = BRACKET_REGEX.sub(" ", raw_stem)
@@ -49,7 +59,7 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
 
     # 2. Extract year if present in brackets or text
     detected_year: Optional[str] = None
-    year_match = YEAR_REGEX.search(raw_stem)
+    year_match = YEAR_REGEX.search(relative_path_hint)
     if year_match:
         detected_year = year_match.group(1)
 
@@ -93,8 +103,13 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
             continue
         context_clues.append(b_clean)
 
+    # Expose folder names (up to two levels) as non-path hints.
+    for folder in folder_parts:
+        if folder and folder.lower() not in ("flac", "mp3", "320"):
+            context_clues.append(folder)
+
     return {
-        "raw_filename": filename,
+        "raw_filename": Path(filename).name,
         "cleaned_stem": cleaned_stem,
         "track_number_guess": track_num,
         "artist_guess": artist_guess,
@@ -108,4 +123,6 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
         ),
         "year_guess": detected_year,
         "bracket_clues": context_clues,
+        "relative_path_hint": relative_path_hint,
+        "folder_context": folder_parts,
     }

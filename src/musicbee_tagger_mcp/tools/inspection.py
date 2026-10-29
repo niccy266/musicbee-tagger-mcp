@@ -59,7 +59,7 @@ def extract_filename_clues(token: str) -> Dict[str, Any]:
             function="extract_filename_clues",
         )
     try:
-        return extract_clues_from_filename(entry.name)
+        return extract_clues_from_filename(str(path))
     except Exception as exc:
         # Filename parsing should not fail, but if it does, report it
         # path-free with the tool's function name.
@@ -103,7 +103,7 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
             "duration_seconds": metadata.get("duration_seconds"),
             "format": metadata.get("format"),
             "tags": metadata.get("tags", {}),
-            "filename_clues": extract_clues_from_filename(path.name),
+            "filename_clues": extract_clues_from_filename(str(path)),
         })
 
 
