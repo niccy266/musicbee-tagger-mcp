@@ -83,7 +83,7 @@ def get_release_tracklist(release_id: str) -> Dict[str, Any]:
     Given a release MBID, returns the release identity (title, artist, date)
     and a list of tracks with disc number, track number, title, and duration.
     """
-    from .musicbrainz_api import musicbrainzngs
+    from ..musicbrainz_api import musicbrainzngs
     try:
         data = musicbrainzngs.get_release_by_id(
             release_id, includes=["recordings", "media", "artist-credits"]
