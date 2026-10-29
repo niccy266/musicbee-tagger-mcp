@@ -100,11 +100,17 @@ class StagingManager:
         """
         # Generate the field-by-field diff (reads file for current values).
         diff = _changed_fields(str(absolute_path), proposed_tags)
+        try:
+            baseline_tags = read_audio_metadata(str(absolute_path)).get("tags", {})
+        except Exception:
+            baseline_tags = None
+
 
         stage_id = str(uuid.uuid4())
         manifest = {
             "stage_id": stage_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "previous_tags": baseline_tags,
             "display_name": display_name,
             "absolute_path": str(absolute_path),  # stored on disk, never returned
             "proposed_tags": proposed_tags,

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from .stage_manifest_store import StageManifestStore
+from .metadata_reader import read_audio_metadata
 from .staging import get_staging_manager
 from .tag_applier import apply_tags_to_file
 
@@ -29,6 +30,16 @@ class StagedChangeApplier:
                 return {"status": "failed", "stage_id": stage_id}
             if manifest.get("archived"):
                 return {"status": "archived", "stage_id": stage_id}
+
+            baseline = manifest.get("previous_tags")
+            if baseline is not None:
+                try:
+                    current_tags = read_audio_metadata(manifest["absolute_path"]).get("tags", {})
+                except Exception:
+                    raise ValueError("Unable to re-read audio file; refusing to apply.")
+                if current_tags != baseline:
+                    raise ValueError("Source tags changed since staging; refusing to apply.")
+
 
             result = apply_tags_to_file(
                 manifest["absolute_path"],
