@@ -483,3 +483,13 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed POSIX path stripping regex from `/[^\\s]*` to `(?<!\S)/[^\s]+` with a negative lookbehind for non-whitespace so that slash-delimited terms like MIME types (`audio/mpeg`), URLs (`/v1/releases`), or strings (`artist/title`) are no longer incorrectly treated as paths and redacted to `[path]`.
 - Mapped `SyntaxError` and `UnicodeError` to `E_PARSE_ERROR` in `_EXCEPTION_TO_CODE`.
 - Added unit tests covering standard Windows paths, non-path text preservation (MIME types, URLs, artist/title), and `E_PARSE_ERROR` mapping in `tests/test_error_codes.py`.
+
+
+### 2026-10-29 — Repo health follow-up (CI, lint, stale tests)
+
+- Fixed CI matrix (`3.10` -> `3.11`) and added `fail-fast: false` so all matrix legs run.
+- Fixed pylint `E0401` by correcting the relative import in `tools/musicbrainz.py`.
+- Repaired stale exact-equality tests (playlist job counts, tool registry, backup path).
+- Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
+- Ran full suite locally and verified lint passes.
+- Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
