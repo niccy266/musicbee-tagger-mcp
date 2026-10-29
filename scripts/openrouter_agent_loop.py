@@ -2223,6 +2223,8 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                 result = {"error": f"{type(error).__name__}: {str(error)[:300]}"}
             result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
 
+            print(f"  tool {name}: {json.dumps(result, ensure_ascii=False)[:4000]}", flush=True)
+
             if name == "stage_tag_changes":
                 if "error" not in result:
                     staged.append(token)
