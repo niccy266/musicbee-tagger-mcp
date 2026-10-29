@@ -1,3 +1,10 @@
+### 2026-10-29 — Documentation/agent prompt consistency audit
+
+- Added a visible, consistent rule to agent-facing docs and prompts: do not run shell commands (bash, cmd, powershell, python, etc.) without first making absolutely sure the required action cannot be performed using an existing exposed tool; prefer the exposed tool and use a shell only as a last resort with justification.
+- Updated AGENTS.md, .github/copilot-instructions.md, both musicbee-investigator SKILL.md copies, prompts/openrouter_agent.md, and docs/OPENROUTER_AGENT.md.
+- Investigated repository test state: current branch has 6 failures (2 added by recent error_codes work plus 4 pre-existing on master); documented without changing unrelated code.
+
+
 # MusicBee Audio Tag & Scrobble Optimizer (MCP Bridge)
 
 ## 📌 Project Overview

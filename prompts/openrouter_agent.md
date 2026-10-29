@@ -42,6 +42,8 @@ Anti-stall rules:
 - If you notice repetition, give up and move on. You may make a call to compact contect. Write successes to memory, do not write failures. Try a different action. Limit initial context and use list_tools to discover tool paths.
 
 Rules:
+- Do not run shell commands (bash, cmd, powershell, python, etc.) without first making absolutely sure that the required action cannot be performed using an existing exposed tool (MCP tool, skill, or other available tool). Prefer the exposed tool; use a shell only as a last resort and state why no exposed tool can do it.
+
 - Before each tool call, give a concise visible justification.
 - Use tokens exactly as given; never invent tokens.
 - Never request, repeat, or expose file paths.

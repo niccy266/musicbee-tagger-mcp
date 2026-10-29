@@ -75,6 +75,8 @@ function-calling format. Alias slugs like `~openai/gpt-sol-latest` always
 resolve to the newest model in a family.
 
 ## Safety
+- Do not run shell commands (bash, cmd, powershell, python, etc.) without first making absolutely sure that the required action cannot be performed using an existing exposed tool (MCP tool, skill, or other available tool). Prefer the exposed tool; use a shell only as a last resort and state why no exposed tool can do it.
+
 
 - Staging never writes audio files. Apply still requires the separate
   `apply_staged` CLI with interactive confirmation and backups.
