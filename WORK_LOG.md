@@ -470,3 +470,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Documented the agent loop's compaction/context flags (`--compaction-model`, `--no-compact-context`, `--context-chars`, `--thought-tokens`) and the full tool surface in `docs/OPENROUTER_AGENT.md`.
 - Dropped a duplicated `web_search` entry in the pinned tool set in `tests/test_secure_pipeline.py`.
 - Validation: 175 passed, 2 skipped.
+
+### 2026-10-29 — Fix Windows path redaction, POSIX path regex corruption, and E_PARSE_ERROR mapping
+- Fixed Windows path redaction regex in `src/musicbee_tagger_mcp/error_codes.py` from `[A-Za-z]:\\\\.*` to `[A-Za-z]:\\.*` to correctly match single backslashes in standard Windows paths (`C:\music\song.mp3`).
+- Fixed POSIX path stripping regex from `/[^\\s]*` to `(?<!\S)/[^\s]+` with a negative lookbehind for non-whitespace so that slash-delimited terms like MIME types (`audio/mpeg`), URLs (`/v1/releases`), or strings (`artist/title`) are no longer incorrectly treated as paths and redacted to `[path]`.
+- Mapped `SyntaxError` and `UnicodeError` to `E_PARSE_ERROR` in `_EXCEPTION_TO_CODE`.
+- Added unit tests covering standard Windows paths, non-path text preservation (MIME types, URLs, artist/title), and `E_PARSE_ERROR` mapping in `tests/test_error_codes.py`.
