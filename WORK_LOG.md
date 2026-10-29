@@ -420,6 +420,21 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated `tests/test_secure_pipeline.py` assertions to match new error code format
 - Validation: all 18 new error code tests passed; full suite 185 passed, 4 skipped, 2 pre-existing failures (ffmpeg missing, tool name mismatch); no regressions
 
+### 2026-10-28 — Close already-implemented issues
+
+- Issue #40: preview_batch already implemented. Closed.
+- Issue #41: release_batch already implemented. Closed.
+- Issue #38: withdraw/amend staged changes already implemented. Closed.
+- Issue #17: ACRCloud fingerprint fallback already implemented. Closed.
+- Issue #29: Docker container with HTTP MCP already implemented. Closed.
+- Issue #6: Stage-manifest persistence hardening already implemented. Closed.
+- Issue #4: MusicBrainz verification gate already implemented. Closed.
+- Issue #2: Path-safe error reporting already implemented. Closed.
+- Issue #44: Case-insensitive search + variant filtering. PR #59 merged.
+- Issue #42: Unresolved/partial batch outcomes. PR #60 merged.
+- Issue #43: Release membership validation in evaluate_match. PR #58 merged.
+- Issue #46: Release tracklist lookup. PR #61 merged.
+
 ### 2026-10-28 — Tackle issues #44, #42, #40, #43
 
 - Issue #44: Made release search case-insensitive (title-cases all-caps/all-lowercase input) and filtered variant editions (isolated vocals, sped-up, slowed, reverb, nightcore, 8d audio, bass boosted). PR #59 merged.
