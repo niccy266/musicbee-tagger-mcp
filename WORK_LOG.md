@@ -420,6 +420,14 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated `tests/test_secure_pipeline.py` assertions to match new error code format
 - Validation: all 18 new error code tests passed; full suite 185 passed, 4 skipped, 2 pre-existing failures (ffmpeg missing, tool name mismatch); no regressions
 
+### 2026-10-28 — Tackle issues #44, #42, #40, #43
+
+- Issue #44: Made release search case-insensitive (title-cases all-caps/all-lowercase input) and filtered variant editions (isolated vocals, sped-up, slowed, reverb, nightcore, 8d audio, bass boosted). PR #59 merged.
+- Issue #42: Support unresolved/partial outcomes in complete_batch (status field), job_status returns unresolved tracks separately, agent loop passes status. PR #60 merged.
+- Issue #40: Already implemented (preview_batch). Closed.
+- Issue #43: Added release_id parameter to evaluate_match for release membership validation. PR #58 merged.
+- All CI jobs pass.
+
 ### 2026-10-28 — Fix agent NameError crashes and improve tool descriptions
 
 - Fixed `NameError: compact_context_with_openrouter` by moving `__main__` block to end of file.
