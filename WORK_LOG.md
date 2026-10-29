@@ -420,6 +420,12 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated `tests/test_secure_pipeline.py` assertions to match new error code format
 - Validation: all 18 new error code tests passed; full suite 185 passed, 4 skipped, 2 pre-existing failures (ffmpeg missing, tool name mismatch); no regressions
 
+### 2026-10-28 — Streamline agent onboarding
+
+- Updated system prompt: metadata and filename clues are pre-provided in the batch brief. Agent should skip read_track_metadata/extract_filename_clues and go straight to web_search and search_canonical_release.
+- Updated tool descriptions in openrouter_agent_loop.py to mark read_track_metadata and extract_filename_clues as "ALREADY PROVIDED — do NOT call".
+- PR #62 merged.
+
 ### 2026-10-28 — Close already-implemented issues
 
 - Issue #40: preview_batch already implemented. Closed.
