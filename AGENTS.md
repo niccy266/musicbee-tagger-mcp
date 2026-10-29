@@ -1,5 +1,10 @@
 # Repository agent guidance
 
+## Tool use before shell commands
+
+- Do not run shell commands (bash, cmd, powershell, python, etc.) without first making absolutely sure that the required action cannot be performed using an existing exposed tool (MCP tool, skill, or other available tool). Prefer the exposed tool; use a shell only as a last resort and state why no exposed tool can do it.
+
+
 ## Validation and pushing changes
 
 - Always run tests relevant to code changes before finishing work, using the project's virtual environment when available.

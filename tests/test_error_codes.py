@@ -16,6 +16,7 @@ import pytest
 from musicbee_tagger_mcp.error_codes import (
     E_AUDIO_READ_FAILED,
     E_FILE_NOT_FOUND,
+    E_INVALID_INPUT,
     E_INTERNAL,
     E_PARSE_ERROR,
     E_PERMISSION_DENIED,
@@ -82,6 +83,16 @@ def test_make_error_strips_windows_paths():
     assert "Music" not in result["error"]
     assert "[path]" in result["error"]
 
+    # Also test single backslash standard Windows paths
+    result2 = make_error(
+        E_FILE_NOT_FOUND,
+        "could not open C:\\Music\\Artist\\track.flac",
+        function="read_track_metadata",
+    )
+    assert "C:" not in result2["error"]
+    assert "Music" not in result2["error"]
+    assert "[path]" in result2["error"]
+
 
 def test_make_error_strips_posix_paths():
     result = make_error(
@@ -91,6 +102,20 @@ def test_make_error_strips_posix_paths():
     )
     assert "/home" not in result["error"]
     assert "[path]" in result["error"]
+
+
+def test_make_error_preserves_non_path_text():
+    msg = "Invalid audio/mpeg format or artist/title in /v1/releases or endpoint /api"
+    result = make_error(E_INVALID_INPUT, msg)
+    assert "audio/mpeg" in result["error"]
+    assert "artist/title" in result["error"]
+    assert "/v1/releases" in result["error"]
+    assert "[path]" in result["error"]
+
+
+def test_error_from_exception_maps_parse_error():
+    assert error_from_exception(SyntaxError("bad syntax"))["error_code"] == E_PARSE_ERROR
+    assert error_from_exception(UnicodeError("bad unicode"))["error_code"] == E_PARSE_ERROR
 
 
 def test_error_from_exception_strips_paths_from_messages():
