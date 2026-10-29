@@ -108,7 +108,7 @@ def make_error(
         import re
 
         safe_message = re.sub(r"[A-Za-z]:\\.*", "[path]", safe_message)
-        safe_message = re.sub(r"(?<!\S)/[^\s/]+$", "[path]", safe_message)
+        safe_message = re.sub(r"(?<!\S)/\S+$", "[path]", safe_message)
 
     result: dict = {"error_code": code, "error": safe_message}
     if function is not None:
