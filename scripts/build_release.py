@@ -42,7 +42,20 @@ def build_mcpb_archive(output_path: Path, version: str) -> None:
     with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(manifest_path, "manifest.json")
         archive.write(ROOT / "release" / "mcpb" / "server.py", "server.py")
-        archive.write(ROOT / "pyproject.toml", "pyproject.toml")
+        pyproject_text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        # Strip the [tool.uv] section (local dev config) from the bundled copy.
+        lines = pyproject_text.splitlines()
+        filtered = []
+        skip = False
+        for line in lines:
+            if line.strip() == "[tool.uv]":
+                skip = True
+                continue
+            if skip and line.startswith("["):
+                skip = False
+            if not skip:
+                filtered.append(line)
+        archive.writestr("pyproject.toml", "\n".join(filtered) + "\n")
         archive.writestr(".python-version", "3.11\n")
         archive.write(ROOT / "README.md", "README.md")
         package_source = ROOT / "src" / "musicbee_tagger_mcp"

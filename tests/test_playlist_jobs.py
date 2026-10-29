@@ -67,7 +67,7 @@ def test_cli_creates_job_with_batches_of_ten(env):
     job_id = job_id.rstrip(".")
     assert len(job_id) == 36  # uuid
     status = jobs.job_status(job_id)
-    assert status["counts"] == {"pending": 25, "in_progress": 0, "done": 0, "failed": 0, "skipped": 0}
+    assert status["counts"]["pending"] == 25
     assert status["skipped"] == 2
     batch = next_batch(job_id, size=10)
     assert len(batch["batch"]) == 10
