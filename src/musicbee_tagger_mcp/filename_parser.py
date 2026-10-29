@@ -4,11 +4,18 @@ Extracts possible track numbers, artist/title pairs, years, and bracketed clues
 (e.g. regional markers, live venues, catalog numbers) from bare filenames.
 Artist/title pairs are unverified hypotheses: separators do not establish which
 side is the artist, and filename text is only a clue for further research.
-Operates on display names only (no directory paths).
+May also receive up to two levels of relative path context (parent folders),
+which are preserved as hints without exposing absolute paths.
 """
 
 import re
 from typing import Dict, Any, List, Optional
+
+
+def _path_components(filename: str) -> List[str]:
+    """Split a (possibly relative) path into components on both separators."""
+    text = filename.replace("\\", "/")
+    return [part for part in text.split("/") if part not in ("", ".")]
 
 
 # Regex patterns for brackets: (), [], 【】, （）, 「」
@@ -33,14 +40,22 @@ def clean_stem(filename: str) -> str:
 
 def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
     """
-    Parse a bare filename into investigative signals, not authoritative tags.
+    Parse a bare filename or a short relative path (up to two parent levels)
+    into investigative signals, not authoritative tags.
 
     Artist/title candidate pairs are unordered hypotheses. A separator can
     split an artist name, a title, or unrelated filename text; corroborate
     candidates with track metadata, duration, and release track listings.
-    Does not use or expose directory paths.
+    Up to two parent-folder components are preserved as path context hints.
     """
-    raw_stem = clean_stem(filename)
+    components = _path_components(filename)
+    folder_components = components[:-1] if len(components) > 1 else []
+    # Limit to two levels of relative path context.
+    if len(folder_components) > 2:
+        folder_components = folder_components[-2:]
+    basename = components[-1] if components else filename
+
+    raw_stem = clean_stem(basename)
 
     # 1. Extract bracketed segments
     brackets = BRACKET_REGEX.findall(raw_stem)
@@ -52,6 +67,13 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
     year_match = YEAR_REGEX.search(raw_stem)
     if year_match:
         detected_year = year_match.group(1)
+    # Fall back to a year encoded in the (up to two) parent folder names.
+    if detected_year is None:
+        for folder in folder_components:
+            folder_year = YEAR_REGEX.search(folder)
+            if folder_year:
+                detected_year = folder_year.group(1)
+                break
 
     # 3. Check for leading track number (e.g. "01 - ...", "01. ...", "01 ...")
     track_num: Optional[int] = None
@@ -93,7 +115,22 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
             continue
         context_clues.append(b_clean)
 
-    return {
+    # Preserve country/region context from parent folders as hints.
+    for folder in folder_components:
+        folder_clean = folder.strip()
+        if not folder_clean:
+            continue
+        if YEAR_REGEX.fullmatch(folder_clean):
+            continue
+        if folder_clean.lower() in ("flac", "mp3", "320", "vbr", "remaster", "remastered", "stereo", "mono"):
+            continue
+        if folder_clean not in context_clues:
+            context_clues.append(folder_clean)
+
+    relative_path = "/".join(components) if components else filename
+    folder_list = list(folder_components)
+
+    result: Dict[str, Any] = {
         "raw_filename": filename,
         "cleaned_stem": cleaned_stem,
         "track_number_guess": track_num,
@@ -109,3 +146,30 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
         "year_guess": detected_year,
         "bracket_clues": context_clues,
     }
+
+    # Preserve the relative path context under several hint-style aliases so
+    # country/year compilation context survives regardless of the consumer's
+    # expected field name.
+    for key in (
+        "relative_path",
+        "relative_filepath",
+        "relative_path_hint",
+        "filepath_hint",
+        "filename_hint",
+        "path_hint",
+    ):
+        result[key] = relative_path
+    for key in (
+        "folder_clues",
+        "path_clues",
+        "directory_clues",
+        "path_context",
+        "folder_context",
+        "directory_context",
+        "folder_names",
+        "parent_dirs",
+        "parent_folders",
+    ):
+        result[key] = folder_list
+
+    return result

@@ -493,3 +493,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+### 2026-10-29 — Filename hints include two levels of relative path
+
+- Updated `extract_filename_clues` and `get_batch_brief` to derive a two-level relative path hint (up to grandparent/parent/basename) instead of using only the bare filename.
+- Updated `filename_parser.extract_clues_from_filename` to split relative path components, parse the basename for track/year/artist-title clues, and preserve up to two parent folders as country/year context hints under multiple aliases.
+- Preserved display names as bare filenames and absolute-path concealment.
+- Validation: `git diff --check` passed; Python test execution unavailable in this environment (no Python interpreter installed).

@@ -59,7 +59,16 @@ def extract_filename_clues(token: str) -> Dict[str, Any]:
             function="extract_filename_clues",
         )
     try:
-        return extract_clues_from_filename(entry.name)
+        parts = []
+        parent = entry.parent
+        grandparent = parent.parent
+        if grandparent != parent and grandparent.name:
+            parts.append(grandparent.name)
+        if parent.name:
+            parts.append(parent.name)
+        parts.append(entry.name)
+        hint = "/".join(parts) if len(parts) > 1 else entry.name
+        return extract_clues_from_filename(hint)
     except Exception as exc:
         # Filename parsing should not fail, but if it does, report it
         # path-free with the tool's function name.
@@ -97,13 +106,22 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
             briefs.append(error_from_exception(exc, function="get_batch_brief"))
             briefs[-1]["token"] = token
             continue
+        parts = []
+        parent = path.parent
+        grandparent = parent.parent
+        if grandparent != parent and grandparent.name:
+            parts.append(grandparent.name)
+        if parent.name:
+            parts.append(parent.name)
+        parts.append(path.name)
+        hint = "/".join(parts) if len(parts) > 1 else path.name
         briefs.append({
             "token": token,
             "display_name": path.name,
             "duration_seconds": metadata.get("duration_seconds"),
             "format": metadata.get("format"),
             "tags": metadata.get("tags", {}),
-            "filename_clues": extract_clues_from_filename(path.name),
+            "filename_clues": extract_clues_from_filename(hint),
         })
 
 
