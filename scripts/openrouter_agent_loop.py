@@ -189,7 +189,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "read_track_metadata",
-            "description": "Read existing tags and technical data for a file token.",
+            "description": "ALREADY PROVIDED in the batch brief — do NOT call this tool. The brief already contains tags, duration, format, and filename clues.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -207,7 +207,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "extract_filename_clues",
-            "description": "Parse artist/title clues out of the file's name.",
+            "description": "ALREADY PROVIDED in the batch brief — do NOT call this tool. The brief already contains filename clues (artist/title candidates, year, track number).",
             "parameters": {
                 "type": "object",
                 "properties": {
