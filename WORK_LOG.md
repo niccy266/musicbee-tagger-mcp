@@ -522,3 +522,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+### 2026-10-30 — Complete issue #70 conftest isolation hardening
+- Rebased on origin/master and combined robust network guard (guarded socket allowing pytest/async internals) with origin/master isolation and loud skip collection.
+- Added singleton reset for file_registry/staging/staged_apply so cached roots follow per-test tmp_path.
+- Updated CI to assert ffmpeg availability and run the suite twice (second pass with -p no:randomly) for order dependence.
+- Added filterwarnings deprecation-as-error for src in pyproject.
