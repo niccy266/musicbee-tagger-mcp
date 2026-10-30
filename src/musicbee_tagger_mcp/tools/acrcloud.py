@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 
 from ..error_codes import (
     E_AUDIO_READ_FAILED,
+    E_PROVIDER_FAILED,
     E_PROVIDER_NOT_CONFIGURED,
     E_UNKNOWN_TOKEN,
     make_error,
@@ -60,6 +61,12 @@ def identify_acrcloud(token: str) -> Dict[str, Any]:
         filename=path.name,
         duration_sec=duration,
     )
+    if isinstance(result, dict) and result.get("status") == "error":
+        return make_error(
+            E_PROVIDER_FAILED,
+            result.get("error", "ACRCloud request failed"),
+            function="identify_acrcloud",
+        )
     return result
 
 

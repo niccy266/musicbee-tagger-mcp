@@ -41,6 +41,34 @@ def job_status(job_id: str) -> Dict[str, Any]:
     return get_job_store().job_status(job_id)
 
 
+def manual_stage_override(job_id: str, token: str, justification: str = "", **kwargs) -> Dict[str, Any]:
+    return get_job_store().manual_stage_override(job_id, token, justification, **kwargs)
+
+
+def manual_override(job_id: str, token: str, justification: str = "", **kwargs) -> Dict[str, Any]:
+    return get_job_store().manual_override(job_id, token, justification, **kwargs)
+
+
+def stage_manual_override(job_id: str, token: str, justification: str = "", **kwargs) -> Dict[str, Any]:
+    return get_job_store().stage_manual_override(job_id, token, justification, **kwargs)
+
+
+def override_unresolved(job_id: str, token: str, justification: str = "", **kwargs) -> Dict[str, Any]:
+    return get_job_store().override_unresolved(job_id, token, justification, **kwargs)
+
+
+def record_manual_override(job_id: str, token: str, justification: str = "", **kwargs) -> Dict[str, Any]:
+    return get_job_store().record_manual_override(job_id, token, justification, **kwargs)
+
+
+def mark_manually_staged(job_id: str, token: str, justification: str = "", **kwargs) -> Dict[str, Any]:
+    return get_job_store().mark_manually_staged(job_id, token, justification, **kwargs)
+
+
+def review_unresolved(job_id: str) -> Dict[str, Any]:
+    return get_job_store().review_unresolved(job_id)
+
+
 def register_playlist_tools(app) -> None:
     @app.tool()
     def list_jobs() -> Dict[str, Any]:

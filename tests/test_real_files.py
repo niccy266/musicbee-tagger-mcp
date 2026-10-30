@@ -21,6 +21,8 @@ OGG_MARSEILLES = FIXTURES / "The Sunshine Of Marseilles - Alfredo And His Band \
 
 REAL_FILES = [MP3, OGG_KNACK, OGG_MARSEILLES]
 
+pytestmark = pytest.mark.requires_audio_fixtures
+
 # Expected ground truth (verified with exiftool)
 EXPECTED = {
     MP3: {"title": "I'd Be A Millionaire", "artist": "David",
