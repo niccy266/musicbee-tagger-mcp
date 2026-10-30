@@ -522,3 +522,10 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+### 2026-10-30 — Issue #67: add tests for the write path
+- Added `tests/test_write_path_coverage.py` exercising real mutagen writes (mp3/ogg/m4a), backup creation and byte-identical restore, refusal paths, staged apply states, revert, partial failure, large manifest, path redaction, and stage manifest store coverage.
+- Fixed `apply_staged.py` argparse so `--revert`/`--undo` can combine with `--stage-id` (documented usage), and added broad exception handling in `cmd_apply_one` so a failed apply is reported as failed instead of crashing the review loop.
+- Fixed revert error output to avoid printing absolute paths.
+- Coverage: apply_staged 92%, tag_applier 97%, tag_preview 100%.
+

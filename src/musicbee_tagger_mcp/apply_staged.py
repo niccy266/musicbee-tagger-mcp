@@ -96,6 +96,14 @@ def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> str
         )
         print(f"\n[ARCHIVED] {display_name}: source file not found; moving to the next item.")
         return "archived"
+    except Exception as exc:
+        try:
+            applier.mark_failed(stage_id, "Apply failed.")
+        except Exception:
+            pass
+        logger.error("Apply failed for stage %s (%s).", stage_id, display_name)
+        print(f"\n[FAILED] {display_name}: apply failed; moving to the next item.")
+        return "failed"
     if result.get("status") == "withdrawn":
         print(f"\n[SKIP] {stage_id} was withdrawn before it could be applied.")
         return "withdrawn"
@@ -184,9 +192,9 @@ def main() -> None:
     group.add_argument("--list", action="store_true", help="List all pending staged changes.")
     group.add_argument("--list-applied", action="store_true",
                        help="List all applied changes that can be reverted (have a .bak backup).")
-    group.add_argument("--revert", action="store_true",
+    parser.add_argument("--revert", action="store_true",
                        help="Revert an applied staged change by restoring its .bak backup.")
-    group.add_argument("--undo", action="store_true",
+    parser.add_argument("--undo", action="store_true",
                        help="Alias for --revert.")
 
     parser.add_argument("--dry-run", action="store_true",
