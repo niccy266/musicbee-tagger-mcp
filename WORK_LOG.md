@@ -509,3 +509,16 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Registered network, slow, windows, requires_audio_fixtures markers; enabled --strict-markers, --timeout=120, and -W error::DeprecationWarning:musicbee_tagger_mcp in pyproject.toml; added pytest-timeout dev dependency.
 - Marked test_real_files and test_field_map_roundtrip as requires_audio_fixtures; switched test_windows_mcpb to windows marker; added tests/test_ffmpeg_available.py.
 - Updated CI to assert ffmpeg and run the suite twice for determinism.
+
+### 2026-10-30 — Issue #57: store best MusicBrainz candidate details for unresolved tracks
+- complete_batch now persists best candidate metadata (recording ID, title, artist, duration, duration difference, verification reason) for unresolved/failed tracks.
+- job_status exposes candidate metadata, manual override audit entries, and unresolved review helpers.
+- Added manual staging override paths in job store, playlists tools, staging manager, and tag tools that require and record user justification.
+- Validation: py_compile passed; CI pending.
+
+
+### 2026-10-30 — Issue #57: store best MusicBrainz candidate details for unresolved tracks
+- complete_batch now persists best candidate metadata for unresolved/failed tracks.
+- job_status exposes candidate metadata and manual override audit entries.
+- Added manual staging override paths requiring and recording user justification.
+- Validation: py_compile passed; CI pending.
