@@ -15,10 +15,13 @@ from mcp.client.stdio import stdio_client
 from scripts.build_release import build_windows_mcpb_archive
 
 
-pytestmark = pytest.mark.skipif(
-    sys.platform != "win32" or importlib.util.find_spec("PyInstaller") is None,
-    reason="The Windows MCPB smoke test requires Windows and PyInstaller",
-)
+pytestmark = [
+    pytest.mark.windows,
+    pytest.mark.skipif(
+        sys.platform != "win32" or importlib.util.find_spec("PyInstaller") is None,
+        reason="The Windows MCPB smoke test requires Windows and PyInstaller",
+    ),
+]
 
 
 def test_windows_mcpb_executable_initializes_and_lists_tools(tmp_path):

@@ -493,3 +493,11 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+### 2026-10-30 — Add tests/conftest.py isolation, network guard, markers and timeouts (issue #70)
+
+- Added `tests/conftest.py` with autouse `isolate_app_data` (sets `MUSICBEE_TAGGER_DATA_DIR` to `tmp_path`, snapshots/restores the real app-data root) and `block_network` (patches `socket.socket`, `socket.create_connection`, `urllib.request.urlopen` to raise `RuntimeError("network access in tests")`, opt-out via `@pytest.mark.network`).
+- Configured pytest in `pyproject.toml`: `--strict-markers`, 120s timeout, deprecation warnings as errors for `musicbee_tagger_mcp`, registered `network`, `slow`, `windows`, `requires_audio_fixtures` markers.
+- Added `pytest-timeout` to dev dependencies.
+- Replaced bare skips in `test_real_files.py` and `test_windows_mcpb.py` with registered markers; added ffmpeg availability skip and skipif guards.
+- Updated CI to assert ffmpeg and run the suite twice for determinism.
+- Validation: pending CI.

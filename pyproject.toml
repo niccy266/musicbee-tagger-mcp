@@ -19,6 +19,7 @@ dev = [
     "build>=1.2.2",
     "pylint>=3.0",
     "pytest>=8.0.0",
+    "pytest-timeout>=2.3.0",
 ]
 release = [
     "build>=1.2.2",
@@ -37,6 +38,15 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--strict-markers --timeout=120 -W error::DeprecationWarning:musicbee_tagger_mcp"
+markers = [
+    "network: allows real network access in a test",
+    "slow: long-running test",
+    "windows: requires Windows platform",
+    "requires_audio_fixtures: requires committed audio fixture files",
+]
+timeout = 120
+filterwarnings = ["error::DeprecationWarning:musicbee_tagger_mcp"]
 
 [tool.uv]
 cache-dir = ".uv-cache"
