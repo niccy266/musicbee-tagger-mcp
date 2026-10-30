@@ -493,3 +493,11 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+
+### 2026-10-30 — Add coverage reporting and floors (issue #66)
+
+- Added `pytest-cov` to dev dependencies.
+- Configured pytest to emit `term-missing` and XML coverage reports with a 73% floor.
+- Added `[tool.coverage.run]`/`[tool.coverage.report]` config with `source = ["musicbee_tagger_mcp"]` and `if __name__ == "__main__":` exclusion.
+- Updated `health.yml` test leg with coverage command, write-path (>=80%) and uncovered-module guards, and artifact upload.
+- Pushed branch; opened PR.
