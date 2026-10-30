@@ -5,6 +5,17 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
+
+def _is_absolute_path(value: object) -> bool:
+    text = str(value)
+    if text.startswith("/"):
+        return True
+    if re.match(r"^[A-Za-z]:[\\/]", text) is not None:
+        return True
+    if text.startswith("\\\\") or text.startswith("//"):
+        return True
+    return False
+
 from .filename_parser import AUDIO_EXTS
 
 
@@ -33,7 +44,7 @@ def parse_m3u_playlist(
     playlist_path: str,
 ) -> List[Tuple[int, Optional[Path], Optional[str]]]:
     """Return local audio paths or safe skip reasons with playlist line numbers."""
-    path = Path(playlist_path).resolve()
+    path = Path(str(playlist_path)).resolve()
     if path.suffix.lower() not in {".m3u", ".m3u8"}:
         raise ValueError("Unsupported playlist format")
 
@@ -54,12 +65,12 @@ def parse_m3u_playlist(
             entries.append((line_number, None, "Remote playlist entries are not supported"))
             continue
 
-        entry_path = Path(entry)
+        entry_path = Path(str(entry))
         if entry_path.suffix.lower() not in AUDIO_EXTS:
             entries.append((line_number, None, "Unsupported audio format"))
             continue
 
-        if not entry_path.is_absolute():
+        if not (entry_path.is_absolute() or _is_absolute_path(entry_path)):
             entry_path = path.parent / entry_path
 
         entries.append((line_number, entry_path, None))

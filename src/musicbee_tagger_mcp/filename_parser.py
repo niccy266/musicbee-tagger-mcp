@@ -108,8 +108,10 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
         if folder and folder.lower() not in ("flac", "mp3", "320"):
             context_clues.append(folder)
 
+    _normalized = str(filename).replace("\\", "/")
+    _basename = _normalized.rsplit("/", 1)[-1] if _normalized else str(filename)
     return {
-        "raw_filename": Path(filename).name,
+        "raw_filename": _basename,
         "cleaned_stem": cleaned_stem,
         "track_number_guess": track_num,
         "artist_guess": artist_guess,
