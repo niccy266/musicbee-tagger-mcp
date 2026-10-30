@@ -522,3 +522,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+### 2026-10-29 — Issue #47 duplicate file registration across jobs
+
+- Added JobStore duplicate detection: jobs_containing_token and aliases detect when a file token is already registered in another active job.
+- add_track now detects duplicates by default, returns existing job id, and skips scheduling unless caller explicitly proceeds via allow/skip options.
+- register_playlist reports duplicates separately and skips them by default; CLI prints duplicate entries and existing job ids.
+- Validation: manual sanity checks for skip/proceed and job status; CI pending.
