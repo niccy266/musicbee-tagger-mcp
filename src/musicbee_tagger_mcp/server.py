@@ -51,8 +51,8 @@ def _print_jobs() -> None:
     for job in jobs:
         print(
             f"  {job.get('job_id')} - {job.get('playlist_name', '')} "
-            f"({job.get('pending', 0)} pending, "
-            f"{job.get('completed', 0)} completed)"
+            f"({job.get('counts', {}).get('pending', 0)} pending, "
+            f"{job.get('counts', {}).get('done', 0) + job.get('counts', {}).get('failed', 0)} completed)"
         )
 
 
