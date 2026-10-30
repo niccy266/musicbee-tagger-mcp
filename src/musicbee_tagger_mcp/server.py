@@ -47,13 +47,30 @@ def _print_jobs() -> None:
     if not jobs:
         print("No playlist jobs with pending work.")
         return
-    print(f"{len(jobs)} playlist job(s) with pending work:")
+    # All possible statuses from job_store.py
+    STATUSES = ("pending", "in_progress", "done", "failed", "skipped", "unresolved", "needs_review", "partial")
+
+    # Print table header
+    header = f"{'Job ID':<36} {'Playlist':<20} " + " ".join(f"{s:>12}" for s in STATUSES) + "  Total"
+    print(header)
+    print("-" * len(header))
+
     for job in jobs:
-        print(
-            f"  {job.get('job_id')} - {job.get('playlist_name', '')} "
-            f"({job.get('counts', {}).get('pending', 0)} pending, "
-            f"{job.get('counts', {}).get('done', 0) + job.get('counts', {}).get('failed', 0)} completed)"
-        )
+        counts = job.get("counts", {})
+        # Count each status
+        row_counts = {}
+        total = 0
+        for status in STATUSES:
+            count = counts.get(status, 0)
+            row_counts[status] = count
+            total += count
+
+        job_id = job.get("job_id", "")[:35]
+        playlist = job.get("playlist_name", "")[:19]
+
+        # Format row
+        row = f"{job_id:<36} {playlist:<20} " + " ".join(f"{row_counts[s]:>12}" for s in STATUSES) + f"  {total:>5}"
+        print(row)
 
 
 def main() -> None:
