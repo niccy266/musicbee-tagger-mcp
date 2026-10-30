@@ -40,7 +40,7 @@ services:
       # Private data dir (registrations, queue, state).
       - musicbee-data:/data:rw
       # Certificates for HTTPS.
-      - musicbee-certs:/certs:ro
+      - musicbee-certs:/certs:rw
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=50m
