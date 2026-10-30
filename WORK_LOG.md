@@ -493,3 +493,10 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+### 2026-10-30 — Implement Cline backend for shared agent loop (#78)
+- Generalized `scripts/agent_loop_script.py` to accept `--agent`/`--agent-type`/`--backend` (`openrouter`, `openai`, `cline`) and delegate to the selected backend.
+- Implemented `scripts/cline_agent.py`: Cline executable discovery, MCP config generation, task prompt construction, command building, and subprocess execution with a missing-dependency fallback.
+- Added compatibility entry points `scripts/agent_loop.py` and `scripts/agent.py`.
+- Abstracted OpenRouter tool orchestration with `dispatch_tool` (plus aliases) and routed `run_batch` through it.
+- Documented both OpenRouter and Cline modes in `docs/OPENROUTER_AGENT.md`.
+- Validation: py_compile/import smoke tests passed; full CI verification pending.

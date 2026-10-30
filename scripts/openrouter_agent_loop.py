@@ -959,6 +959,40 @@ LOCAL_TOOLS = {
 }
 
 
+def dispatch_tool(name, args=None, **kwargs):
+    """Execute one local agent tool by name.
+
+    This shared dispatcher keeps tool orchestration backend-agnostic so both
+    OpenAI-style function calling and an external Cline agent can route calls
+    through the same implementation. ``args`` may be a mapping; additional
+    keyword arguments are merged into it.
+    """
+    if args is None:
+        args = {}
+    if not isinstance(args, dict):
+        try:
+            args = dict(args)
+        except Exception:
+            args = {}
+    merged = dict(args)
+    merged.update(kwargs)
+    fn = LOCAL_TOOLS.get(name)
+    try:
+        result = fn(**merged) if fn is not None else {"error": f"Unknown tool {name}"}
+    except Exception as error:
+        result = {"error": f"{type(error).__name__}: {str(error)[:300]}"}
+    try:
+        result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
+    except Exception:
+        pass
+    return result
+
+
+tool_dispatch = dispatch_tool
+execute_tool = dispatch_tool
+run_tool = dispatch_tool
+
+
 def call_openrouter(messages, model, api_key, temperature=0.2, retries=5,
                    run_log=None, stream=True, tools=None):
     """One chat completion with tool support, via the openai SDK pointed at
@@ -2217,11 +2251,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                     args["mb_recording_id"] = requested_mbid
                     args["forensic_score"] = args.get("forensic_score", 0)
 
-            fn = LOCAL_TOOLS.get(name)
-            try:
-                result = fn(**args) if fn else {"error": f"Unknown tool {name}"}
-            except Exception as error:
-                result = {"error": f"{type(error).__name__}: {str(error)[:300]}"}
+            result = dispatch_tool(name, args)
             result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
 
             logger.info("tool {name}: {result}", name=name, result=json.dumps(result, ensure_ascii=False)[:4000])
