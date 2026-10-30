@@ -522,3 +522,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #98 agent tool usage helpers
+- Added scripts/commands.py with run_commands validation, execution, and gh_issue_comment wrapper.
+- Registered run_commands and gh_issue_comment in openrouter agent TOOLS and LOCAL_TOOLS.
+- Added gh helper skills (.agents and release copies).
