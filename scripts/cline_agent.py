@@ -68,6 +68,11 @@ def build_mcp_config(
     """Build a Cline-compatible MCP server configuration dictionary."""
     if server_command is None:
         server_command = [sys.executable, "-m", "musicbee_tagger_mcp.server"]
+    if isinstance(server_command, str):
+        server_command = server_command.split()
+    server_command = list(server_command)
+    if not server_command:
+        server_command = [sys.executable, "-m", "musicbee_tagger_mcp.server"]
     server: dict[str, Any] = {
         "type": "stdio",
         "command": server_command[0],

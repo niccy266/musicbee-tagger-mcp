@@ -529,3 +529,10 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+## 2026-10-31 - Issue #78 follow-up
+- Generalized agent loop module aliases (`scripts/agent_loop.py`, `scripts/agent.py`) to re-export the full OpenRouter loop API while retaining backend-aware entry points.
+- Made `openrouter_agent.run` forward job ids and tolerate loop `main(argv)` calling conventions.
+- Updated system prompt wording to include "tagger" for generalized agent usage.
+- Hardened Cline MCP config generation for string server commands.
+- Updated OpenRouter `load_system_prompt` to accept optional backend arguments.

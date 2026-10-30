@@ -71,7 +71,7 @@ BATCH_SIZE = 1
 
 _SYSTEM_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "openrouter_agent.md"
 
-def load_system_prompt() -> str:
+def load_system_prompt(*args, **kwargs) -> str:
     """Load the agent system prompt from the external Markdown file."""
     path = _SYSTEM_PROMPT_PATH
     if not path.is_file():
@@ -2451,7 +2451,7 @@ def _handle_sigint(signum, frame):
     raise SystemExit(130)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "job_id",
@@ -2493,7 +2493,7 @@ def main():
     )
     parser.add_argument("--resume", action="store_true",
                         help="Skip files recorded as staged in the state file")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
