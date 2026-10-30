@@ -1,11 +1,14 @@
 """MCP application assembly and stdio entrypoint."""
 
+import argparse
+import asyncio
 import os
 import sys
 
 from mcp.server.mcpserver import MCPServer
 
 from . import __version__
+from .job_store import get_job_store
 from .tools import register_tools
 from .tools.inspection import (
     extract_filename_clues,
@@ -27,8 +30,71 @@ app = MCPServer("musicbee-tagger")
 register_tools(app)
 
 
+def _print_tools() -> None:
+    tools = asyncio.run(app.list_tools())
+    print(f"musicbee-tagger-mcp {__version__} MCP tools:")
+    for tool in tools:
+        description = (tool.description or "").strip()
+        print(f"  {tool.name}: {description}")
+
+
+def _print_jobs() -> None:
+    jobs = get_job_store().list_jobs()
+    if not jobs:
+        print("No playlist jobs with pending work.")
+        return
+    print(f"{len(jobs)} playlist job(s) with pending work:")
+    for job in jobs:
+        print(
+            f"  {job.get('job_id')} - {job.get('playlist_name', '')} "
+            f"({job.get('pending', 0)} pending, "
+            f"{job.get('completed', 0)} completed)"
+        )
+
+
 def main() -> None:
-    """Run the MCP server over stdio for local desktop clients."""
+    """Run the MCP server over stdio or print user-facing help."""
+    parser = argparse.ArgumentParser(
+        prog="musicbee-tagger-mcp",
+        description=(
+            "MusicBee Tagger MCP server. Run without arguments to start the "
+            "stdio MCP server; use the options below for user-facing help."
+        ),
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"musicbee-tagger-mcp {__version__}"
+    )
+    parser.add_argument(
+        "--list-tools",
+        action="store_true",
+        help="List the MCP tools available to agents.",
+    )
+    parser.add_argument(
+        "--list-jobs",
+        action="store_true",
+        help="List playlist jobs with pending work.",
+    )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("help", "list-jobs", "list-tools"),
+        help="Optional help command.",
+    )
+
+    args = parser.parse_args()
+
+    if args.command == "list-tools" or args.list_tools:
+        _print_tools()
+        return
+    if args.command == "list-jobs" or args.list_jobs:
+        _print_jobs()
+        return
+    if args.command == "help":
+        _print_tools()
+        print()
+        _print_jobs()
+        return
+
     print(
         f"musicbee-tagger-mcp {__version__} starting; "
         f"data_dir={os.environ.get('MUSICBEE_TAGGER_DATA_DIR', '(default)')}",
