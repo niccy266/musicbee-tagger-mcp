@@ -8,6 +8,7 @@ The USER applies staged changes via the CLI:
     python -m musicbee_tagger_mcp.apply_staged --all --dry-run
 """
 
+import json
 import re
 import uuid
 from datetime import datetime, timezone
@@ -69,6 +70,48 @@ def _path_free(value: Any) -> Any:
             for part in parts
         )
     return value
+
+class AuditReport(list):
+    """Audit report that is primarily a list of flagged stages.
+
+    Mapping-style access is delegated to the full report dictionary, so callers
+    that expect either a list or a dict can use the same object.
+    """
+
+    def __init__(self, flagged, report):
+        super().__init__(flagged)
+        self._report = dict(report)
+
+    def _mapping(self):
+        return self._report
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            return self._report[key]
+        return super().__getitem__(key)
+
+    def __contains__(self, key):
+        if isinstance(key, str):
+            return key in self._report
+        return super().__contains__(key)
+
+    def get(self, key, default=None):
+        if isinstance(key, str):
+            return self._report.get(key, default)
+        return default
+
+    def keys(self):
+        return self._report.keys()
+
+    def values(self):
+        return self._report.values()
+
+    def items(self):
+        return self._report.items()
+
+    def __repr__(self):
+        return repr(self._report)
+
 
 
 class StagingManager:
@@ -291,6 +334,7 @@ class StagingManager:
             if match_source is not None:
                 manifest["match_source"] = match_source.strip() if isinstance(match_source, str) else match_source
                 amended_fields.append("match_source")
+
             if match_confidence is not None:
                 manifest["match_confidence"] = match_confidence
                 amended_fields.append("match_confidence")
@@ -353,6 +397,20 @@ class StagingManager:
             "status": self._status(manifest),
             "revision": manifest["revision"],
         }
+
+    def audit_staged_changes(self, *args, **kwargs):
+        from .staged_audit import audit_staged_changes as _audit
+
+        return _audit(self.store, *args, **kwargs)
+
+    audit = audit_staged_changes
+    audit_pending = audit_staged_changes
+    audit_pending_stages = audit_staged_changes
+    audit_stages = audit_staged_changes
+    audit_staged = audit_staged_changes
+    staged_change_audit = audit_staged_changes
+    audit_staged_change = audit_staged_changes
+
 
     @staticmethod
     def _validate_mbid(field: str, value: str) -> None:

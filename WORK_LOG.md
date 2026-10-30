@@ -1,3 +1,11 @@
+### 2026-10-29 — Add staged-change audit for duplicate, conflicting, empty, or low-confidence stages (#49)
+
+- Added read-only staged-change audit (`StagingManager.audit_staged_changes()` plus aliases and MCP tool `audit_staged_changes`) that inspects pending manifests without applying or discarding them.
+- Detects multiple pending stages for the same file, overlapping/conflicting field changes, empty diffs, and unusually low forensic scores.
+- Report includes stage IDs, file identity, notes/reason, diffs, score scale/meaning, thresholds, and grouped findings.
+- Added CLI `--audit` and `cmd_audit` helpers in `staged_review`/`apply_staged`.
+
+
 ### 2026-10-29 — Documentation/agent prompt consistency audit
 
 - Added a visible, consistent rule to agent-facing docs and prompts: do not run shell commands (bash, cmd, powershell, python, etc.) without first making absolutely sure the required action cannot be performed using an existing exposed tool; prefer the exposed tool and use a shell only as a last resort with justification.

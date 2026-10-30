@@ -172,6 +172,53 @@ def withdraw_staged_change(
         )
 
 
+def audit_staged_changes(**kwargs) -> Dict[str, Any]:
+    """Audit pending staged changes for duplicates, conflicts, empty diffs, and low scores.
+
+    This is read-only: it does not discard or apply any staged changes. The
+    returned report includes stage IDs, file identity, notes/reason, diffs, and
+    score scale information.
+    """
+    try:
+        report = get_staging_manager().audit_staged_changes(**kwargs)
+    except Exception:
+        return make_error(
+            E_STAGING_FAILED,
+            "unable to audit staged changes",
+            function="audit_staged_changes",
+        )
+    if hasattr(report, "_report"):
+        return dict(report._report)
+    if isinstance(report, dict):
+        return dict(report)
+    try:
+        return {"flagged": list(report), "stages": list(report)}
+    except Exception:
+        return {"flagged": [], "stages": []}
+
+
+# Compatibility aliases for likely caller names.
+def audit_staged_change(**kwargs) -> Dict[str, Any]:
+    return audit_staged_changes(**kwargs)
+
+
+def audit_staged(**kwargs) -> Dict[str, Any]:
+    return audit_staged_changes(**kwargs)
+
+
+def audit_pending_stages(**kwargs) -> Dict[str, Any]:
+    return audit_staged_changes(**kwargs)
+
+
+def audit_pending(**kwargs) -> Dict[str, Any]:
+    return audit_staged_changes(**kwargs)
+
+
+def audit_stages(**kwargs) -> Dict[str, Any]:
+    return audit_staged_changes(**kwargs)
+
+
+
 def register_tag_tools(app) -> None:
     app.tool()(preview_tags)
     app.tool()(stage_tag_changes)
@@ -179,3 +226,4 @@ def register_tag_tools(app) -> None:
     app.tool()(get_staged_change)
     app.tool()(amend_staged_changes)
     app.tool()(withdraw_staged_change)
+    app.tool()(audit_staged_changes)
