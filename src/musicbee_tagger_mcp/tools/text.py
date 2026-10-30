@@ -6,13 +6,16 @@ import re
 import urllib.parse
 import urllib.request
 
-from ..error_codes import E_PROVIDER_FAILED, make_error
+from ..error_codes import E_PROVIDER_FAILED, error_from_exception, make_error
 from ..mojibake import fix_mojibake
 
 
 def repair_mojibake(text: str) -> Dict[str, Any]:
     """Detect and suggest repairs for common mojibake patterns."""
-    return fix_mojibake(text)
+    try:
+        return fix_mojibake(text)
+    except Exception as error:
+        return error_from_exception(error, function="repair_mojibake")
 
 
 def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:

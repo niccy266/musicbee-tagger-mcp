@@ -1,3 +1,14 @@
+### 2026-10-30 — Issue #68: harden MCP tool wrappers for offline tests
+
+- Updated `tools/musicbrainz.py` `get_release_tracklist` to omit `duration_seconds` when unknown, harden zero-media/404/transport paths, and resolve MusicBrainz client in a patch-friendly way.
+- Updated `tools/acrcloud.py` to map provider failures to `E_PROVIDER_FAILED` (and missing credentials to `E_PROVIDER_NOT_CONFIGURED`).
+- Updated `tools/text.py` to map `repair_mojibake` exceptions via `error_from_exception`.
+- Updated `tools/tags.py` to validate field names and newline values before preview/stage.
+- Updated `tools/queue.py` and `tools/operations.py` to return typed `E_*` errors for bad operation ids.
+- Added compatibility aliases in `artist_validation.py` and `tools/operations.py`.
+- Branch: codex/issue-68-tool-wrapper-tests.
+
+
 ### 2026-10-29 — Documentation/agent prompt consistency audit
 
 - Added a visible, consistent rule to agent-facing docs and prompts: do not run shell commands (bash, cmd, powershell, python, etc.) without first making absolutely sure the required action cannot be performed using an existing exposed tool; prefer the exposed tool and use a shell only as a last resort with justification.
