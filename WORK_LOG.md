@@ -493,3 +493,7 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+### 2026-10-30 — Safe genre cleanup workflow for chart and language clutter (#48)
+- Added genre_cleanup module with clean_genre_clutter and aliases, preserving separators and real genres; mood removal is explicit.
+- Added MCP tool clean_genre_clutter with per-track diffs and skip for no-change tracks.
+- Registered tool and updated security tool set.
