@@ -65,7 +65,7 @@ def _print_jobs() -> None:
             row_counts[status] = count
             total += count
 
-        job_id = job.get("job_id", "")[:35]
+        job_id = job.get("job_id", "")
         playlist = job.get("playlist_name", "")[:19]
 
         # Format row
