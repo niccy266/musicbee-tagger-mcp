@@ -8,6 +8,28 @@ from urllib.parse import urlparse
 from .filename_parser import AUDIO_EXTS
 
 
+def translate_audio_path(path: Path, container_audio_dir: str = "/audio") -> Path:
+    """Choops the path after 'musicbee' (and optional 'main') and prepends container audio dir."""
+    parts = path.parts
+    musicbee_idx = -1
+    for i, part in enumerate(parts):
+        if part.lower() == "musicbee":
+            musicbee_idx = i
+            break
+    
+    if musicbee_idx != -1:
+        start_idx = musicbee_idx + 1
+        if start_idx < len(parts) and parts[start_idx].lower() == "main":
+            start_idx += 1
+        
+        sub_parts = parts[start_idx:]
+        if sub_parts:
+            rel = "/".join(sub_parts)
+            return Path(container_audio_dir + "/" + rel)
+            
+    return path
+
+
 def parse_m3u_playlist(
     playlist_path: str,
 ) -> List[Tuple[int, Optional[Path], Optional[str]]]:
