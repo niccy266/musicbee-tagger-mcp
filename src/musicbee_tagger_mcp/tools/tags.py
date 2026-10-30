@@ -50,6 +50,11 @@ def stage_tag_changes(
     match_source: Optional[str] = None,
     match_confidence: Optional[float] = None,
     notes: str = "",
+    manual_override: bool = False,
+    manual_override_justification: Optional[str] = None,
+    override_justification: Optional[str] = None,
+    override_reason: Optional[str] = None,
+    justification: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
@@ -76,6 +81,11 @@ def stage_tag_changes(
             match_source=match_source,
             match_confidence=match_confidence,
             notes=notes,
+            manual_override=manual_override,
+            manual_override_justification=manual_override_justification,
+            override_justification=override_justification,
+            override_reason=override_reason,
+            justification=justification,
         )
     except Exception:
         # Staging errors can include the absolute path held by the manager.
@@ -172,6 +182,31 @@ def withdraw_staged_change(
         )
 
 
+def stage_manual_override(
+    token: str,
+    new_tags: Dict[str, Any],
+    justification: str,
+    mb_recording_id: Optional[str] = None,
+    mb_release_id: Optional[str] = None,
+    forensic_score: Optional[float] = None,
+    match_source: Optional[str] = None,
+    match_confidence: Optional[float] = None,
+    notes: str = "",
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    return stage_tag_changes(
+        token=token,
+        new_tags=new_tags,
+        mb_recording_id=mb_recording_id,
+        mb_release_id=mb_release_id,
+        forensic_score=forensic_score,
+        match_source=match_source,
+        match_confidence=match_confidence,
+        notes=notes,
+        manual_override=True,
+        justification=justification,
+        **kwargs,
+    )
 def register_tag_tools(app) -> None:
     app.tool()(preview_tags)
     app.tool()(stage_tag_changes)
