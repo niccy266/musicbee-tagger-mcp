@@ -39,7 +39,11 @@ def _print_tools() -> None:
 
 
 def _print_jobs() -> None:
-    jobs = get_job_store().list_jobs()
+    try:
+        jobs = get_job_store().list_jobs()
+    except RuntimeError as error:
+        print(f"Unable to list playlist jobs: {error}")
+        return
     if not jobs:
         print("No playlist jobs with pending work.")
         return
