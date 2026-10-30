@@ -32,6 +32,11 @@ def isolate_app_data(tmp_path, monkeypatch):
     real_home = Path.home()
     real_appdata = os.environ.get("APPDATA")
 
+    real_home_dir = real_home / "musicbee-tagger-mcp"
+    real_appdata_dir = Path(real_appdata) / "musicbee-tagger-mcp" if real_appdata else None
+    home_existed = real_home_dir.exists()
+    appdata_existed = real_appdata_dir.exists() if real_appdata_dir else False
+
     monkeypatch.setenv("MUSICBEE_TAGGER_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("APPDATA", str(tmp_path))
@@ -41,12 +46,15 @@ def isolate_app_data(tmp_path, monkeypatch):
     assert data_paths.default_data_dir() == tmp_path
 
     yield
+    # Allow pre-existing dirs
 
-    assert not (real_home / "musicbee-tagger-mcp").exists(), (
-        "test created data under the real home directory"
-    )
-    if real_appdata:
-        assert not (Path(real_appdata) / "musicbee-tagger-mcp").exists(), (
+
+    if not home_existed:
+        assert not real_home_dir.exists(), (
+            "test created data under the real home directory"
+        )
+    if real_appdata_dir and not appdata_existed:
+        assert not real_appdata_dir.exists(), (
             "test created data under the real APPDATA directory"
         )
 

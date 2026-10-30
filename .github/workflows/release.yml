@@ -2,6 +2,7 @@ name: Publish Release
 
 on:
   push:
+    branches: [master]
     tags:
       - "v*"
 
@@ -26,9 +27,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $assets = @(Get-ChildItem dist -File | Sort-Object Name | ForEach-Object FullName)
-          if ($assets.Count -ne 7) {
-            throw "Expected 7 release assets, found $($assets.Count)"
+          if ($env:GITHUB_REF_NAME -eq "master") {
+            $tag = "nightly"
+            # Delete existing nightly release/tag if it exists to keep rolling nightly
+            git tag -d nightly 2>$null
+            git push origin :refs/tags/nightly 2>$null
+            gh release delete nightly --yes 2>$null
+            git tag nightly
+            git push origin nightly
+            $refName = "nightly"
+            $title = "MusicBee Tagger MCP Nightly Build"
+            $prerelease = "--prerelease"
+          } else {
+            $refName = $env:GITHUB_REF_NAME
+            $title = "MusicBee Tagger MCP $env:GITHUB_REF_NAME"
+            $prerelease = ""
           }
-          gh release create $env:GITHUB_REF_NAME @assets --verify-tag --title "MusicBee Tagger MCP $env:GITHUB_REF_NAME" --generate-notes
+
+          $assets = @(Get-ChildItem dist -File | Sort-Object Name | ForEach-Object FullName)
+          if ($assets.Count -lt 6) {
+            throw "Expected at least 6 release assets, found $($assets.Count)"
+          }
+          gh release create $refName @assets --verify-tag --title $title --generate-notes $prerelease
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

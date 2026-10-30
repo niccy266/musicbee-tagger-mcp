@@ -25,8 +25,11 @@ class FileRegistry:
         self.directory = directory
         self._store: Dict[str, Path] = {}  # token → absolute path
 
-    def register(self, path: str) -> dict:
+    def register(self, path: str, store_path: Optional[str] = None) -> dict:
         """Register a file path and return a token + display name.
+
+        Verifies existence of `path` on disk, but optionally persists `store_path`
+        (e.g., container virtual path).
 
         Returns:
             {"token": str, "display_name": str}
@@ -38,14 +41,15 @@ class FileRegistry:
         p = Path(path).expanduser().resolve()
         if not p.is_file():
             raise FileNotFoundError("File not found")
-        existing = self.token_for_path(p)
+        s = Path(store_path) if store_path else p
+        existing = self.token_for_path(s)
         if existing is not None:
             return {"token": existing, "display_name": p.name,
                     "already_registered": True}
         token = str(uuid.uuid4())
-        self._store[token] = p
+        self._store[token] = s
         if self.directory is not None:
-            self._save(token, p)
+            self._save(token, s)
         return {"token": token, "display_name": p.name}
 
     def register_many(self, paths: list[str]) -> list[dict]:
@@ -79,7 +83,7 @@ class FileRegistry:
         try:
             record = json.loads(record_path.read_text(encoding="utf-8"))
             path = Path(record["path"])
-            if record["token"] != normalized_token or not path.is_absolute():
+            if record["token"] != normalized_token or not (path.is_absolute() or path.as_posix().startswith("/")):
                 raise ValueError
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
             raise KeyError("Unknown file token") from None
@@ -107,9 +111,10 @@ class FileRegistry:
         return candidates
 
 
-    def token_for_path(self, path: Path) -> Optional[str]:
+    def token_for_path(self, path: Path | str) -> Optional[str]:
         """Return the token already registered for this path, if any."""
-        resolved = Path(path).expanduser().resolve()
+        path_str = str(path)
+        resolved = Path(path) if path_str.startswith("/") else Path(path).expanduser().resolve()
         for token, registered in self._store.items():
             if registered == resolved:
                 return token
@@ -118,7 +123,8 @@ class FileRegistry:
                 try:
                     token = str(uuid.UUID(record_path.stem))
                     record = json.loads(record_path.read_text(encoding="utf-8"))
-                    if token not in self._store and Path(record["path"]) == resolved:
+                    rec_path = Path(record["path"])
+                    if token not in self._store and rec_path == resolved:
                         self._store[token] = resolved
                         return token
                 except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
