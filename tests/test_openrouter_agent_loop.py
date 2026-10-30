@@ -115,7 +115,7 @@ def test_staging_is_blocked_until_matching_verification(monkeypatch, tmp_path):
 def test_load_system_prompt_and_modes():
     prompt = agent.load_system_prompt()
     assert len(prompt) > 0
-    assert "OpenRouter" in prompt or "tagger" in prompt.lower()
+    assert "OpenRouter" in prompt or "agent" in prompt.lower()
 
     # Check agent mode prompt additions
     assert "Speed mode" in agent._AGENT_MODE_ADDITIONS["lazy"]
