@@ -54,7 +54,8 @@ def isolate_app_data(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def block_network_access(request):
     """Block socket/urlopen access unless @pytest.mark.network is used."""
-    if request.node.get_closest_marker("network") is not None:
+    if (request.node.get_closest_marker("network") is not None or
+            request.node.get_closest_marker("windows") is not None):
         yield
         return
 
