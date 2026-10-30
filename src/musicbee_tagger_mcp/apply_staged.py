@@ -141,7 +141,7 @@ def cmd_revert_one(applier, stage_id: str) -> str:
         return "no_backup"
     backup = Path(backup_path)
     if not backup.is_file():
-        print(f"\n[ERROR] Backup file not found: {backup_path}; cannot revert.")
+        print("\n[ERROR] Backup file not found; cannot revert.")
         return "no_backup_file"
 
     display_name = manifest.get("display_name", stage_id)
@@ -166,7 +166,7 @@ def cmd_revert_one(applier, stage_id: str) -> str:
         result = applier.revert(stage_id)
     except FileNotFoundError as exc:
         logger.error("Revert failed for %s: %s", stage_id, exc)
-        print(f"\n[ERROR] {exc}")
+        print("\n[ERROR] Revert failed: file not found.")
         return "error"
     if result.get("status") == "already_reverted":
         print(f"\n[SKIP] {stage_id} has already been reverted.")
