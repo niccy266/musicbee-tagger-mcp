@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from ..error_codes import (
     E_AUDIO_READ_FAILED,
     E_FILE_NOT_FOUND,
+    E_INVALID_INPUT,
     E_PERMISSION_DENIED,
     E_STAGING_FAILED,
     E_STAGE_CONFLICT,
@@ -13,13 +14,40 @@ from ..error_codes import (
     error_from_exception,
     make_error,
 )
+from ..field_map import FIELD_MAP
 from ..file_registry import get_registry
 from ..staging import get_staging_manager
 from ..tag_writer import preview_tag_changes
 
 
+def _validate_tags(new_tags: Any, function: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(new_tags, dict):
+        return make_error(
+            E_INVALID_INPUT,
+            "new_tags must be an object",
+            function=function,
+        )
+    for key, value in new_tags.items():
+        if key not in FIELD_MAP:
+            return make_error(
+                E_INVALID_INPUT,
+                f"unknown tag field: {key}",
+                function=function,
+            )
+        if isinstance(value, str) and ("\n" in value or "\r" in value):
+            return make_error(
+                E_INVALID_INPUT,
+                f"tag value must not contain a newline: {key}",
+                function=function,
+            )
+    return None
+
+
 def preview_tags(token: str, new_tags: Dict[str, Any]) -> Dict[str, Any]:
     """Preview proposed metadata changes without modifying audio."""
+    validation_error = _validate_tags(new_tags, "preview_tags")
+    if validation_error is not None:
+        return validation_error
     try:
         path = get_registry().resolve(token)
     except KeyError:
@@ -57,6 +85,9 @@ def stage_tag_changes(
     allowed regardless of whether verification passed). NEXT STEP: After
     staging, call finish_batch when all files are resolved.
     """
+    validation_error = _validate_tags(new_tags, "stage_tag_changes")
+    if validation_error is not None:
+        return validation_error
     try:
         entry = get_registry().resolve(token)
     except KeyError:
