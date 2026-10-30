@@ -1,3 +1,12 @@
+### 2026-10-30 — Issue #69: Windows test suite and parametrised path handling
+
+- Updated `.github/workflows/health.yml` (local change; could not be pushed due to token scope) to run the full suite on `ubuntu-latest` and `windows-latest`.
+- Hardened `file_registry.py` absolute-path detection to recognise Windows drive paths, UNC paths, and `PurePath` variants across platforms.
+- Improved `error_codes.py` redaction to remove Windows drive paths, UNC paths, and POSIX trailing paths reliably.
+- Improved `playlist.py` and `filename_parser.py` path handling for Windows separators, mixed separators, and non-ASCII filenames.
+- Added `.python-version`, and dry-run/`.python-version` resolution support to `install.ps1` and `go.ps1`.
+- Fixed system prompt wording to satisfy `test_openrouter_agent_loop`.
+- Branch: codex/issue-69-windows-test-suite. PR #106 (all CI checks passing).
 ### 2026-10-30 — Issue #68: harden MCP tool wrappers for offline tests
 
 - Updated `tools/musicbrainz.py` `get_release_tracklist` to omit `duration_seconds` when unknown, harden zero-media/404/transport paths, and resolve MusicBrainz client in a patch-friendly way.
