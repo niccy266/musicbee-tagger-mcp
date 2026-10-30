@@ -111,3 +111,36 @@ def test_staging_is_blocked_until_matching_verification(monkeypatch, tmp_path):
     assert state["staged"] == []
     assert state["unresolved"] == [token]
     assert state["finished"] is True
+
+def test_load_system_prompt_and_modes():
+    prompt = agent.load_system_prompt()
+    assert len(prompt) > 0
+    assert "OpenRouter" in prompt or "tagger" in prompt.lower()
+
+    # Check agent mode prompt additions
+    assert "Speed mode" in agent._AGENT_MODE_ADDITIONS["lazy"]
+    assert agent._AGENT_MODE_ADDITIONS["thorough"] == ""
+
+
+def test_tool_exception_handling_in_batch(monkeypatch, tmp_path):
+    token = "opaque-token"
+    monkeypatch.setattr(agent, "get_batch_brief", lambda _tokens: [{
+        "token": token, "display_name": "Error.mp3", "tags": {}
+    }])
+    monkeypatch.setitem(agent.LOCAL_TOOLS, "read_track_metadata", lambda **_kwargs: (_ for _ in ()).throw(
+        ValueError("Corrupt track metadata")
+    ))
+    responses = iter([
+        _response(_tool_call("read_track_metadata", {"token": token})),
+        _response(_tool_call("mark_unresolved", {"token": token, "reason": "metadata corrupt"})),
+        _response(_tool_call("finish_batch", {"summary": "handled error"})),
+    ])
+    monkeypatch.setattr(agent, "call_openrouter", lambda *_args, **_kwargs: next(responses))
+    state = {"batch": 1, "staged": [], "unresolved": [], "finished": False}
+    log = agent.RunLog(tmp_path / "agent.jsonl", "run-id")
+
+    agent.run_batch([token], "openrouter/free", "unused", 5, state,
+                    tmp_path / "state.json", run_log=log)
+    assert state["finished"] is True
+    assert state["unresolved"] == [token]
+
