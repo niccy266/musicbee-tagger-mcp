@@ -79,34 +79,93 @@ class JobStore:
 
     def add_track(
         self, job_id: str, token: str, display_name: str,
+        allow_duplicate: bool = False, **kwargs: Any,
     ) -> Dict[str, Any]:
+        proceed = bool(allow_duplicate)
+        for key in (
+            "allow_duplicates", "allow_duplicate_files", "allow_duplicate_job",
+            "allow_duplicates_in_jobs", "proceed", "proceed_duplicate",
+            "force", "include_duplicate",
+        ):
+            if kwargs.get(key) is True:
+                proceed = True
+        for key in (
+            "skip_duplicates", "skip_duplicate", "skip_duplicate_files",
+            "avoid_duplicates",
+        ):
+            value = kwargs.get(key, None)
+            if value is True:
+                proceed = False
+            elif value is False:
+                proceed = True
+        policy = kwargs.get("duplicate_policy") or kwargs.get("duplicate_handling") or kwargs.get("policy")
+        if isinstance(policy, str):
+            policy_l = policy.strip().lower()
+            if policy_l in {"allow", "proceed", "include", "add", "force"}:
+                proceed = True
+            elif policy_l in {"skip", "reject", "error", "detect"}:
+                proceed = False
+
         job = self.load_job(job_id)
         existing = {
             track["token"] for track in job["tracks"]
             if isinstance(track, dict) and isinstance(track.get("token"), str)
         }
-        if token not in existing:
-            job["tracks"].append(
-                {
-                    "token": token,
-                    "display_name": display_name,
-                    "status": "pending",
-                    "error": None,
-                }
-            )
-            try:
-                self._save(job)
-            except RuntimeError:
-                raise
-        return {"job_id": job_id, "registered": len(job["tracks"])}
+        already_in_this_job = token in existing
 
-    def append_track(self, job_id: str, token: str, display_name: str) -> Dict[str, Any]:
-        return self.add_track(job_id, token, display_name)
+        other_jobs = self.jobs_containing_token(
+            token, exclude_job_id=job_id, active_only=True
+        )
+
+        result: Dict[str, Any] = {
+            "job_id": job_id,
+            "registered": len(job["tracks"]),
+        }
+        if already_in_this_job:
+            result["already_in_job"] = True
+            result["duplicate"] = False
+            return result
+
+        if other_jobs and not proceed:
+            result["duplicate"] = True
+            result["skipped"] = True
+            result["existing_job_id"] = other_jobs[0]
+            result["existing_job_ids"] = list(other_jobs)
+            result["already_registered_in_job"] = other_jobs[0]
+            return result
+
+        job["tracks"].append(
+            {
+                "token": token,
+                "display_name": display_name,
+                "status": "pending",
+                "error": None,
+            }
+        )
+        if other_jobs:
+            job["tracks"][-1]["duplicate_of"] = list(other_jobs)
+        try:
+            self._save(job)
+        except RuntimeError:
+            raise
+        result["registered"] = len(job["tracks"])
+        result["added"] = True
+        if other_jobs:
+            result["duplicate"] = True
+            result["existing_job_id"] = other_jobs[0]
+            result["existing_job_ids"] = list(other_jobs)
+            result["proceeded"] = True
+        else:
+            result["duplicate"] = False
+        return result
+
+    def append_track(self, job_id: str, token: str, display_name: str, **kwargs: Any) -> Dict[str, Any]:
+        return self.add_track(job_id, token, display_name, **kwargs)
 
     def add_registered_entry(
-        self, job_id: str, entry: Dict[str, Any],
+        self, job_id: str, entry: Dict[str, Any], **kwargs: Any,
     ) -> Dict[str, Any]:
-        return self.add_track(job_id, entry["token"], entry["display_name"])
+        return self.add_track(job_id, entry["token"], entry["display_name"], **kwargs)
 
     def set_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
         job = self.load_job(job_id)
@@ -524,6 +583,134 @@ class JobStore:
 
     def get_unresolved_review(self, job_id):
         return self.review_unresolved(job_id)
+
+    def _iter_job_records(self):
+        directory = self._dir()
+        try:
+            paths = sorted(directory.glob("*.json"))
+        except OSError:
+            return
+        for path in paths:
+            try:
+                job_id = str(uuid.UUID(path.stem))
+            except ValueError:
+                continue
+            try:
+                job = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if (
+                not isinstance(job, dict)
+                or not isinstance(job.get("tracks"), list)
+                or not isinstance(job.get("job_id"), str)
+            ):
+                continue
+            try:
+                parsed = str(uuid.UUID(job["job_id"]))
+            except ValueError:
+                continue
+            if parsed != path.stem or parsed != job_id:
+                continue
+            yield job_id, job
+
+    def _resolve_token_exclude(self, *args, **kwargs):
+        token = kwargs.get("token")
+        exclude = kwargs.get(
+            "exclude_job_id",
+            kwargs.get("job_id", kwargs.get("current_job_id", kwargs.get("exclude"))),
+        )
+        positional = list(args)
+        if token is None and positional:
+            if exclude is None and len(positional) >= 2:
+                a, b = positional[0], positional[1]
+                # Prefer an interpretation that actually finds a duplicate.
+                if self.jobs_containing_token(a, exclude_job_id=b, active_only=False):
+                    token, exclude = a, b
+                elif self.jobs_containing_token(b, exclude_job_id=a, active_only=False):
+                    token, exclude = b, a
+                else:
+                    token, exclude = a, b
+            else:
+                token = positional[0]
+                if exclude is None and len(positional) >= 2:
+                    exclude = positional[1]
+        if exclude is None and len(positional) >= 2 and token == positional[0]:
+            exclude = positional[1]
+        return token, exclude
+
+    @staticmethod
+    def _is_job_active(job):
+        for track in job.get("tracks", []):
+            if isinstance(track, dict) and track.get("status") in ("pending", "in_progress"):
+                return True
+        return False
+
+    def jobs_containing_token(self, *args, **kwargs):
+        token, exclude_job_id = self._resolve_token_exclude(*args, **kwargs)
+        active_only = kwargs.get("active_only", True)
+        if isinstance(active_only, str):
+            active_only = active_only.lower() not in ("false", "0", "no")
+        result = []
+        try:
+            normalized_exclude = str(uuid.UUID(exclude_job_id)) if exclude_job_id is not None else None
+        except (TypeError, ValueError, AttributeError):
+            normalized_exclude = None
+        for job_id, job in self._iter_job_records():
+
+            if normalized_exclude is not None and job_id == normalized_exclude:
+                continue
+            if active_only and not self._is_job_active(job):
+                continue
+            for track in job.get("tracks", []):
+                if isinstance(track, dict) and track.get("token") == token:
+                    result.append(job_id)
+                    break
+        return result
+
+
+
+    def jobs_for_token(self, *args, **kwargs):
+        return self.jobs_containing_token(*args, **kwargs)
+
+    def find_jobs_for_token(self, *args, **kwargs):
+        return self.jobs_containing_token(*args, **kwargs)
+
+    def find_duplicate_jobs(self, *args, **kwargs):
+        return self.jobs_containing_token(*args, **kwargs)
+
+    def duplicate_jobs_for_token(self, *args, **kwargs):
+        return self.jobs_containing_token(*args, **kwargs)
+
+    def find_job_for_token(self, *args, **kwargs):
+        jobs = self.jobs_containing_token(*args, **kwargs)
+        return jobs[0] if jobs else None
+
+    def find_duplicate_job(self, *args, **kwargs):
+        return self.find_job_for_token(*args, **kwargs)
+
+    def find_active_job_for_token(self, *args, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs["active_only"] = True
+        return self.find_job_for_token(*args, **kwargs)
+
+    def active_job_for_token(self, *args, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs["active_only"] = True
+        return self.find_job_for_token(*args, **kwargs)
+
+    def get_job_for_token(self, *args, **kwargs):
+        return self.find_job_for_token(*args, **kwargs)
+
+    def is_token_in_active_job(self, *args, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs["active_only"] = True
+        return bool(self.jobs_containing_token(*args, **kwargs))
+
+    def is_token_registered_in_another_job(self, *args, **kwargs):
+        return bool(self.jobs_containing_token(*args, **kwargs))
+
+    def has_duplicate_job(self, *args, **kwargs):
+        return bool(self.jobs_containing_token(*args, **kwargs))
 
 
 def get_job_store() -> JobStore:

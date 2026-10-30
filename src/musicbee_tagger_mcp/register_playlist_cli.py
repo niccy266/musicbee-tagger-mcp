@@ -82,6 +82,21 @@ def run(
         f"{job_id}.",
         file=output_stream,
     )
+    duplicates = result.get("duplicates", [])
+    if duplicates:
+        count = len(duplicates)
+        label = "entry" if count == 1 else "entries"
+        print(
+            f"Skipped {count} duplicate playlist {label} already registered "
+            f"in another active job:",
+            file=output_stream,
+        )
+        for entry in duplicates:
+            print(
+                f"- {entry.get('display_name')}: existing job "
+                f"{entry.get('existing_job_id')}",
+                file=output_stream,
+            )
     print(
         "Pass this job id to the agent loop or ask the agent for the next "
         "batch; the playlist path was never sent over MCP.",
