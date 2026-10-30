@@ -146,6 +146,10 @@ class JobStore:
         available = []
         for path in paths:
             try:
+                job_id = str(uuid.UUID(path.stem))
+            except ValueError:
+                continue
+            try:
                 job = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 raise RuntimeError("Unable to read playlist job") from None
@@ -156,11 +160,12 @@ class JobStore:
             ):
                 raise RuntimeError("Invalid playlist job record")
             try:
-                job_id = str(uuid.UUID(job["job_id"]))
+                parsed_job_id = str(uuid.UUID(job["job_id"]))
             except ValueError:
                 raise RuntimeError("Invalid playlist job record") from None
-            if job_id != path.stem:
+            if parsed_job_id != path.stem or parsed_job_id != job_id:
                 raise RuntimeError("Invalid playlist job record")
+            job_id = parsed_job_id
 
             counts = {status: 0 for status in STATUSES}
             for track in job["tracks"]:
