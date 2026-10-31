@@ -71,7 +71,7 @@ BATCH_SIZE = 1
 
 _SYSTEM_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "openrouter_agent.md"
 
-def load_system_prompt() -> str:
+def load_system_prompt(*args, **kwargs) -> str:
     """Load the agent system prompt from the external Markdown file."""
     path = _SYSTEM_PROMPT_PATH
     if not path.is_file():
@@ -665,6 +665,40 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_commands",
+            "description": "Run a list of shell commands. Pass commands as an array of non-empty strings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "commands": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["commands"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "gh_issue_comment",
+            "description": "Post a comment to a GitHub issue using the gh CLI.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "issue": {"type": "string"},
+                    "body": {"type": "string"},
+                    "repo": {"type": "string"}
+                },
+                "required": ["issue", "body"]
+            }
+        }
+    },
+
 ]
 
 def _search_canonical_release(artist, title, duration_seconds=None):
@@ -926,6 +960,36 @@ list_recent_tracks = get_recent_tracks
 recent_tracks = get_recent_tracks
 get_seen_tracks = get_recent_tracks
 
+try:
+    from . import commands as _commands_helper
+except Exception:  # pragma: no cover - import fallback for script execution
+    try:
+        import commands as _commands_helper
+    except Exception:
+        try:
+            from scripts import commands as _commands_helper
+        except Exception:
+            _commands_helper = None
+
+if _commands_helper is not None:
+    run_commands = _commands_helper.run_commands
+    gh_issue_comment = _commands_helper.gh_issue_comment
+    validate_commands = _commands_helper.validate_commands
+    validate_run_commands = _commands_helper.validate_run_commands
+    validate_run_commands_input = _commands_helper.validate_run_commands_input
+    check_commands = _commands_helper.check_commands
+else:
+    def run_commands(commands=None):
+        return {"error": "commands helper unavailable"}
+
+    gh_issue_comment = run_commands
+    validate_commands = lambda value: "commands helper unavailable"
+    validate_run_commands = validate_commands
+    validate_run_commands_input = validate_commands
+    check_commands = validate_commands
+
+
+
 LOCAL_TOOLS = {
     "read_memory": lambda: read_memory(),
     "write_memory": lambda text="", mode="replace": write_memory(text, mode=mode),
@@ -949,6 +1013,9 @@ LOCAL_TOOLS = {
     "get_staged_change": get_staged_change,
     "list_staged_changes": lambda: list_staged_changes(),
     "web_search": lambda query, max_results=5: web_search(query, max_results),
+    "run_commands": lambda commands=None: run_commands(commands),
+    "gh_issue_comment": lambda issue=None, body="", repo=None: gh_issue_comment(issue, body, repo=repo),
+
     "identify_acrcloud": lambda token: _identify_acrcloud(token),
     "propose_artist_split": lambda artist_field, split_ampersand=False, split_comma=False: propose_artist_split(artist_field, split_ampersand=split_ampersand, split_comma=split_comma),
     "search_musicbrainz_artist": lambda name, limit=5: search_musicbrainz_artist(name, limit),
@@ -957,6 +1024,40 @@ LOCAL_TOOLS = {
     "list_tools": lambda: list_tools(),
     "list_all_tools": lambda: list_all_tools(),
 }
+
+
+def dispatch_tool(name, args=None, **kwargs):
+    """Execute one local agent tool by name.
+
+    This shared dispatcher keeps tool orchestration backend-agnostic so both
+    OpenAI-style function calling and an external Cline agent can route calls
+    through the same implementation. ``args`` may be a mapping; additional
+    keyword arguments are merged into it.
+    """
+    if args is None:
+        args = {}
+    if not isinstance(args, dict):
+        try:
+            args = dict(args)
+        except Exception:
+            args = {}
+    merged = dict(args)
+    merged.update(kwargs)
+    fn = LOCAL_TOOLS.get(name)
+    try:
+        result = fn(**merged) if fn is not None else {"error": f"Unknown tool {name}"}
+    except Exception as error:
+        result = {"error": f"{type(error).__name__}: {str(error)[:300]}"}
+    try:
+        result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
+    except Exception:
+        pass
+    return result
+
+
+tool_dispatch = dispatch_tool
+execute_tool = dispatch_tool
+run_tool = dispatch_tool
 
 
 def call_openrouter(messages, model, api_key, temperature=0.2, retries=5,
@@ -2217,11 +2318,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                     args["mb_recording_id"] = requested_mbid
                     args["forensic_score"] = args.get("forensic_score", 0)
 
-            fn = LOCAL_TOOLS.get(name)
-            try:
-                result = fn(**args) if fn else {"error": f"Unknown tool {name}"}
-            except Exception as error:
-                result = {"error": f"{type(error).__name__}: {str(error)[:300]}"}
+            result = dispatch_tool(name, args)
             result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
 
             logger.info("tool {name}: {result}", name=name, result=json.dumps(result, ensure_ascii=False)[:4000])
@@ -2421,7 +2518,7 @@ def _handle_sigint(signum, frame):
     raise SystemExit(130)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "job_id",
@@ -2463,7 +2560,7 @@ def main():
     )
     parser.add_argument("--resume", action="store_true",
                         help="Skip files recorded as staged in the state file")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

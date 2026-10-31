@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, Optional
 
+from ..error_codes import E_INVALID_INPUT, error_from_exception, make_error
 from ..queue_store import OperationQueue
 
 _queue: Optional[OperationQueue] = None
@@ -37,9 +38,18 @@ def update_batch_operation(
     operation_id: str, status: str, details: Optional[str] = None
 ) -> Dict[str, Any]:
     """Update a queued operation's status and optional progress details."""
-    return _get_queue().update(
-        operation_id=operation_id, status=status, details=details
-    )
+    try:
+        return _get_queue().update(
+            operation_id=operation_id, status=status, details=details
+        )
+    except ValueError as error:
+        return make_error(
+            E_INVALID_INPUT,
+            str(error),
+            function="update_batch_operation",
+        )
+    except Exception as error:
+        return error_from_exception(error, function="update_batch_operation")
 
 
 def register_queue_tools(app) -> None:
