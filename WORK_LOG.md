@@ -580,3 +580,4 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Hardened registry resolution and list_staged_changes/list_jobs error paths.
 - Retained exact MCP tool-set check and documented fixture/security boundaries.
 - Validation: compileall passed; CI pending.
+
