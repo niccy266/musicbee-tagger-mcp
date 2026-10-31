@@ -262,6 +262,7 @@ def test_apply_staged_not_in_mcp_server():
         "read_track_metadata",
         "extract_filename_clues",
         "get_batch_brief",
+        "resolve_track_token",
         "get_release_tracklist",
         "identify_acrcloud",
         "repair_mojibake",
