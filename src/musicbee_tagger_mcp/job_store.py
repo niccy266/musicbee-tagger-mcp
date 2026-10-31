@@ -29,6 +29,33 @@ def default_jobs_dir() -> Path:
     return ensure_data_subdirectory("playlists")
 
 
+def get_registry():
+    """Return the shared file registry, if available."""
+    try:
+        from .file_registry import get_registry as _registry_getter
+
+        return _registry_getter()
+    except Exception:
+        return None
+
+
+def _resolve_registry(*args, **kwargs):
+    for key in ("registry", "reg", "file_registry", "registry_instance"):
+        value = kwargs.get(key)
+        if hasattr(value, "resolve"):
+            return value
+    for arg in args:
+        if hasattr(arg, "resolve"):
+            return arg
+    try:
+        registry = get_registry()
+        if hasattr(registry, "resolve"):
+            return registry
+    except Exception:
+        pass
+    return None
+
+
 class JobStore:
     """Create playlist jobs and hand out pending tokens in batches."""
 
@@ -50,6 +77,9 @@ class JobStore:
                 job_id = str(uuid.UUID(job_id))
             except (TypeError, ValueError, AttributeError):
                 raise ValueError("Unknown job id") from None
+        registry = _resolve_registry(**kwargs)
+        if isinstance(entries, list):
+            self._enrich_tracks_from_registry(entries, registry)
         sort_by = (
             kwargs.pop("sort_by", None)
             or kwargs.pop("order_by", None)
@@ -894,6 +924,8 @@ class JobStore:
         tracks = job.get("tracks")
         if not isinstance(tracks, list):
             return {"error": "Invalid playlist job record"}
+        registry = _resolve_registry(*args, **kwargs)
+        self._enrich_tracks_from_registry(tracks, registry)
         if order is not None:
             by_token = {}
             by_name = {}
@@ -984,6 +1016,36 @@ class JobStore:
     def grouped_albums(self, *args, **kwargs):
         return self._album_groups(*args, **kwargs)
 
+    def _enrich_tracks_from_registry(self, tracks, registry):
+        if registry is None or not hasattr(registry, "resolve"):
+            return
+        try:
+            from .metadata_reader import read_audio_metadata
+        except Exception:
+            return
+        if not isinstance(tracks, list):
+            return
+        for track in tracks:
+            if not isinstance(track, dict):
+                continue
+            token = track.get("token")
+            if not isinstance(token, str):
+                continue
+            try:
+                path = registry.resolve(token)
+            except Exception:
+                continue
+            try:
+                audio_metadata = read_audio_metadata(str(path))
+            except Exception:
+                continue
+            tags = audio_metadata.get("tags") if isinstance(audio_metadata, dict) else None
+            if not isinstance(tags, dict):
+                continue
+            for key, value in tags.items():
+                if value is not None and track.get(key) is None:
+                    track[key] = value
+
     def _resolve_job_id(self, *args, **kwargs):
         job_id = kwargs.get("job_id", kwargs.get("job", kwargs.get("id")))
         positional = list(args)
@@ -1009,6 +1071,8 @@ class JobStore:
             return {"error": "Unknown job id"}
         if pending_only:
             tracks = [t for t in tracks if isinstance(t, dict) and t.get("status") == "pending"]
+        registry = _resolve_registry(*args, **kwargs)
+        self._enrich_tracks_from_registry(tracks, registry)
         album_groups_map = {}
         album_group_order = []
         single_tracks = []
@@ -1126,6 +1190,8 @@ class JobStore:
                 "error": None,
             }
             track.update({k: v for k, v in metadata.items() if v is not None})
+            registry = _resolve_registry(*args, **kwargs)
+            self._enrich_tracks_from_registry([track], registry)
             for key, value in kwargs.items():
                 if value is not None and key not in track and key not in ("sort_by", "order_by", "pending_only", "reverse", "order", "tokens"):
                     track[key] = value
