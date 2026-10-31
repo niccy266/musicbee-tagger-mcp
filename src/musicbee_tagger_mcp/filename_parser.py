@@ -49,35 +49,40 @@ def _sanitize(text: Any) -> str:
 def _extract_bracket_contents(text: str) -> List[str]:
     """Extract top-level balanced bracket contents, preserving nested text.
 
-    Matching is type-aware (each opener must close with its own closer) so
-    mixed bracket types are handled without falsely pairing unrelated
-    brackets.  Nested brackets are kept inside their outer clue.  Unmatched
-    brackets are left untouched in the source text and produce no clue.
+    Matching is type-aware: each opener must close with its own closer.
+    Nested brackets are kept inside their outer clue, and separate
+    top-level groups each produce their own clue.  Mismatched or unmatched
+    brackets are left untouched in the source text and produce no clue, so
+    real title text is never lost.
     """
     results: List[str] = []
-    stack: List[str] = []
-    top_start: Optional[int] = None
     i = 0
     n = len(text)
     while i < n:
-        ch = text[i]
-        if ch in _OPEN_TO_CLOSE:
-            if not stack:
-                top_start = i
-            stack.append(ch)
-            i += 1
-        elif ch in _CLOSE_TO_OPEN:
-            if stack and _OPEN_TO_CLOSE[stack[-1]] == ch:
-                stack.pop()
-                if not stack and top_start is not None:
-                    results.append(text[top_start + 1 : i])
-                    top_start = None
-                i += 1
-            else:
-                # Unmatched closer: leave it untouched.
-                i += 1
-        else:
-            i += 1
+        if text[i] in _OPEN_TO_CLOSE:
+            stack: List[str] = [text[i]]
+            j = i + 1
+            matched = False
+            while j < n and stack:
+                ch = text[j]
+                if ch in _OPEN_TO_CLOSE:
+                    stack.append(ch)
+                elif ch in _CLOSE_TO_OPEN:
+                    if _OPEN_TO_CLOSE[stack[-1]] == ch:
+                        stack.pop()
+                        if not stack:
+                            matched = True
+                            break
+                    else:
+                        # Mismatched closer: this group is not a valid
+                        # bracket pair; abandon it.
+                        break
+                j += 1
+            if matched:
+                results.append(text[i + 1 : j])
+                i = j + 1
+                continue
+        i += 1
     return results
 
 
