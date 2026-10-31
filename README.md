@@ -239,6 +239,17 @@ $env:MUSICBEE_TAGGER_DATA_DIR = "K:\tools\mcp-servers\musicbee-tags\data"
 K:\bin\musicbee-tagger-register-playlist.cmd
 ```
 
+
+## Docker Hosting & Two-Container Sandboxing
+
+For containerized deployments, MusicBee Tagger MCP provides a secure, least-privilege Docker Compose setup (`docker-compose.yml`) utilizing a two-container architecture:
+
+- **`musicbee-mcp`**: Runs the HTTPS MCP server with a read-only root file system, outbound network restricted to MusicBrainz/ACRCloud APIs, and the audio library mounted strictly **read-only** (`:ro`) to guarantee the MCP server and AI agent can never modify audio files.
+- **`musicbee-apply`**: An isolated offline apply agent with **no network access** and read-write access to the audio library (`:rw`), responsible solely for executing review-approved stage manifests.
+
+For full setup instructions, see [`docs/DOCKER_HOSTING.md`](docs/DOCKER_HOSTING.md).
+
+
 ## Artist split validation (agent-assisted)
 
 The agent loop exposes four read-only tools for splitting malformed artist

@@ -23,13 +23,37 @@ from .staged_review import cmd_list, print_review, _print_diff
 from .staged_apply import get_staged_applier
 from .staging import get_staging_manager
 
+from .staged_audit import audit_staged_changes as _audit_staged_changes
+
+
+def cmd_audit(staging) -> None:
+    report = _audit_staged_changes(staging.store)
+    print(f"Audited {report['total_stages']} pending staged change(s).")
+    print(report["score_scale"])
+    print()
+    if not report["flagged"]:
+        print("No staged changes flagged for review.")
+        return
+    print(f"{report['flagged_count']} flagged for review:")
+    for item in report["flagged"]:
+        print(f"  stage_id   : {item['stage_id']}")
+        print(f"  file       : {item['display_name']}")
+        print(f"  flags      : {', '.join(item['flags'])}")
+        if item.get("notes"):
+            print(f"  reason     : {item['notes']}")
+        print("  changes    :")
+        _print_diff(item.get("diff_summary", []), include_title=False, indent="    ")
+        print()
+
+
+
 logger = logging.getLogger(__name__)
 
 
 def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> str:
     try:
         manifest = applier.load(stage_id)
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         logger.error("Staged manifest %s is missing; skipping it.", stage_id)
         print(f"\n[ERROR] Stage {stage_id} is missing; moving to the next item.")
         return "missing_stage"
@@ -96,6 +120,14 @@ def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> str
         )
         print(f"\n[ARCHIVED] {display_name}: source file not found; moving to the next item.")
         return "archived"
+    except Exception as exc:
+        try:
+            applier.mark_failed(stage_id, "Apply failed.")
+        except Exception:
+            pass
+        logger.error("Apply failed for stage %s (%s).", stage_id, display_name)
+        print(f"\n[FAILED] {display_name}: apply failed; moving to the next item.")
+        return "failed"
     if result.get("status") == "withdrawn":
         print(f"\n[SKIP] {stage_id} was withdrawn before it could be applied.")
         return "withdrawn"
@@ -111,7 +143,7 @@ def cmd_revert_one(applier, stage_id: str) -> str:
     """Revert an applied staged change by restoring its .bak backup."""
     try:
         manifest = applier.load(stage_id)
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         logger.error("Staged manifest %s is missing; cannot revert.", stage_id)
         print(f"\n[ERROR] Stage {stage_id} is missing.")
         return "missing_stage"
@@ -133,7 +165,7 @@ def cmd_revert_one(applier, stage_id: str) -> str:
         return "no_backup"
     backup = Path(backup_path)
     if not backup.is_file():
-        print(f"\n[ERROR] Backup file not found: {backup_path}; cannot revert.")
+        print("\n[ERROR] Backup file not found; cannot revert.")
         return "no_backup_file"
 
     display_name = manifest.get("display_name", stage_id)
@@ -158,7 +190,7 @@ def cmd_revert_one(applier, stage_id: str) -> str:
         result = applier.revert(stage_id)
     except FileNotFoundError as exc:
         logger.error("Revert failed for %s: %s", stage_id, exc)
-        print(f"\n[ERROR] {exc}")
+        print("\n[ERROR] Revert failed: file not found.")
         return "error"
     if result.get("status") == "already_reverted":
         print(f"\n[SKIP] {stage_id} has already been reverted.")
@@ -182,11 +214,12 @@ def main() -> None:
     group.add_argument("--stage-id", metavar="UUID", help="Apply or revert a specific staged change.")
     group.add_argument("--all", action="store_true", help="Apply all pending staged changes.")
     group.add_argument("--list", action="store_true", help="List all pending staged changes.")
+    group.add_argument("--audit", action="store_true", help="Audit pending staged changes for duplicates, conflicts, empty diffs, and low scores.")
     group.add_argument("--list-applied", action="store_true",
                        help="List all applied changes that can be reverted (have a .bak backup).")
-    group.add_argument("--revert", action="store_true",
+    parser.add_argument("--revert", action="store_true",
                        help="Revert an applied staged change by restoring its .bak backup.")
-    group.add_argument("--undo", action="store_true",
+    parser.add_argument("--undo", action="store_true",
                        help="Alias for --revert.")
 
     parser.add_argument("--dry-run", action="store_true",
@@ -200,6 +233,10 @@ def main() -> None:
 
     if args.list:
         cmd_list(staging)
+        return
+
+    if args.audit:
+        cmd_audit(staging)
         return
 
     if args.list_applied:

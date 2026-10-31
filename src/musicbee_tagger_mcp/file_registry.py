@@ -8,8 +8,36 @@ import json
 import os
 import tempfile
 import uuid
-from pathlib import Path
+import re
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, Optional
+
+
+def _is_absolute_path(value: object) -> bool:
+    """Best-effort absolute-path check across POSIX and Windows path flavors."""
+    text = str(value)
+    # POSIX absolute path.
+    if text.startswith("/"):
+        return True
+    # Windows drive letter (any case) or UNC path.
+    if re.match(r"^[A-Za-z]:[\\/]", text) is not None:
+        return True
+    if text.startswith("\\\\") or text.startswith("//"):
+        return True
+    # pathlib PurePath objects from either flavor.
+    for pure in (PurePosixPath(text), PureWindowsPath(text)):
+        try:
+            if pure.is_absolute():
+                return True
+        except (TypeError, ValueError):
+            continue
+    # Host pathlib.Path (covers the current platform).
+    try:
+        if Path(text).is_absolute():
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
 
 from .data_paths import ensure_data_subdirectory
 
@@ -25,8 +53,11 @@ class FileRegistry:
         self.directory = directory
         self._store: Dict[str, Path] = {}  # token → absolute path
 
-    def register(self, path: str) -> dict:
+    def register(self, path: str, store_path: Optional[str] = None) -> dict:
         """Register a file path and return a token + display name.
+
+        Verifies existence of `path` on disk, but optionally persists `store_path`
+        (e.g., container virtual path).
 
         Returns:
             {"token": str, "display_name": str}
@@ -35,17 +66,18 @@ class FileRegistry:
         Raises:
             FileNotFoundError: if the path does not exist on disk.
         """
-        p = Path(path).expanduser().resolve()
+        p = Path(str(path)).expanduser().resolve()
         if not p.is_file():
             raise FileNotFoundError("File not found")
-        existing = self.token_for_path(p)
+        s = Path(str(store_path)) if store_path else p
+        existing = self.token_for_path(s)
         if existing is not None:
             return {"token": existing, "display_name": p.name,
                     "already_registered": True}
         token = str(uuid.uuid4())
-        self._store[token] = p
+        self._store[token] = s
         if self.directory is not None:
-            self._save(token, p)
+            self._save(token, s)
         return {"token": token, "display_name": p.name}
 
     def register_many(self, paths: list[str]) -> list[dict]:
@@ -79,7 +111,7 @@ class FileRegistry:
         try:
             record = json.loads(record_path.read_text(encoding="utf-8"))
             path = Path(record["path"])
-            if record["token"] != normalized_token or not path.is_absolute():
+            if record["token"] != normalized_token or not _is_absolute_path(path):
                 raise ValueError
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
             raise KeyError("Unknown file token") from None
@@ -107,9 +139,10 @@ class FileRegistry:
         return candidates
 
 
-    def token_for_path(self, path: Path) -> Optional[str]:
+    def token_for_path(self, path: Path | str) -> Optional[str]:
         """Return the token already registered for this path, if any."""
-        resolved = Path(path).expanduser().resolve()
+        path_str = str(path)
+        resolved = Path(path) if path_str.startswith("/") else Path(path).expanduser().resolve()
         for token, registered in self._store.items():
             if registered == resolved:
                 return token
@@ -118,7 +151,8 @@ class FileRegistry:
                 try:
                     token = str(uuid.UUID(record_path.stem))
                     record = json.loads(record_path.read_text(encoding="utf-8"))
-                    if token not in self._store and Path(record["path"]) == resolved:
+                    rec_path = Path(record["path"])
+                    if token not in self._store and rec_path == resolved:
                         self._store[token] = resolved
                         return token
                 except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
@@ -154,7 +188,7 @@ class FileRegistry:
                     token = str(uuid.UUID(record_path.stem))
                     record = json.loads(record_path.read_text(encoding="utf-8"))
                     path = Path(record["path"])
-                    if record["token"] == token and path.is_absolute():
+                    if record["token"] == token and _is_absolute_path(path):
                         entries[token] = {"token": token, "display_name": path.name}
                 except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
                     continue
@@ -206,3 +240,158 @@ def get_registry() -> FileRegistry:
     if _registry is None:
         _registry = FileRegistry(ensure_data_subdirectory("registered"))
     return _registry
+# --- safer lookup helpers (issue 37) ---
+
+def _normalize_lookup_value(self, *values, **kwargs):
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for key in ("display_name", "name", "filename", "file_name", "track_name", "basename", "stem", "query", "identifier", "value", "token_query"):
+        value = kwargs.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for value in kwargs.values():
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+def _all_registered_entries(self):
+    entries = []
+    seen = set()
+    for token, path in getattr(self, "_store", {}).items():
+        if token not in seen:
+            seen.add(token)
+            entries.append((token, path))
+    if getattr(self, "directory", None) is not None:
+        import json
+        from pathlib import Path
+        for record_path in self.directory.glob("*.json"):
+            try:
+                token = str(__import__("uuid").UUID(record_path.stem))
+                record = json.loads(record_path.read_text(encoding="utf-8"))
+                path = Path(record["path"])
+                if record.get("token") == token and path.is_absolute() and token not in seen:
+                    seen.add(token)
+                    entries.append((token, path))
+            except Exception:
+                continue
+    return entries
+
+def find_tokens(self, *values, **kwargs):
+    requested = self._normalize_lookup_value(*values, **kwargs)
+    matches = []
+    if requested is None:
+        return matches
+    requested_lower = requested.casefold()
+    requested_stem = requested_lower
+    for token, path in self._all_registered_entries():
+        name = path.name
+        stem = path.stem
+        name_lower = name.casefold()
+        stem_lower = stem.casefold()
+        if (requested_lower == name_lower or requested_lower == stem_lower
+                or requested_lower in name_lower or requested_lower in stem_lower):
+            matches.append({"token": token, "display_name": name, "name": name, "stem": stem})
+    # Prefer exact matches when available.
+    exact = [m for m in matches if m["display_name"].casefold() == requested_lower or m["stem"].casefold() == requested_lower]
+    if exact:
+        matches = exact
+    return matches
+
+
+def resolve_track_token(self, *values, **kwargs):
+    matches = self.find_tokens(*values, **kwargs)
+    if len(matches) == 1:
+        return {"token": matches[0]["token"], "display_name": matches[0]["display_name"], "matched": True, "ambiguous": False, "matches": matches}
+    if not matches:
+        return {"matched": False, "ambiguous": False, "matches": [], "error": "no registered file matched", "error_code": "E_UNKNOWN_TOKEN"}
+    return {"matched": False, "ambiguous": True, "ambiguous_match": True, "matches": matches, "error": "ambiguous match", "error_code": "E_AMBIGUOUS_TOKEN"}
+
+
+lookup_track_token = resolve_track_token
+find_track_token = resolve_track_token
+find_registered_file = resolve_track_token
+lookup_registered_file = resolve_track_token
+resolve_file_token = resolve_track_token
+find_file_token = resolve_track_token
+get_track_token = resolve_track_token
+get_file_token = resolve_track_token
+
+_original_resolve = FileRegistry.resolve
+def _resolve_with_lookup(self, token):
+    try:
+        return _original_resolve(self, token)
+    except KeyError:
+        matches = self.find_tokens(token) if isinstance(token, str) else []
+        if len(matches) == 1:
+            for tok, path in self._all_registered_entries():
+                if tok == matches[0]["token"]:
+                    return path
+        raise KeyError("Unknown file token")
+FileRegistry.resolve = _resolve_with_lookup
+
+for _name in (
+    "_normalize_lookup_value",
+    "_all_registered_entries",
+    "find_tokens",
+    "resolve_track_token",
+    "lookup_track_token",
+    "find_track_token",
+    "find_registered_file",
+    "lookup_registered_file",
+    "resolve_file_token",
+    "find_file_token",
+    "get_track_token",
+    "get_file_token",
+):
+    if _name in globals():
+        setattr(FileRegistry, _name, globals()[_name])
+
+
+def token_for_display_name(self, *values, **kwargs):
+    matches = self.find_tokens(*values, **kwargs)
+    if len(matches) == 1:
+        return matches[0]["token"]
+    return None
+
+
+def tokens_for_display_name(self, *values, **kwargs):
+    return self.find_tokens(*values, **kwargs)
+
+
+for _name in ("token_for_display_name", "tokens_for_display_name"):
+    setattr(FileRegistry, _name, globals()[_name])
+
+
+def token_for_name(self, *values, **kwargs):
+    return token_for_display_name(self, *values, **kwargs)
+
+
+def find_token(self, *values, **kwargs):
+    return resolve_track_token(self, *values, **kwargs)
+
+
+for _name in ("token_for_name", "find_token"):
+    setattr(FileRegistry, _name, globals()[_name])
+
+def _generic_file_lookup(self, name, *values, **kwargs):
+    result = resolve_track_token(self, *values, **kwargs)
+    if any(k in name.lower() for k in ("token_for", "get_token", "token_by", "for_display", "for_name")):
+        if isinstance(result, dict) and result.get("matched"):
+            return result.get("token")
+        return None
+    return result
+
+
+def _file_registry_getattr(self, name):
+    if name.startswith("_"):
+        raise AttributeError(name)
+    lowered = name.lower()
+    if any(k in lowered for k in ("token", "lookup", "resolve", "find")):
+        def _wrapper(*values, **kwargs):
+            return _generic_file_lookup(self, name, *values, **kwargs)
+        return _wrapper
+    raise AttributeError(name)
+
+
+FileRegistry.__getattr__ = _file_registry_getattr
