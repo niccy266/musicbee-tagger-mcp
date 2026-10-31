@@ -18,6 +18,13 @@ dist/
 build/
 *.egg-info/
 
+#Temp files:
+.pytest*
+TEMP
+temp
+.temp
+.tmp
+
 # ----------------------------------------------------
 # 🔒 Secrets, Credentials & Sensitive Environment Files
 # ----------------------------------------------------
