@@ -40,6 +40,7 @@ def test_release_configs_use_supported_claude_shapes():
 
     assert marketplace["plugins"][0]["source"] == "./plugins/musicbee-tagger"
     assert plugin["mcpServers"] == "./.mcp.json"
+    assert plugin_server["type"] == "stdio"
     assert plugin_server["command"] == "cmd.exe"
     assert plugin_server["args"][-1] == server["args"][-1]
     assert plugin_server["env"] == server["env"]
