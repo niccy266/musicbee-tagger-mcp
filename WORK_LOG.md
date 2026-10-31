@@ -537,3 +537,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Preserved existing behavior for nested/mixed brackets, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
 - Added regression tests for mixed, nested mixed, unmatched, and multilingual bracket cases.
 - Validation: py_compile passed; CI run 41171857420 succeeded.
+### 2026-10-31 — Issue #7: verification and completion pass
+- Reviewed current implementation on `codex/issue-7-filename-clues` (HEAD 828a7bf): type-aware bracket matching, preserved bracketed title text, meaningful `_2020` suffix handling, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Ran full test suite with repository venv and `PYTHONPATH=src`: 183 passed, 30 skipped.
+- Ran pylint errors-only on `src`: clean.
+- No code changes required; branch and PR #114 already contain the implementation.
