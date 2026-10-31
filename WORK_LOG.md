@@ -542,3 +542,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added module-level registry resolution and track enrichment from the file registry so reorder/group/create operations can resolve album/disc/track metadata from tokens.
 - Verified lint and test suites pass via GitHub Actions CI (run 41175729366) on PR #115.
 
+
+### 2026-10-31 — Issue #45 follow-up: alias and pending-order hardening
+- Added compatibility aliases and pending-only explicit ordering support.
+- Hardened metadata collection against registry leakage.
+- Verified imports and pylint.
