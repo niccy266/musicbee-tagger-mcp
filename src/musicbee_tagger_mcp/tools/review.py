@@ -128,3 +128,10 @@ def resolve_review_flag(*args: Any, **kwargs: Any) -> Any:
 
 def register_review_tools(app) -> None:
     app.tool()(flag_for_review)
+
+
+def get_review_flag(*a, **k):
+    return get_review_store().get(*a, **k)
+
+def delete_review_flag(*a, **k):
+    return get_review_store().delete(*a, **k)

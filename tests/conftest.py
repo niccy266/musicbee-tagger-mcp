@@ -47,6 +47,7 @@ def isolate_app_data(tmp_path, monkeypatch):
 
     import musicbee_tagger_mcp.data_paths as data_paths
     import musicbee_tagger_mcp.file_registry as file_registry
+    import musicbee_tagger_mcp.review_flags as review_flags
     import musicbee_tagger_mcp.staging as staging
     import musicbee_tagger_mcp.staged_apply as staged_apply
 
@@ -54,6 +55,8 @@ def isolate_app_data(tmp_path, monkeypatch):
 
     # Reset cached singletons so they pick up the per-test data root.
     monkeypatch.setattr(file_registry, "_registry", None, raising=False)
+    monkeypatch.setattr(review_flags, "_review_store", None, raising=False)
+    monkeypatch.setattr(review_flags, "_review_store_directory", None, raising=False)
     monkeypatch.setattr(staging, "_staging_manager", None, raising=False)
     monkeypatch.setattr(staged_apply, "_applier", None, raising=False)
 

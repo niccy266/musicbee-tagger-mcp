@@ -260,6 +260,9 @@ def stage_manual_override(
         justification=justification,
         **kwargs,
     )
+def audit_staged_changes(*args, **kwargs):
+    return get_staging_manager().audit_staged_changes(*args, **kwargs)
+
 def register_tag_tools(app) -> None:
     app.tool()(preview_tags)
     app.tool()(stage_tag_changes)
