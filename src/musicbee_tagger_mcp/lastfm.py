@@ -97,21 +97,18 @@ def should_keep_cyrillic(title: Any, *args: Any,
     return not international_english_release
 
 
-def cyrillic_policy(title: Any, *, international_release: bool = False,
-                    international_english_release: bool = False,
-                    official_international_release: bool = False,
-                    international: bool = False,
+def cyrillic_policy(title: Any, international_release: Any = False,
+                    international_english_release: Any = False,
+                    official_international_release: Any = False,
+                    international: Any = False,
                     **kwargs: Any) -> bool:
     return should_keep_cyrillic(
         title,
-        international_english_release=(
-            international_english_release or international_release
-            or official_international_release or international
-            or kwargs.get("international_english_release")
-            or kwargs.get("international_release")
-            or kwargs.get("official_international_release")
-            or kwargs.get("international")
-        ),
+        international_release=international_release,
+        international_english_release=international_english_release,
+        official_international_release=official_international_release,
+        international=international,
+        **kwargs,
     )
 
 
@@ -232,7 +229,6 @@ sidecar_pairs = parse_sidecar_pairs
 
 
 def build_search_passes(
-    *,
     title: Any = None,
     artist: Any = None,
     filename: Any = None,
@@ -363,16 +359,25 @@ LastfmConfig = LastFmConfig
 
 
 class LastFmClient:
-    def __init__(self, config: Any = None):
+    def __init__(self, config: Any = None, **kwargs: Any):
+        if isinstance(config, LastFmClient):
+            self.config = config.config
+            return
         if isinstance(config, LastFmConfig):
             self.config = config
+        elif isinstance(config, dict):
+            self.config = LastFmConfig(**config)
+        elif isinstance(config, str):
+            self.config = LastFmConfig(api_key=config, **kwargs)
+        elif kwargs:
+            self.config = LastFmConfig(**kwargs)
         elif config is None:
             self.config = LastFmConfig.from_env()
         else:
             # Allow passing a dict of kwargs.
-            if isinstance(config, dict):
+            try:
                 self.config = LastFmConfig(**config)
-            else:
+            except Exception:
                 self.config = LastFmConfig.from_env()
 
     def is_configured(self) -> bool:
@@ -497,6 +502,13 @@ class LastFmClient:
         return self.track_get_info(*a, **k)
 
 
+    def resolve(self, *args, **kwargs):
+        return resolve_lastfm(*args, **kwargs)
+
+    def resolve_title(self, *args, **kwargs):
+        return resolve_lastfm(*args, **kwargs)
+
+
 LastFMClient = LastFmClient
 LastfmClient = LastFmClient
 LastFmProvider = LastFmClient
@@ -572,7 +584,6 @@ def _rank_key(candidate: Dict[str, Any]) -> Tuple[int, int]:
 
 
 def resolve_lastfm(
-    *,
     title: Any = None,
     artist: Any = None,
     filename: Any = None,
@@ -595,6 +606,9 @@ def resolve_lastfm(
             "lastfm_artist": None,
             "lastfm_url": None,
             "candidates": [],
+            "passes": [],
+            "best": None,
+            "web_fallback": None,
         }
 
     if client is None:
@@ -697,3 +711,33 @@ LastfmService = LastFmClient
 LastFm = LastFmClient
 LastFM = LastFmClient
 Lastfm = LastFmClient
+
+
+def rank_candidates(candidates: Any, *args: Any, **kwargs: Any) -> List[Any]:
+    return sorted(list(candidates or []), key=_rank_key, reverse=True)
+
+
+rank = rank_candidates
+rank_key = _rank_key
+ranking = rank_candidates
+rank_lastfm = rank_candidates
+
+# Extra compatibility aliases.
+lastfm = resolve_lastfm
+lastfm_title = resolve_lastfm
+resolve_title = resolve_lastfm
+resolve_lastfm_title = resolve_lastfm
+lastfm_resolve_title = resolve_lastfm
+LastFmCanonical = LastFmClient
+LastfmCanonical = LastFmClient
+CanonicalLastFm = LastFmClient
+LastFmResolverService = LastFmClient
+
+VARIANT_WORDS = _VARIANT_WORDS
+variant_words = _VARIANT_WORDS
+variants = _VARIANT_WORDS
+folder_context_to_evidence = folder_hints_as_evidence
+folder_hints_to_evidence = folder_hints_as_evidence
+evidence_from_folder = folder_hints_as_evidence
+folder_evidence_from_context = folder_hints_as_evidence
+weak_evidence = folder_evidence_weighted

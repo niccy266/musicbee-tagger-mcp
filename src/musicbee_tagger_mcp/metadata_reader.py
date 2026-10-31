@@ -119,3 +119,10 @@ def normalize_for_matching(text):
 
 normalize_match_key = normalize_for_matching
 normalize_key = normalize_for_matching
+
+
+def strip_invisible(text):
+    import re
+    if text is None:
+        return ""
+    return re.sub(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]", "", str(text))
