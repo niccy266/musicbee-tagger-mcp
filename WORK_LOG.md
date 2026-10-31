@@ -493,3 +493,11 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+### 2026-10-31 — Human review step in investigation workflow (issue #9)
+- Added durable `flag_for_review(token, reason)` MCP tool backed by a persistent `ReviewFlagStore` under the configured private data directory (`review-flags/`).
+- Flags record token-safe identity, concise reason, timestamp, outcome type, and optional candidate/verification summaries; absolute paths are never stored or returned.
+- Review flags are stored separately from staged proposals, completed no-match archives, and transient search-retry records, with `outcome_type=human_review` and non-retryable flags.
+- Duplicate flags for the same token update the existing open flag instead of creating duplicates; flags can be listed, resolved, reopened, and deleted.
+- Persistence across store instances/restarts verified manually; path-privacy scrubbing applied to reasons and summaries.
+- Updated both investigator skill copies and MCP tool/manifest registration surfaces; aligned release asset and secure-pipeline tool sets.
+- Validation: compileall passes; manual end-to-end flag/duplicate/resolve/persistence/path-privacy check passes. CI will run the full suite.

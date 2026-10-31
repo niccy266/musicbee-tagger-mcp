@@ -111,6 +111,10 @@
       "description": "Suggest repairs for text corrupted by common encoding errors."
     },
     {
+      "name": "flag_for_review",
+      "description": "Record a durable, path-free human-review flag for an uncertain registered track."
+    },
+    {
       "name": "identify_acrcloud",
       "description": "Identify a registered track using ACRCloud (opt-in fallback)."
     }
