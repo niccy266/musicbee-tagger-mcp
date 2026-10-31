@@ -1,6 +1,6 @@
 site_name: MusicBee Tagger MCP
 site_description: Human and MCP guide for safely investigating MusicBee audio metadata.
-site_url: https://niccy266.github.io/musicbee-tagger-mcp/
+site_url: http://mcp-docs/home
 repo_url: https://github.com/niccy266/musicbee-tagger-mcp
 repo_name: niccy266/musicbee-tagger-mcp
 
@@ -16,15 +16,36 @@ theme:
     - navigation.sections
     - search.suggest
     - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src, .]
+          options:
+            show_root_heading: true
+            show_source: true
 
 markdown_extensions:
   - admonition
-  - codehilite
   - def_list
   - footnotes
   - tables
   - toc:
       permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:pymdownx.emoji.twemoji
+      emoji_generator: !!python/name:pymdownx.emoji.to_svg
 
 nav:
   - Overview: index.md
@@ -33,3 +54,8 @@ nav:
   - OpenRouter Agent Loop: OPENROUTER_AGENT.md
   - Field Map: field-map.md
   - Release Plan: LOCAL_DESKTOP_RELEASE_PLAN.md
+  - API & Scripts Reference:
+      - Python Scripts (`scripts/`): reference/scripts.md
+      - Core Modules (`src/`): reference/modules.md
+      - Project Dependencies: reference/dependencies.md
+

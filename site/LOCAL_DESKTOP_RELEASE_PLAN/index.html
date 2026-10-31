@@ -1,0 +1,1961 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Human and MCP guide for safely investigating MusicBee audio metadata.">
+      
+      
+      
+        <link rel="canonical" href="http://mcp-docs/home/LOCAL_DESKTOP_RELEASE_PLAN/">
+      
+      
+        <link rel="prev" href="../field-map/">
+      
+      
+        <link rel="next" href="../reference/scripts/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Release Plan - MusicBee Tagger MCP</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#local-desktop-release-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="MusicBee Tagger MCP" class="md-header__button md-logo" aria-label="MusicBee Tagger MCP" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MusicBee Tagger MCP
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Release Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/niccy266/musicbee-tagger-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    niccy266/musicbee-tagger-mcp
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="MusicBee Tagger MCP" class="md-nav__button md-logo" aria-label="MusicBee Tagger MCP" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MusicBee Tagger MCP
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/niccy266/musicbee-tagger-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    niccy266/musicbee-tagger-mcp
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOCKER_HOSTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Docker Hosting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../THREAT_MODEL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPENROUTER_AGENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenRouter Agent Loop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../field-map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Field Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-read-this-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Read This First
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Read This First">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#product-goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Product goal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#user-preferences-already-gathered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User preferences already gathered
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#non-negotiable-safety-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-negotiable safety boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-current-project-starting-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Current Project Starting Point
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-proposed-install-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Proposed Install Layout
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Proposed Install Layout">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#launcher-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Launcher requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-privacy-and-persistence-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Privacy and Persistence Model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Privacy and Persistence Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-state-root" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private state root
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-confidence-routing-proposal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Confidence Routing Proposal
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Confidence Routing Proposal">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#95100-auto-stage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        95–100 — Auto-stage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#85949-corroborate-then-agent-judgment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        85–94.9 — Corroborate, then agent judgment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#75849-stage-with-an-explicit-caution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        75–84.9 — Stage with an explicit caution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#60749-unresolved-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        60–74.9 — Unresolved archive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#60-low-priority-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        &lt;60 — Low-priority archive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hard-gates-override-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hard gates override scores
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-logging-and-search-archives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Logging and Search Archives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Logging and Search Archives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#human-readable-path-free-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Human-readable path-free log
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#applied-stage-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Applied-stage audit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-failure-and-unresolved-records" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search failure and unresolved records
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minimum-search-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Minimum search manifest
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-delivery-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Delivery Phases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Delivery Phases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-confirm-assumptions-and-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0 — Confirm assumptions and baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-install-package-and-launcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Install package and launcher
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-private-data-root-and-durable-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — Private data root and durable folders
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-structured-event-log-and-manifests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — Structured event log and manifests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-confidence-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — Confidence routing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-documentation-and-release-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — Documentation and release checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-required-tests-and-safety-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Required Tests and Safety Checks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Required Tests and Safety Checks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#install-and-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install and config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privacy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#routing-and-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routing and logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#audio-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-new-agent-handoff-instructions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. New-Agent Handoff Instructions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-open-decisions-to-validate-during-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Open Decisions to Validate During Implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & Scripts Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API & Scripts Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/scripts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python Scripts (`scripts/`)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Modules (`src/`)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-read-this-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Read This First
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Read This First">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#product-goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Product goal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#user-preferences-already-gathered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User preferences already gathered
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#non-negotiable-safety-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-negotiable safety boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-current-project-starting-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Current Project Starting Point
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-proposed-install-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Proposed Install Layout
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Proposed Install Layout">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#launcher-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Launcher requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-privacy-and-persistence-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Privacy and Persistence Model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Privacy and Persistence Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-state-root" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private state root
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-confidence-routing-proposal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Confidence Routing Proposal
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Confidence Routing Proposal">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#95100-auto-stage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        95–100 — Auto-stage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#85949-corroborate-then-agent-judgment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        85–94.9 — Corroborate, then agent judgment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#75849-stage-with-an-explicit-caution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        75–84.9 — Stage with an explicit caution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#60749-unresolved-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        60–74.9 — Unresolved archive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#60-low-priority-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        &lt;60 — Low-priority archive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hard-gates-override-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hard gates override scores
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-logging-and-search-archives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Logging and Search Archives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Logging and Search Archives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#human-readable-path-free-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Human-readable path-free log
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#applied-stage-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Applied-stage audit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-failure-and-unresolved-records" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search failure and unresolved records
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minimum-search-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Minimum search manifest
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-delivery-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Delivery Phases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Delivery Phases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-confirm-assumptions-and-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0 — Confirm assumptions and baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-install-package-and-launcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Install package and launcher
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-private-data-root-and-durable-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — Private data root and durable folders
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-structured-event-log-and-manifests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — Structured event log and manifests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-confidence-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — Confidence routing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-documentation-and-release-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — Documentation and release checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-required-tests-and-safety-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Required Tests and Safety Checks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Required Tests and Safety Checks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#install-and-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install and config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privacy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#routing-and-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routing and logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#audio-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-new-agent-handoff-instructions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. New-Agent Handoff Instructions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-open-decisions-to-validate-during-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Open Decisions to Validate During Implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/niccy266/musicbee-tagger-mcp/edit/master/docs/LOCAL_DESKTOP_RELEASE_PLAN.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="local-desktop-release-plan">Local Desktop Release Plan<a class="headerlink" href="#local-desktop-release-plan" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Purpose:</strong> Give a fresh coding agent enough context to prepare MusicBee Tagger MCP for reliable use on one Windows desktop.</p>
+<p><strong>Scope:</strong> Local Python package, Claude Code-style user configuration, <code>K:\bin</code> launcher, private local state, searchable investigation logs, and conservative confidence routing.</p>
+<p><strong>Not in scope:</strong> Docker, hosted/network MCP, PostgreSQL, multi-user support, or automatic writes to audio files.</p>
+</blockquote>
+<hr />
+<h2 id="1-read-this-first">1. Read This First<a class="headerlink" href="#1-read-this-first" title="Permanent link">&para;</a></h2>
+<h3 id="product-goal">Product goal<a class="headerlink" href="#product-goal" title="Permanent link">&para;</a></h3>
+<p>Make the MCP server easy to install and connect to Claude Code on the user's desktop, while keeping audio paths private and all physical audio edits under explicit user control.</p>
+<h3 id="user-preferences-already-gathered">User preferences already gathered<a class="headerlink" href="#user-preferences-already-gathered" title="Permanent link">&para;</a></h3>
+<ul>
+<li>This is a <strong>single-user desktop tool</strong>.</li>
+<li>The first target client is <strong>Claude Code</strong>, using a user-level configuration.</li>
+<li>Install the Python application under:
+  <code>K:\tools\mcp-servers\musicbee-tags\</code></li>
+<li>Put launchers or aliases in:
+  <code>K:\bin\</code></li>
+<li>Prefer a <strong>Python package</strong> installation.</li>
+<li>A human-run local command accepts playlist paths; the MCP server accepts only
+  opaque file tokens.</li>
+<li>Neither the agent nor ordinary MCP responses/logs should expose absolute paths.</li>
+<li>Use a configurable private state/log root, set in the user-level MCP config. The requested default is:
+  <code>K:\tools\mcp-servers\musicbee-tags\</code></li>
+<li>A Bash alias is acceptable if the MCP client can launch it reliably. On Windows, provide and test a native <code>.cmd</code> launcher as the dependable option.</li>
+<li>Investigation summaries, staged proposals, applied changes, and unresolved searches should be recorded.</li>
+<li>Confidence thresholds need validation against real examples and must remain configurable/tunable.</li>
+</ul>
+<h3 id="non-negotiable-safety-boundary">Non-negotiable safety boundary<a class="headerlink" href="#non-negotiable-safety-boundary" title="Permanent link">&para;</a></h3>
+<p><strong>Auto-stage is not auto-apply.</strong></p>
+<ul>
+<li>The agent may inspect, search, verify, preview, log, and stage proposals.</li>
+<li>The user-controlled CLI remains the only path that physically changes audio files in this plan.</li>
+<li>Do not add an MCP tool that applies tags.</li>
+<li>Any future request to let an agent apply audio changes requires a separate design and explicit approval. Do not infer that permission from confidence thresholds or logging requirements.</li>
+</ul>
+<hr />
+<h2 id="2-current-project-starting-point">2. Current Project Starting Point<a class="headerlink" href="#2-current-project-starting-point" title="Permanent link">&para;</a></h2>
+<p>The repository already has:</p>
+<ul>
+<li>An MCP server using <strong>stdio</strong> transport.</li>
+<li>A Python console entry point: <code>musicbee-tagger-mcp</code>.</li>
+<li>A separate user CLI: <code>musicbee-tagger-apply</code>.</li>
+<li>Nine MCP tools for metadata inspection, MusicBrainz investigation, preview, staging, and mojibake repair; path-taking registration tools are not exposed.</li>
+<li>Opaque tokens backed by a persistent, local token-to-path registry in the configured private data directory. A human-run CLI registers playlists and a separate confirmation-gated CLI clears registrations.</li>
+<li>Metadata reads directly from audio files; metadata is not currently cached in a database.</li>
+<li>Pending change manifests stored as JSON files.</li>
+<li>A user CLI that prompts before writing tags and creates backups by default.</li>
+<li>Tests for playlist parsing, path concealment, tag verification, staging, and MCP tool registration.</li>
+</ul>
+<p>Recent structural refactor:</p>
+<ul>
+<li><code>server.py</code> assembles the app and starts stdio.</li>
+<li>MCP handlers live in <code>src/musicbee_tagger_mcp/tools/</code>.</li>
+<li>MusicBrainz search, verification, and shared scoring live in separate modules.</li>
+<li>Manifest storage, read-only preview, staged application, and format-specific writes are separated.</li>
+<li>The MCP server does not import the audio-write modules.</li>
+</ul>
+<p>Before changing code, inspect the current branch and worktree. Do not assume the branch, line counts, or this plan's proposed module names remain unchanged.</p>
+<hr />
+<h2 id="3-proposed-install-layout">3. Proposed Install Layout<a class="headerlink" href="#3-proposed-install-layout" title="Permanent link">&para;</a></h2>
+<p>Keep the executable environment, launcher, and application data clearly separated:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>K:\tools\mcp-servers\musicbee-tags\
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── .venv\                 # Dedicated Python environment
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── pyproject.toml / package installation
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── staged\                # Pending change manifests
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── applied\               # Applied manifests and audit records
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── search-retry\          # Temporary/transient failures, retryable
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├── search-archive\        # Completed unresolved investigations
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├── low-confidence\        # Low-priority, user-browsable archive
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>└── logs\                  # Path-free event log
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>K:\bin\
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>├── musicbee-tagger-mcp.cmd
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>└── musicbee-tagger-mcp.sh   # Optional; only if supported/tested by the client shell
+</code></pre></div>
+<p>This is a proposed organization, not a settled on-disk schema. Confirm that the configured root can be both the install parent and data root without packaging/upgrades overwriting user data. If not, keep the requested root as the parent and place package/runtime files and private data in distinct subfolders.</p>
+<h3 id="launcher-requirements">Launcher requirements<a class="headerlink" href="#launcher-requirements" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The MCP config should call a stable command in <code>K:\bin</code>, not a checkout path.</li>
+<li>Prefer a native <code>.cmd</code> launcher for Windows reliability.</li>
+<li>The launcher should invoke the dedicated environment's installed console script.</li>
+<li>Do not rely on the caller's current working directory.</li>
+<li>A <code>.sh</code> launcher is optional and must be tested with the actual Claude Code shell.</li>
+<li>Avoid baking credentials or user-specific secrets into launch scripts.</li>
+</ul>
+<h3 id="configuration-requirements">Configuration requirements<a class="headerlink" href="#configuration-requirements" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Use Claude Code's current supported user-level MCP configuration format. Verify the exact schema against current official documentation during implementation.</li>
+<li>Configure the server command, arguments, and the private data-root setting.</li>
+<li>Use the user's configured data root; default to <code>K:\tools\mcp-servers\musicbee-tags\</code>.</li>
+<li>Do not add a config option that causes paths to be included in logs or MCP responses.</li>
+<li>Document installation, config location, restart/reload behavior, and a health check.</li>
+</ul>
+<hr />
+<h2 id="4-privacy-and-persistence-model">4. Privacy and Persistence Model<a class="headerlink" href="#4-privacy-and-persistence-model" title="Permanent link">&para;</a></h2>
+<h3 id="paths">Paths<a class="headerlink" href="#paths" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Accept playlist paths only through a human-run local CLI, never through an MCP tool.</li>
+<li>Resolve playlist-relative entries inside the server.</li>
+<li>Use opaque tokens after registration.</li>
+<li>Store token-to-path mappings in the configured private registration directory for token resolution across MCP restarts; the registration cleanup CLI removes these mappings after explicit confirmation.</li>
+<li>This boundary keeps paths out of chat and MCP payloads, but is not protection from unrestricted same-user shell access.</li>
+<li>Never include absolute paths in:</li>
+<li>MCP tool responses</li>
+<li>agent-facing notes</li>
+<li>investigation logs</li>
+<li>search archives</li>
+<li>exception text shown to the agent</li>
+<li>A bare filename/display name may be used as a human hint, but should not be treated as an identifier. Two files may share a name.</li>
+<li>Review CLI output separately: show enough information for the user to identify a file, but do not print directory paths by default.</li>
+</ul>
+<h3 id="metadata">Metadata<a class="headerlink" href="#metadata" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Continue reading tags from audio files on demand.</li>
+<li>Do not introduce a metadata database merely to make the initial install work.</li>
+<li>Consider metadata caching only after measuring a real performance issue.</li>
+<li>Do not assume the filesystem is the bottleneck; separate tag reads, MusicBrainz requests, manifest writes, and audio writes in any benchmark.</li>
+</ul>
+<h3 id="private-state-root">Private state root<a class="headerlink" href="#private-state-root" title="Permanent link">&para;</a></h3>
+<p>Use the configured data root for private application state. Keep separate subfolders for:</p>
+<ul>
+<li>pending stage manifests</li>
+<li>applied stage/audit records</li>
+<li>retryable search failures</li>
+<li>completed unresolved searches</li>
+<li>low-confidence investigation archive</li>
+<li>concise append-only event logs</li>
+</ul>
+<p>Create folders with restrictive user-only permissions where supported. On Windows, document how the user's profile/ACL controls access. Do not silently fall back to a public or shared temp directory for important records.</p>
+<hr />
+<h2 id="5-confidence-routing-proposal">5. Confidence Routing Proposal<a class="headerlink" href="#5-confidence-routing-proposal" title="Permanent link">&para;</a></h2>
+<p>The current confidence value is a <strong>heuristic score</strong>, not a calibrated probability. Labels such as “95%” must not be described as a measured 95% chance of correctness.</p>
+<p>Use these initial score bands for <strong>proposal routing only</strong>:</p>
+<h3 id="95100-auto-stage"><code>95–100</code> — Auto-stage<a class="headerlink" href="#95100-auto-stage" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Automatically create a pending stage proposal.</li>
+<li>Log that it was auto-staged.</li>
+<li>Still require all verification/evidence gates below.</li>
+<li><strong>Do not write the audio file.</strong> The user's CLI remains the apply gate.</li>
+</ul>
+<h3 id="85949-corroborate-then-agent-judgment"><code>85–94.9</code> — Corroborate, then agent judgment<a class="headerlink" href="#85949-corroborate-then-agent-judgment" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Perform web corroboration from reliable discographic sources.</li>
+<li>Record concise source links and why they support or contradict the candidate.</li>
+<li>The agent may stage only if evidence is coherent and the verifier has no important mismatch.</li>
+<li>Otherwise archive as unresolved.</li>
+</ul>
+<h3 id="75849-stage-with-an-explicit-caution"><code>75–84.9</code> — Stage with an explicit caution<a class="headerlink" href="#75849-stage-with-an-explicit-caution" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A proposal may be staged for user review if the verifier passes.</li>
+<li>Include a concise warning describing uncertainty or mismatched context.</li>
+<li>Do not fill album/release/year fields based only on a recording match.</li>
+</ul>
+<h3 id="60749-unresolved-archive"><code>60–74.9</code> — Unresolved archive<a class="headerlink" href="#60749-unresolved-archive" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Do not stage.</li>
+<li>Archive the candidate evidence for later investigation.</li>
+<li>Add a short reason to the path-free log.</li>
+</ul>
+<h3 id="60-low-priority-archive"><code>&lt;60</code> — Low-priority archive<a class="headerlink" href="#60-low-priority-archive" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Do not stage.</li>
+<li>Put the unresolved investigation in a user-browsable, low-priority archive.</li>
+<li>This archive is a lower priority than the install, staging, and retry workflow.</li>
+</ul>
+<h3 id="hard-gates-override-scores">Hard gates override scores<a class="headerlink" href="#hard-gates-override-scores" title="Permanent link">&para;</a></h3>
+<p>No score band permits staging if:</p>
+<ul>
+<li><code>verify_mbid</code> does not return <code>verified: true</code>;</li>
+<li>there is a material title, artist, or duration mismatch;</li>
+<li>required evidence is missing or contradictory;</li>
+<li>a match appears to be a different version (for example live vs studio) without adequate corroboration.</li>
+</ul>
+<p>The exact threshold behavior, especially what evidence permits the 95+ route and what to do when MusicBrainz has no duration, must be tested and tuned before enabling auto-staging by default.</p>
+<hr />
+<h2 id="6-logging-and-search-archives">6. Logging and Search Archives<a class="headerlink" href="#6-logging-and-search-archives" title="Permanent link">&para;</a></h2>
+<h3 id="human-readable-path-free-log">Human-readable path-free log<a class="headerlink" href="#human-readable-path-free-log" title="Permanent link">&para;</a></h3>
+<p>Keep the ordinary log concise. Do not copy full API payloads into it.</p>
+<p>Record:</p>
+<ul>
+<li>registration/batch summary</li>
+<li>auto-stage events</li>
+<li>stage ID and path-free proposed-field summary</li>
+<li>verifier score, duration difference, mismatch summary, and source links where relevant</li>
+<li>unresolved outcomes and archive manifest IDs</li>
+<li>apply attempts and outcomes</li>
+<li>retryable API/network failures</li>
+</ul>
+<h3 id="applied-stage-audit">Applied-stage audit<a class="headerlink" href="#applied-stage-audit" title="Permanent link">&para;</a></h3>
+<p>For each apply attempt, write two linked events:</p>
+<ol>
+<li><strong>Before:</strong> timestamp, event ID, stage ID, bare display name, fields proposed, and confirmation/apply intent.</li>
+<li><strong>After:</strong> same event ID and stage ID, outcome, fields written, backup result, and concise error reason if failed.</li>
+</ol>
+<p>Write the “before” record before attempting a physical write. Write the “after” record whether the operation succeeds or fails. Do not log the absolute path.</p>
+<p>Current behavior is user CLI apply only. Preserve that. If agent application is ever authorized later, it must use the same before/after audit and receive a separate security design.</p>
+<h3 id="search-failure-and-unresolved-records">Search failure and unresolved records<a class="headerlink" href="#search-failure-and-unresolved-records" title="Permanent link">&para;</a></h3>
+<p>Distinguish these outcomes:</p>
+<ul>
+<li><strong>Transient failure:</strong> network error, rate limit, or service failure. Record a short reason and put a retryable manifest under <code>search-retry</code>.</li>
+<li><strong>Completed no-match:</strong> the API responded successfully, but no candidate passed investigation. Archive at the end of the batch under <code>search-archive</code>.</li>
+<li><strong>Low-confidence candidate:</strong> archive according to the score bands; do not mislabel it as a network failure.</li>
+</ul>
+<p>The user asked for failed-search log entries to be two lines:</p>
+<ol>
+<li>a concise failure/no-match event with reason;</li>
+<li>the ID of the archived manifest.</li>
+</ol>
+<p>Use a manifest ID rather than a path. The archive stays under the configured private data root.</p>
+<h3 id="minimum-search-manifest">Minimum search manifest<a class="headerlink" href="#minimum-search-manifest" title="Permanent link">&para;</a></h3>
+<p>Keep it small but sufficient to retry:</p>
+<ul>
+<li>manifest ID and timestamp</li>
+<li>path-free display name or batch-local token only if safe and meaningful</li>
+<li>normalized artist/title/clue inputs used for the request</li>
+<li>duration if available</li>
+<li>query variant count</li>
+<li>result count</li>
+<li>concise outcome/reason</li>
+<li>candidate recording IDs and scores if any were returned</li>
+<li>source links if web research was performed</li>
+<li>retry status / attempt count</li>
+</ul>
+<p>Do not store audio paths, playlist paths, or raw exception messages that might include paths.</p>
+<hr />
+<h2 id="7-delivery-phases">7. Delivery Phases<a class="headerlink" href="#7-delivery-phases" title="Permanent link">&para;</a></h2>
+<p>Complete each phase independently. Keep changes small and testable.</p>
+<h3 id="phase-0-confirm-assumptions-and-baseline">Phase 0 — Confirm assumptions and baseline<a class="headerlink" href="#phase-0-confirm-assumptions-and-baseline" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Read <code>.github/copilot-instructions.md</code>, the investigator skill, this plan, and the user guide.</li>
+<li>[ ] Confirm the worktree is clean and identify the target branch.</li>
+<li>[ ] Run the current full test suite.</li>
+<li>[ ] Inspect current package entry points, CLI behavior, MCP SDK version, and current Claude Code config schema.</li>
+<li>[ ] Confirm the install/data folder layout does not put user data inside a directory replaced by upgrades.</li>
+<li>[ ] Do not modify audio files during development tests.</li>
+</ul>
+<p><strong>Exit check:</strong> baseline tests pass and installation/config schema is documented from current official guidance.</p>
+<h3 id="phase-1-install-package-and-launcher">Phase 1 — Install package and launcher<a class="headerlink" href="#phase-1-install-package-and-launcher" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Create a reproducible install into the dedicated location under <code>K:\tools\mcp-servers\musicbee-tags\</code>.</li>
+<li>[ ] Add a native <code>K:\bin\musicbee-tagger-mcp.cmd</code> launcher.</li>
+<li>[ ] Add a Bash launcher only if the user's Claude Code environment requires and supports it.</li>
+<li>[ ] Ensure the launcher works from a different current directory.</li>
+<li>[ ] Verify the configured package command starts the existing stdio MCP server.</li>
+<li>[ ] Add a user-level Claude Code config example using the stable launcher.</li>
+</ul>
+<p><strong>Exit check:</strong> clean install and MCP initialize/tool-list smoke test succeed without requiring the source checkout.</p>
+<h3 id="phase-2-private-data-root-and-durable-folders">Phase 2 — Private data root and durable folders<a class="headerlink" href="#phase-2-private-data-root-and-durable-folders" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Read the configurable data root from user-level MCP environment/config.</li>
+<li>[ ] Use the requested default root unless install/data separation requires subfolders.</li>
+<li>[ ] Create stage, applied, retry, archive, low-confidence, and log folders on demand.</li>
+<li>[ ] Handle unavailable folders with explicit, path-sanitized errors; never silently lose state.</li>
+<li>[ ] Ensure a restart preserves pending stages and archives.</li>
+</ul>
+<p><strong>Exit check:</strong> state survives server restart, remains local, and no path appears in MCP responses or logs.</p>
+<h3 id="phase-3-structured-event-log-and-manifests">Phase 3 — Structured event log and manifests<a class="headerlink" href="#phase-3-structured-event-log-and-manifests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Define versioned, append-only path-free log records.</li>
+<li>[ ] Log auto-stage events and link each record to a stage ID.</li>
+<li>[ ] Implement before/after apply events with the same event ID.</li>
+<li>[ ] Separate retryable transient failures from completed no-match searches.</li>
+<li>[ ] Archive no-match investigations at batch end, as requested.</li>
+<li>[ ] Make archive manifests retryable without re-registering files or requiring old tokens.</li>
+<li>[ ] Add safe retention/cleanup guidance; do not automatically delete user records.</li>
+</ul>
+<p><strong>Exit check:</strong> tests prove event pairing, path concealment, restart/retry behavior, and failure visibility.</p>
+<h3 id="phase-4-confidence-routing">Phase 4 — Confidence routing<a class="headerlink" href="#phase-4-confidence-routing" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Keep the current verifier as a hard evidence gate.</li>
+<li>[ ] Add an explicit, testable routing function for the proposed score bands.</li>
+<li>[ ] Require web corroboration for the 85–94.9 band before agent-judged staging.</li>
+<li>[ ] Include an uncertainty note for the 75–84.9 band.</li>
+<li>[ ] Archive 60–74.9 and below-60 outcomes without staging.</li>
+<li>[ ] Require no major mismatch even for scores at or above 95.</li>
+<li>[ ] Add tests for every boundary: 59.9, 60, 74.9, 75, 84.9, 85, 94.9, and 95.</li>
+<li>[ ] Keep the feature disabled or conservative by default until evaluated against a representative set of matches.</li>
+</ul>
+<p><strong>Exit check:</strong> boundary tests and a labeled evaluation set demonstrate that score routing does not bypass verification.</p>
+<h3 id="phase-5-documentation-and-release-checks">Phase 5 — Documentation and release checks<a class="headerlink" href="#phase-5-documentation-and-release-checks" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Update the user guide with install, config, launcher, data folders, logs, retry, and CLI apply instructions.</li>
+<li>[ ] Update the investigator skill with the finalized confidence routing and archive behavior.</li>
+<li>[ ] Document backup/restore and uninstall behavior without deleting user data.</li>
+<li>[ ] Run the full test suite, package build/install smoke test, config parse/launch smoke test, and <code>git diff --check</code>.</li>
+<li>[ ] Confirm MCP tool inventory is unchanged unless an explicitly reviewed feature requires a change.</li>
+<li>[ ] Confirm MCP imports still cannot reach the physical audio write implementation.</li>
+<li>[ ] Commit each coherent, tested phase; do not amend existing commits.</li>
+</ul>
+<p><strong>Exit check:</strong> another person can install and configure the server from the guide without opening the repository's source code.</p>
+<hr />
+<h2 id="8-required-tests-and-safety-checks">8. Required Tests and Safety Checks<a class="headerlink" href="#8-required-tests-and-safety-checks" title="Permanent link">&para;</a></h2>
+<h3 id="install-and-config">Install and config<a class="headerlink" href="#install-and-config" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Package installs into the dedicated Python environment.</li>
+<li>[ ] <code>K:\bin</code> launcher works from PowerShell and from the MCP client.</li>
+<li>[ ] MCP config validates and launches stdio.</li>
+<li>[ ] Failure messages are useful but do not echo absolute paths.</li>
+</ul>
+<h3 id="privacy">Privacy<a class="headerlink" href="#privacy" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] MCP responses never return audio or playlist paths.</li>
+<li>[ ] Logs and search manifests never contain absolute paths.</li>
+<li>[ ] Pending stage manifests keep path information private and are readable only by the local apply workflow.</li>
+<li>[ ] Duplicate filenames do not cause stage/search records to be confused.</li>
+</ul>
+<h3 id="routing-and-logs">Routing and logs<a class="headerlink" href="#routing-and-logs" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Every confidence boundary is tested.</li>
+<li>[ ] Failed verification never stages regardless of score.</li>
+<li>[ ] Auto-stage emits a log record and still does not modify audio.</li>
+<li>[ ] Apply writes a before record and an after record, including on failure.</li>
+<li>[ ] Retryable errors and completed no-match outcomes are stored separately.</li>
+<li>[ ] Archived searches can be retried later from their path-free inputs.</li>
+</ul>
+<h3 id="audio-safety">Audio safety<a class="headerlink" href="#audio-safety" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] MCP tool listing contains no apply/write tool.</li>
+<li>[ ] MCP server process does not import audio-write modules.</li>
+<li>[ ] Only explicit CLI confirmation performs physical tag changes.</li>
+<li>[ ] Tests use generated temporary audio fixtures or mocks, never the user's library.</li>
+</ul>
+<hr />
+<h2 id="9-new-agent-handoff-instructions">9. New-Agent Handoff Instructions<a class="headerlink" href="#9-new-agent-handoff-instructions" title="Permanent link">&para;</a></h2>
+<p>The next agent should:</p>
+<ol>
+<li>Read this plan, <code>.github/copilot-instructions.md</code>, <code>.agents/skills/musicbee-investigator/SKILL.md</code>, and <code>docs/index.html</code>.</li>
+<li>Inspect the current branch, commit, worktree, test commands, and package entry points before editing.</li>
+<li>Treat all preferences above as requirements unless explicitly marked “proposed” or “to validate.”</li>
+<li>Implement only <strong>one delivery phase at a time</strong>.</li>
+<li>Ask before changing the no-agent-audio-writes boundary.</li>
+<li>Never send audio/playlist paths to a subagent. If delegating, pass path-free briefs and verify shared MCP token access first.</li>
+<li>Use web research for weak or conflicting MusicBrainz matches; retain citations in the appropriate record.</li>
+<li>Update <code>WORK_LOG.md</code> after substantive work and commit coherent verified changes with the required Copilot co-author trailer.</li>
+<li>Report what changed, tests run, remaining risks, and any user decision needed.</li>
+</ol>
+<hr />
+<h2 id="10-open-decisions-to-validate-during-implementation">10. Open Decisions to Validate During Implementation<a class="headerlink" href="#10-open-decisions-to-validate-during-implementation" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Does the install root double as the data root, or should state live in a child folder such as <code>data\</code> to protect it during upgrades?</li>
+<li>Which user-level Claude Code config format/version is installed on the target desktop?</li>
+<li>Should the <code>.sh</code> launcher be implemented, or is <code>.cmd</code> sufficient for the actual client?</li>
+<li>What test corpus is representative enough to tune heuristic confidence thresholds?</li>
+<li>Does “85–94.9 agent judgment” always require a web citation, or can another documented independent source count?</li>
+<li>How long should applied manifests, retryable failures, and low-confidence archives be retained?</li>
+<li>Is display-name logging acceptable for the user's privacy expectations, or should logs use only opaque IDs?</li>
+<li>What happens when no local duration or MusicBrainz duration is available? Recommended default: no auto-stage.</li>
+<li>Keep all actual audio writes user-confirmed by CLI. Any change to that rule needs an explicit, separate approval.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
