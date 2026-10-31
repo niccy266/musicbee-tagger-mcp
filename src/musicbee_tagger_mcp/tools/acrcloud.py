@@ -57,11 +57,18 @@ def identify_acrcloud(token: str) -> Dict[str, Any]:
             function="identify_acrcloud",
         )
 
-    result = provider.identify(
-        audio_bytes,
-        filename=path.name,
-        duration_sec=duration,
-    )
+    try:
+        result = provider.identify(
+            audio_bytes,
+            filename=path.name,
+            duration_sec=duration,
+        )
+    except Exception as error:
+        return make_error(
+            E_PROVIDER_FAILED,
+            redact_paths(f"ACRCloud request failed: {type(error).__name__}: {error}"),
+            function="identify_acrcloud",
+        )
     if isinstance(result, dict) and result.get("status") == "error":
         return make_error(
             E_PROVIDER_FAILED,

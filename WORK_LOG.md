@@ -561,3 +561,15 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Shell-access security boundary remains documented in docs/THREAT_MODEL.md.
 - Exact MCP tool-set check retained.
 - Validation: py_compile passed; CI pending.
+
+## 2026-10-31 - Issue #10 final verification
+
+- Hardened ACRCloud provider error path to catch exceptions and redact paths.
+- Re-verified redact_paths handles decoded and serialized Windows paths.
+- Re-verified package builds and import isolation (server does not import physical write modules).
+- Confirmed source files are UTF-8 without BOM; no encoding fixes needed.
+- Confirmed MusicBrainz User-Agent uses public email contact (repository private).
+- Confirmed tracked audio fixtures remain in Git with autouse protection.
+- Confirmed shell-access security boundary documented in docs/THREAT_MODEL.md.
+- Retained exact expected MCP tool-set check.
+- Validation: full suite 171 passed, 30 skipped (CI).
