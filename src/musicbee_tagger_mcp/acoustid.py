@@ -9,6 +9,8 @@ import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from .error_codes import redact_paths
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -326,7 +328,7 @@ def _normalize_acoustid_payload(
             "provider": provider,
             "configured": True,
             "error_code": "E_PROVIDER_FAILED",
-            "error": f"AcoustID request failed: {message}",
+            "error": redact_paths(f"AcoustID request failed: {message}"),
             "acoustid_code": code,
             "acoustid_message": message,
             "acoustid_status": status,

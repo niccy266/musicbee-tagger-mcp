@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from .musicbrainz_api import musicbrainzngs
 from .match_store import record_match
+from .error_codes import redact_paths
 from .musicbrainz_scoring import classify_release, string_similarity
 
 _FORENSIC_SCORE_ALIASES = (

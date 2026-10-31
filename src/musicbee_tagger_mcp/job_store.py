@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .data_paths import ensure_data_subdirectory
+from .error_codes import redact_paths
 
 
 def _first_present(mapping, keys):

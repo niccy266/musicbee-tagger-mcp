@@ -132,11 +132,21 @@ class StagingManager:
         match_source: Optional[str] = None,
         match_confidence: Optional[float] = None,
         notes: str = "",
+        manual_override: bool = False,
+        manual_override_justification: Optional[str] = None,
+        override_justification: Optional[str] = None,
+        override_reason: Optional[str] = None,
+        justification: Optional[str] = None,
         token: Optional[str] = None,
         job_id: Optional[str] = None,
         batch: Optional[str] = None,
         note: Optional[str] = None,
         rationale: Optional[str] = None,
+        manual_override: Any = None,
+        manual_override_justification: Optional[str] = None,
+        override_justification: Optional[str] = None,
+        override_reason: Optional[str] = None,
+        justification: Optional[str] = None,
     ) -> dict:
         """Write a pending change manifest and return a stage_id + summary.
 

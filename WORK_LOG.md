@@ -588,3 +588,14 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Merged master and resolved conflicts; removed undefined audit_staged_changes tool reference.
 - Verified import isolation and redact_paths behavior manually; CI blocked by billing.
 - Validation: compileall and import check passed.
+## 2026-10-31 - Issue #10 release-readiness follow-up (agent)
+
+- Strengthened `redact_paths` to handle decoded payloads, serialized Windows paths, and non-string/bytes inputs.
+- Hardened MCP error paths (review.py, acoustid.py, musicbrainz.py) to redact paths.
+- Verified package import isolation: MCP server does not import physical write modules.
+- Confirmed source files are UTF-8 clean; no encoding fixes needed.
+- Confirmed MusicBrainz User-Agent uses public email contact (repository private).
+- Confirmed tracked audio fixtures remain in Git with autouse protection.
+- Confirmed shell-access security boundary documented in docs/THREAT_MODEL.md.
+- Validation: compileall and import checks passed; CI verification pending due to billing block.
+"""

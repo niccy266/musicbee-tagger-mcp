@@ -26,17 +26,24 @@ def redact_paths(text):
     Handles plain text, URL-encoded payloads, and serialized/escaped Windows
     paths. Non-string containers are sanitized recursively.
     """
+    if isinstance(text, (bytes, bytearray)):
+        try:
+            text = text.decode("utf-8", errors="replace")
+        except Exception:
+            text = str(text)
     if isinstance(text, dict):
         return {key: redact_paths(value) for key, value in text.items()}
-    if isinstance(text, (list, tuple, set)):
+    if isinstance(text, (list, tuple, set, frozenset)):
         return [redact_paths(value) for value in text]
-    if not isinstance(text, str):
+    if text is None:
         return text
+    if not isinstance(text, str):
+        text = str(text)
 
     patterns = [
-        re.compile("[A-Za-z]:[\\\\/].*", re.DOTALL),
-        re.compile(r"\\\\.*", re.DOTALL),
-        re.compile(r"(?<!\S)/\S+$"),
+        re.compile(r"[A-Za-z]:[\\/].*", re.DOTALL),
+        re.compile(r"\\.*", re.DOTALL),
+        re.compile(r"/.*", re.DOTALL),
     ]
 
     current = text
@@ -87,9 +94,6 @@ def make_error(
         message = str(message)
     safe_message = redact_paths(message) if path_free else message
     result = {"error_code": code, "error": safe_message}
-    if function is not None:
-        result["function"] = function
-    return result
     if function is not None:
         result["function"] = function
     return result
