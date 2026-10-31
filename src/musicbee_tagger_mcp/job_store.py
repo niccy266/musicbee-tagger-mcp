@@ -79,6 +79,7 @@ class JobStore:
                 raise ValueError("Unknown job id") from None
         registry = _resolve_registry(**kwargs)
         if isinstance(entries, list):
+            entries = [{"token": e, "display_name": e} if isinstance(e, str) else e for e in entries]
             self._enrich_tracks_from_registry(entries, registry)
         sort_by = (
             kwargs.pop("sort_by", None)
