@@ -568,3 +568,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Verified existing regression tests in tests/test_investigator_tools.py cover all cases and multilingual examples.
 - No code changes required; branch and PR #114 already contain the implementation.
 - Validation: CI run 41174737658 succeeded.
+
+### 2026-10-31 — Issue #7: verify filename clue parser robustness
+- Re-reviewed `src/musicbee_tagger_mcp/filename_parser.py` against acceptance criteria: preserved bracketed title text, type-aware nested/mixed bracket extraction, meaningful `_2020` suffix preservation, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and three-or-more segment subtitles.
+- Confirmed multilingual regression coverage in `tests/test_investigator_tools.py`.
+- Validation: py_compile passed; existing PR #114 CI green.
