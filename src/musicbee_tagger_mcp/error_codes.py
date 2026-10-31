@@ -32,7 +32,7 @@ def redact_paths(text):
         except Exception:
             text = str(text)
     if isinstance(text, dict):
-        return {key: redact_paths(value) for key, value in text.items()}
+        return {redact_paths(key): redact_paths(value) for key, value in text.items()}
     if isinstance(text, (list, tuple, set, frozenset)):
         return [redact_paths(value) for value in text]
     if text is None:
