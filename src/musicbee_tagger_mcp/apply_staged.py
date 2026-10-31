@@ -119,7 +119,7 @@ def cmd_revert_one(applier, stage_id: str) -> str:
     """Revert an applied staged change by restoring its .bak backup."""
     try:
         manifest = applier.load(stage_id)
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         logger.error("Staged manifest %s is missing; cannot revert.", stage_id)
         print(f"\n[ERROR] Stage {stage_id} is missing.")
         return "missing_stage"
