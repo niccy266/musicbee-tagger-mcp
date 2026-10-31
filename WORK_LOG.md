@@ -558,6 +558,68 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
 
+### 2026-10-30 — Issue #7: Parse filename clues variants, subtitles, track numbers
+- Rewrote filename_parser bracket extraction to preserve balanced/nested/mixed bracket text in candidates while still returning bracket clues separately.
+- Preserved meaningful numeric suffixes such as `_2020` while still stripping short track-number suffixes.
+- Avoided treating hyphenated titles (`99-Luftballons`, `7-Seconds`) as leading track numbers.
+- Sanitized invisible Unicode format characters throughout parser outputs.
+- Retained both Artist/Title orderings and multi-segment subtitle joins.
+- Updated and added regression tests in tests/test_investigator_tools.py.
+
+
+### 2026-10-31 — Issue #7: refine filename clue parsing (type-aware brackets)
+- Made bracket matching type-aware so mixed bracket types are handled without falsely pairing unrelated brackets.
+- Preserved existing behavior for nested/mixed brackets, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Added regression tests for mixed, nested mixed, unmatched, and multilingual bracket cases.
+- Validation: py_compile passed; CI run 41171857420 succeeded.
+### 2026-10-31 — Issue #7: verification and completion pass
+- Reviewed current implementation on `codex/issue-7-filename-clues` (HEAD 828a7bf): type-aware bracket matching, preserved bracketed title text, meaningful `_2020` suffix handling, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Ran full test suite with repository venv and `PYTHONPATH=src`: 183 passed, 30 skipped.
+- Ran pylint errors-only on `src`: clean.
+- No code changes required; branch and PR #114 already contain the implementation.
+
+### 2026-10-31 — Issue #7: whitespace normalization and track stem cleanup
+- Normalized internal whitespace in `clean_stem` and track-number-stripped stems.
+- Preserved existing bracket, suffix, hyphenated-title, and invisible-character behavior.
+- Validation: py_compile passed; push and CI pending.
+
+### 2026-10-31 — Issue #7: normalize whitespace in filename stem parsing
+- Normalized internal whitespace in `clean_stem` and track-number extraction so invisible-character sanitization does not leave irregular spacing.
+- Preserved existing type-aware bracket matching, meaningful `_2020` suffix handling, hyphenated-title distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #7: robust bracket extraction for unmatched openers
+- Reworked `_extract_bracket_contents` to scan each opener independently, so an unmatched outer opener no longer suppresses valid inner bracket clues.
+- Preserved type-aware matching, nested/mixed brackets, unmatched closer handling, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #7: raw filename basename handling
+- Updated `raw_filename` to use the final path component consistently (backslash/forward slash safe) and sanitize it.
+- Re-ran focused filename parser tests and full suite: 183 passed, 30 skipped.
+- Validation: local tests via CI-style venv passed; push and CI pending.
+
+### 2026-10-31 — Issue #7: final verification and handoff
+- Reviewed implementation against acceptance criteria: preserved bracketed title text, nested/mixed bracket handling, meaningful `_2020` suffix preservation, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Verified existing regression tests in tests/test_investigator_tools.py cover all cases and multilingual examples.
+- No code changes required; branch and PR #114 already contain the implementation.
+- Validation: CI run 41174737658 succeeded.
+
+### 2026-10-31 — Issue #7: verify filename clue parser robustness
+- Re-reviewed `src/musicbee_tagger_mcp/filename_parser.py` against acceptance criteria: preserved bracketed title text, type-aware nested/mixed bracket extraction, meaningful `_2020` suffix preservation, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and three-or-more segment subtitles.
+- Confirmed multilingual regression coverage in `tests/test_investigator_tools.py`.
+- Validation: py_compile passed; existing PR #114 CI green.
+### 2026-11-01 — Issue #7: filename clue parsing final pass
+
+- Created branch `claude/issue-7-filename-clues` from `codex/issue-7-filename-clues`.
+- Minor hardening: trim stem before trailing `_N` suffix stripping in `clean_stem`.
+- Verified CI (Repo Health) green on PR #117 for Python 3.11/3.12/3.14 and Windows bundle.
+- Preserved bracketed title text, nested/mixed bracket handling, meaningful `_2020` suffixes, hyphenated title distinction, invisible-char sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+
+
+### 2026-11-01 — Issue #7: final robustness review and handoff
+- Re-reviewed filename_parser against acceptance criteria; no code changes required.
+- Manual smoke checks passed for brackets, suffixes, track numbers, invisible chars, hypotheses, subtitles, multilingual examples.
+- CI green on PR #117.
 ## 2026-10-31 - Issue #78 follow-up
 - Generalized agent loop module aliases (`scripts/agent_loop.py`, `scripts/agent.py`) to re-export the full OpenRouter loop API while retaining backend-aware entry points.
 - Made `openrouter_agent.run` forward job ids and tolerate loop `main(argv)` calling conventions.
