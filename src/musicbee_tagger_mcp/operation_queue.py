@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .queue_store import OperationQueue as _PersistentQueue, default_queue_dir
+from .error_codes import redact_paths
 
 _STATUSES = {"pending", "in_progress", "done", "blocked", "failed"}
 _LOCAL_PATH = re.compile(
@@ -57,7 +58,7 @@ class OperationQueue:
                 title.strip(), description.strip(), priority=priority
             )
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         return {
             "operation_id": operation["operation_id"],
             "status": operation["status"],
@@ -80,7 +81,7 @@ class OperationQueue:
         try:
             result = self._queue.list_operations(status=status, limit=limit)
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         return {"operations": [self._operation(item) for item in result["items"]]}
 
     def claim_batch(self, worker_id: str, size: int = 10) -> Dict[str, Any]:
@@ -94,7 +95,7 @@ class OperationQueue:
         try:
             result = self._queue.claim_batch(worker_id.strip(), size=size)
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         return {
             "operations": [self._operation(item) for item in result["operations"]],
             "remaining": result["remaining"],
@@ -119,7 +120,7 @@ class OperationQueue:
                 operation_id, worker_id.strip(), success, result
             )
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
 
 
 def get_operation_queue() -> OperationQueue:

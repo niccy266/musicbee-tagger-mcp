@@ -72,3 +72,11 @@ casually.
   registry persistence, including Windows-style absolute paths.
 - Adding or changing an MCP tool requires: no path parameter, no path in the
   return value, no path in any error branch, and a test proving it.
+
+## Shell access boundary
+
+When the MCP agent also has shell access, the token-based boundary is not a sandbox.
+The agent can read the local registry, staged manifests, and audio files directly with the users privileges.
+The MCP boundary still prevents accidental path leakage in tool responses, but it cannot prevent
+a hostile or compromised agent with shell access from reading user data. Residual risk is accepted
+and documented; mitigate with OS-level sandboxing or by not granting shell access to untrusted agents.

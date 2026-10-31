@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Protocol, runtime_checkable
+from .error_codes import redact_paths
 
 DEFAULT_REGION = "us-west-2"
 DEFAULT_DATA_TYPE = "audio"
@@ -260,7 +261,7 @@ class ACRCloudProvider:
                 "status": "error",
                 "provider": self.name,
                 "configured": True,
-                "error": f"ACRCloud request failed: {type(error).__name__}: {error}",
+                "error": redact_paths(f"ACRCloud request failed: {type(error).__name__}: {error}"),
             }
 
         payload = _safe_json(raw_text)

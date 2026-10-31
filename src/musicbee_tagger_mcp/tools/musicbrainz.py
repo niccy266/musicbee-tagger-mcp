@@ -1,6 +1,7 @@
 """MCP wrappers for MusicBrainz search and recording verification."""
 
 from typing import Any, Dict, List, Optional
+from ..error_codes import redact_paths, make_error, E_PROVIDER_FAILED
 
 from ..artist_validation import (
     heuristic_flags,
@@ -126,7 +127,7 @@ def get_release_tracklist(release_id: str) -> Dict[str, Any]:
             release_id, includes=["recordings", "media", "artist-credits"]
         )
     except Exception as error:
-        return {"error": f"Failed to fetch release {release_id}: {error}"}
+        return make_error(E_PROVIDER_FAILED, redact_paths(f"Failed to fetch release {release_id}: {error}"), function="get_release_tracklist")
 
     release = data.get("release", {})
     tracks = []

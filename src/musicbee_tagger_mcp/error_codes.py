@@ -23,7 +23,7 @@ Error codes are grouped by failure domain:
 * ``E_INTERNAL`` -- unexpected internal failure
 """
 
-from typing import Optional
+from typing import Any, Optional
 
 # --- Token / registry errors -------------------------------------------------
 
@@ -55,6 +55,40 @@ E_PROVIDER_FAILED = "E_PROVIDER_FAILED"
 
 E_INVALID_INPUT = "E_INVALID_INPUT"
 E_INTERNAL = "E_INTERNAL"
+
+import re
+import urllib.parse
+
+
+def redact_paths(text):
+    """Remove anything that looks like a filesystem path from *text*."""
+    if not isinstance(text, str):
+        return text
+
+    patterns = [
+        re.compile(r"[A-Za-z]:[\/][^\s]+"),
+        re.compile(r"\\[^\s]+"),
+        re.compile(r"(?<![\w.])/(?:[^\s/]+/)*[^\s/]+"),
+    ]
+
+    current = text
+    for _ in range(5):
+        previous = current
+        try:
+            decoded = urllib.parse.unquote(current)
+        except Exception:
+            decoded = current
+        current = decoded
+        for pattern in patterns:
+            current = pattern.sub("[path]", current)
+        if current == previous:
+            break
+    return current
+
+
+def sanitize_path_text(text):
+    return redact_paths(text)
+
 
 # Map Python exception types to stable error codes.
 _EXCEPTION_TO_CODE: dict[type[BaseException], str] = {
@@ -101,14 +135,7 @@ def make_error(
     -------
     dict with ``error_code``, ``error``, and optionally ``function`` keys.
     """
-    safe_message = message
-    if path_free:
-        # Remove anything that looks like a Windows absolute path or a POSIX
-        # absolute path so call sites never accidentally leak locations.
-        import re
-
-        safe_message = re.sub(r"[A-Za-z]:\\.*", "[path]", safe_message)
-        safe_message = re.sub(r"(?<!\S)/\S+$", "[path]", safe_message)
+    safe_message = redact_paths(message) if path_free else message
 
     result: dict = {"error_code": code, "error": safe_message}
     if function is not None:

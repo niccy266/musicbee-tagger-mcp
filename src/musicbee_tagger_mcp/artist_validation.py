@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 
 import musicbrainzngs
 
+from .error_codes import redact_paths
 from .artist_split import split_artists
 
 musicbrainzngs.set_useragent("musicbee-tagger-mcp", "0.4.5", "niccy266@gmail.com")
@@ -48,7 +49,7 @@ def search_artist(name: str, limit: int = 5) -> List[Dict[str, Any]]:
     try:
         results = musicbrainzngs.search_artists(artist=name, limit=limit)
     except Exception as error:
-        return [{"error": f"MusicBrainz query error: {error}"}]
+        return [{"error": redact_paths(f"MusicBrainz query error: {error}")}]
     out = []
     for a in results.get("artist-list", []):
         out.append({
@@ -77,7 +78,7 @@ def verify_artist_credit(
         rec = musicbrainzngs.get_recording_by_id(
             recording_id, includes=["artist-credits"])["recording"]
     except Exception as error:
-        return {"error": f"MusicBrainz fetch error: {error}"}
+        return {"error": redact_paths(f"MusicBrainz fetch error: {error}")}
 
     credited: List[str] = []
     for credit in rec.get("artist-credit", []):

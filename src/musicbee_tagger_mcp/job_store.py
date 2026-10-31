@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .data_paths import ensure_data_subdirectory
+from .error_codes import redact_paths
 
 
 def _first_present(mapping, keys):
@@ -209,7 +210,7 @@ class JobStore:
         try:
             job = self.load_job(job_id)
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         claimed = []
         for track in job["tracks"]:
             if len(claimed) >= size:
@@ -223,7 +224,7 @@ class JobStore:
             try:
                 self._save(job)
             except RuntimeError as error:
-                return {"error": str(error)}
+                return {"error": redact_paths(str(error))}
         remaining = sum(1 for t in job["tracks"] if t["status"] == "pending")
         return {"batch": claimed, "remaining": remaining, "job_id": job_id}
 
@@ -234,7 +235,7 @@ class JobStore:
         try:
             job = self.load_job(job_id)
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         preview = [
             {"token": t["token"], "display_name": t["display_name"]}
             for t in job["tracks"]
@@ -269,7 +270,7 @@ class JobStore:
         try:
             job = self.load_job(job_id)
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         by_token = {t["token"]: t for t in job["tracks"]}
         updated, unknown = 0, []
         for result in results:
@@ -286,7 +287,7 @@ class JobStore:
             else:
                 track["status"] = "done" if result.get("success") else "failed"
             track["error"] = (
-                str(result.get("error"))[:200] if not result.get("success") else None
+                redact_paths(str(result.get("error")))[:200] if not result.get("success") else None
             )
             candidate = _candidate_from_result(result)
             if candidate:
@@ -319,7 +320,7 @@ class JobStore:
         try:
             self._save(job)
         except RuntimeError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         remaining = sum(1 for t in job["tracks"] if t["status"] == "pending")
         return {"updated": updated, "remaining": remaining, "unknown": unknown}
 
@@ -330,7 +331,7 @@ class JobStore:
         try:
             job = self.load_job(job_id)
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
 
         by_token = {track["token"]: track for track in job["tracks"]}
         released, unchanged = [], []
@@ -356,7 +357,7 @@ class JobStore:
             try:
                 self._save(job)
             except RuntimeError as error:
-                return {"error": str(error)}
+                return {"error": redact_paths(str(error))}
         remaining = sum(1 for track in job["tracks"] if track["status"] == "pending")
         return {"released": released, "unchanged": unchanged, "remaining": remaining}
 
@@ -365,7 +366,7 @@ class JobStore:
         try:
             job = self.load_job(job_id)
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         counts = {status: 0 for status in STATUSES}
         failed = []
         unresolved = []
@@ -441,7 +442,7 @@ class JobStore:
         try:
             job = self.load_job(job_id)
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         by_token = {track["token"]: track for track in job["tracks"]}
         track = by_token.get(token) if isinstance(token, str) else None
         if track is None:
@@ -477,7 +478,7 @@ class JobStore:
         try:
             self._save(job)
         except RuntimeError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         return {
             "job_id": job_id,
             "status": status,

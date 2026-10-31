@@ -118,3 +118,14 @@ def pytest_collection_modifyitems(config, items):
                     )
                 )
 
+@pytest.fixture(autouse=True)
+def protect_tracked_audio_fixtures():
+    import hashlib
+    root = ROOT / "test_files" / "test_audio_files"
+    if not root.exists():
+        yield
+        return
+    before = {str(f): hashlib.sha256(f.read_bytes()).hexdigest() for f in root.rglob("*") if f.is_file()}
+    yield
+    after = {str(f): hashlib.sha256(f.read_bytes()).hexdigest() for f in root.rglob("*") if f.is_file()}
+    assert before == after, "tracked audio fixtures were modified by a test"
