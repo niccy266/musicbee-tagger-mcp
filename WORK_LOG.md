@@ -530,3 +530,10 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Sanitized invisible Unicode format characters throughout parser outputs.
 - Retained both Artist/Title orderings and multi-segment subtitle joins.
 - Updated and added regression tests in tests/test_investigator_tools.py.
+
+
+### 2026-10-31 — Issue #7: refine filename clue parsing (type-aware brackets)
+- Made bracket matching type-aware so mixed bracket types are handled without falsely pairing unrelated brackets.
+- Preserved existing behavior for nested/mixed brackets, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Added regression tests for mixed, nested mixed, unmatched, and multilingual bracket cases.
+- Validation: py_compile passed; CI run 41171857420 succeeded.
