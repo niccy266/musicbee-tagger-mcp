@@ -179,3 +179,26 @@ def test_filename_parser_multilingual_examples():
     assert "Live" in res["bracket_clues"]
     res2 = extract_clues_from_filename("\u3061\u3083\u3063\u304d\u308a\u7bc0 (\u9759\u5ca1) - \u30b8\u30df\u30fc\u7af9\u5185.ogg")
     assert "\u9759\u5ca1" in res2["bracket_clues"]
+def test_filename_parser_mixed_brackets():
+    res = extract_clues_from_filename("Artist - Title (Live) [Remix] {Radio Edit}.mp3")
+    assert res["artist_title_candidates"][0]["title"] == "Title (Live) [Remix] {Radio Edit}"
+    assert set(res["bracket_clues"]) >= {"Live", "Remix", "Radio Edit"}
+
+
+def test_filename_parser_nested_mixed_brackets():
+    res = extract_clues_from_filename("Artist - Title (Live [Acoustic]).mp3")
+    assert res["artist_title_candidates"][0]["title"] == "Title (Live [Acoustic])"
+    assert res["bracket_clues"] == ["Live [Acoustic]"]
+
+
+def test_filename_parser_unmatched_bracket_is_conservative():
+    res = extract_clues_from_filename("Artist - Title (Live].mp3")
+    assert res["artist_title_candidates"][0]["title"] == "Title (Live]"
+    assert "Live" not in res["bracket_clues"]
+
+
+def test_filename_parser_multilingual_preserves_spelling():
+    res = extract_clues_from_filename("Björk - Jóga (Live).mp3")
+    assert res["artist_title_candidates"][0]["artist"] == "Björk"
+    assert res["artist_title_candidates"][0]["title"] == "Jóga (Live)"
+    assert "Live" in res["bracket_clues"]

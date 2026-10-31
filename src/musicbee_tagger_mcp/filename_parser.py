@@ -12,9 +12,21 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 
-# Opening/closing bracket characters handled by the parser.
-_OPENING_BRACKETS = "([{【（「"
-_CLOSING_BRACKETS = ")]}】）」"
+# Opening/closing bracket pairs handled by the parser.  Matching is type-aware
+# so that mixed bracket types are handled without falsely pairing unrelated
+# brackets (e.g. a stray "]" does not close an open "(").
+_BRACKET_PAIRS = {
+    "(": ")",
+    "[": "]",
+    "{": "}",
+    "【": "】",
+    "（": "）",
+    "「": "」",
+}
+_OPENING_BRACKETS = "".join(_BRACKET_PAIRS.keys())
+_CLOSING_BRACKETS = "".join(_BRACKET_PAIRS.values())
+_OPEN_TO_CLOSE = dict(_BRACKET_PAIRS)
+_CLOSE_TO_OPEN = {v: k for k, v in _BRACKET_PAIRS.items()}
 # Regex for 4-digit years (1920-2030)
 YEAR_REGEX = re.compile(r"\b(19\d\d|20[0-2]\d)\b")
 # Common file extensions to strip
@@ -37,31 +49,33 @@ def _sanitize(text: Any) -> str:
 def _extract_bracket_contents(text: str) -> List[str]:
     """Extract top-level balanced bracket contents, preserving nested text.
 
-    Mixed and nested brackets are handled conservatively: an outer bracket's
-    full inner text (including any nested brackets) is returned as one clue,
-    and unmatched brackets are left untouched in the source text.
+    Matching is type-aware (each opener must close with its own closer) so
+    mixed bracket types are handled without falsely pairing unrelated
+    brackets.  Nested brackets are kept inside their outer clue.  Unmatched
+    brackets are left untouched in the source text and produce no clue.
     """
     results: List[str] = []
+    stack: List[str] = []
+    top_start: Optional[int] = None
     i = 0
     n = len(text)
     while i < n:
-        if text[i] in _OPENING_BRACKETS:
-            depth = 1
-            j = i + 1
-            while j < n and depth > 0:
-                if text[j] in _OPENING_BRACKETS:
-                    depth += 1
-                elif text[j] in _CLOSING_BRACKETS:
-                    depth -= 1
-                    if depth == 0:
-                        break
-                j += 1
-            if depth == 0 and j < n:
-                results.append(text[i + 1 : j])
-                i = j + 1
-                continue
-            # Unbalanced bracket: leave it in place.
+        ch = text[i]
+        if ch in _OPEN_TO_CLOSE:
+            if not stack:
+                top_start = i
+            stack.append(ch)
             i += 1
+        elif ch in _CLOSE_TO_OPEN:
+            if stack and _OPEN_TO_CLOSE[stack[-1]] == ch:
+                stack.pop()
+                if not stack and top_start is not None:
+                    results.append(text[top_start + 1 : i])
+                    top_start = None
+                i += 1
+            else:
+                # Unmatched closer: leave it untouched.
+                i += 1
         else:
             i += 1
     return results
