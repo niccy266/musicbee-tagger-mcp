@@ -522,3 +522,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #18: Last.fm canonical-title resolver compatibility hardening
+
+- Rebased branch onto latest master.
+- Hardened LastFmClient constructor, positional APIs, cyrillic policy, ranking, and compatibility aliases.
+- Validation: GitHub Actions CI all jobs pass (test 3.11/3.12/3.14, lint-score, windows-mcpb, dependency-audit).
