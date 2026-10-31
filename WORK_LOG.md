@@ -562,3 +562,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated `raw_filename` to use the final path component consistently (backslash/forward slash safe) and sanitize it.
 - Re-ran focused filename parser tests and full suite: 183 passed, 30 skipped.
 - Validation: local tests via CI-style venv passed; push and CI pending.
+
+### 2026-10-31 — Issue #7: final verification and handoff
+- Reviewed implementation against acceptance criteria: preserved bracketed title text, nested/mixed bracket handling, meaningful `_2020` suffix preservation, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Verified existing regression tests in tests/test_investigator_tools.py cover all cases and multilingual examples.
+- No code changes required; branch and PR #114 already contain the implementation.
+- Validation: CI run 41174737658 succeeded.
