@@ -81,37 +81,6 @@ class JobStore:
             "skipped": skipped,
         }
 
-    def add_track(
-        self, job_id: str, token: str, display_name: str,
-    ) -> Dict[str, Any]:
-        job = self.load_job(job_id)
-        existing = {
-            track["token"] for track in job["tracks"]
-            if isinstance(track, dict) and isinstance(track.get("token"), str)
-        }
-        if token not in existing:
-            job["tracks"].append(
-                {
-                    "token": token,
-                    "display_name": display_name,
-                    "status": "pending",
-                    "error": None,
-                }
-            )
-            try:
-                self._save(job)
-            except RuntimeError:
-                raise
-        return {"job_id": job_id, "registered": len(job["tracks"])}
-
-    def append_track(self, job_id: str, token: str, display_name: str) -> Dict[str, Any]:
-        return self.add_track(job_id, token, display_name)
-
-    def add_registered_entry(
-        self, job_id: str, entry: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        return self.add_track(job_id, entry["token"], entry["display_name"])
-
     def set_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
         job = self.load_job(job_id)
         job["skipped"] = skipped
