@@ -42,6 +42,7 @@ build-backend = "setuptools.build_meta"
 testpaths = ["tests"]
 addopts = "--strict-markers --timeout=120 -W error::DeprecationWarning:musicbee_tagger_mcp"
 timeout = 120
+filterwarnings = ["error::DeprecationWarning:musicbee_tagger_mcp"]
 markers = [
     "network: allow network access in this test",
     "slow: slow-running test",
