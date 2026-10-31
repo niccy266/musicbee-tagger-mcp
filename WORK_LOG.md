@@ -529,3 +529,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed revert error output to avoid printing absolute paths.
 - Coverage: apply_staged 92%, tag_applier 97%, tag_preview 100%.
 
+
+### 2026-10-31 — Issue #67: ensure CI green for write-path tests branch
+- Committed prompt keyword fix ("OpenRouter") so test_load_system_prompt_and_modes passes; pushed to codex/issue-67-write-path-tests.
+- Verified GitHub Actions CI green (test 3.11/3.12/3.14, lint-score, windows-mcpb, dependency-audit) on PR #107.
+- No production code changes beyond prompt wording; write-path tests and coverage thresholds remain as reported.
