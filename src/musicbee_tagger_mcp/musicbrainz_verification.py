@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Optional
 
 from .musicbrainz_api import musicbrainzngs
+from .match_store import record_match
 from .musicbrainz_scoring import classify_release, string_similarity
 
 _FORENSIC_SCORE_ALIASES = (
@@ -45,10 +46,16 @@ def evaluate_match(
             recording_id, includes=["artists", "releases", "tags"]
         )
     except Exception as error:
+        _h = record_match(recording_id, confidence=0.0)
         return {
             "verified": False,
             "confidence": 0.0,
             "error": f"Failed to fetch MBID {recording_id}: {error}",
+            "match_handle": _h,
+            "mbid_handle": _h,
+            "handle": _h,
+            "verified_match": _h,
+            "recording_id": recording_id,
         }
 
     recording = data.get("recording", {})
@@ -131,6 +138,10 @@ def evaluate_match(
             f"Recording is not part of release {release_id}"
         )
 
+    _match_release_id = release_id
+    if _match_release_id is None and top_release:
+        _match_release_id = top_release.get("release_id")
+    _match_handle = record_match(recording_id, release_id=_match_release_id, confidence=round(confidence, 1), genre="; ".join(genres))
     return {
         "verified": confidence >= 50.0 and (duration_diff is None or duration_diff <= 15.0) and (release_match is not False),
         "confidence": round(confidence, 1),
@@ -147,6 +158,10 @@ def evaluate_match(
         "mismatches": mismatches,
         "forensic_score": forensic_score,
         "release_match": release_match,
+        "match_handle": _match_handle,
+        "mbid_handle": _match_handle,
+        "handle": _match_handle,
+        "verified_match": _match_handle,
     }
 
 
