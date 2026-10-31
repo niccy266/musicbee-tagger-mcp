@@ -1,3 +1,9 @@
+### 2026-10-29 — Add staged-change audit for duplicate, conflicting, empty, or low-confidence stages (#49)
+
+- Added read-only staged-change audit (`StagingManager.audit_staged_changes()` plus aliases and MCP tool `audit_staged_changes`) that inspects pending manifests without applying or discarding them.
+- Detects multiple pending stages for the same file, overlapping/conflicting field changes, empty diffs, and unusually low forensic scores.
+- Report includes stage IDs, file identity, notes/reason, diffs, score scale/meaning, thresholds, and grouped findings.
+- Added CLI `--audit` and `cmd_audit` helpers in `staged_review`/`apply_staged`.
 ### 2026-10-30 — Issue #68: harden MCP tool wrappers for offline tests
 
 - Updated `tools/musicbrainz.py` `get_release_tracklist` to omit `duration_seconds` when unknown, harden zero-media/404/transport paths, and resolve MusicBrainz client in a patch-friendly way.
@@ -504,6 +510,42 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+### 2026-11-01 — Issue #37: safer file and MBID lookup
+
+- Added FileRegistry.find_tokens/resolve_track_token lookup by display name (and aliases), with ambiguous-match handling.
+- Enhanced FileRegistry.resolve to resolve by display name when a UUID is not supplied.
+- Added MCP tool resolve_track_token and module aliases for lookup helpers.
+- Added match handle store (match_store.py) and wired verify_mbid to return/carry handles; stage_tag_changes and amend_staged_changes accept handle aliases and auto-resolve MBIDs.
+- Updated tests/manifest for new tool surface.
+
+### 2026-10-30 — Implement Cline backend for shared agent loop (#78)
+- Generalized `scripts/agent_loop_script.py` to accept `--agent`/`--agent-type`/`--backend` (`openrouter`, `openai`, `cline`) and delegate to the selected backend.
+- Implemented `scripts/cline_agent.py`: Cline executable discovery, MCP config generation, task prompt construction, command building, and subprocess execution with a missing-dependency fallback.
+- Added compatibility entry points `scripts/agent_loop.py` and `scripts/agent.py`.
+- Abstracted OpenRouter tool orchestration with `dispatch_tool` (plus aliases) and routed `run_batch` through it.
+- Documented both OpenRouter and Cline modes in `docs/OPENROUTER_AGENT.md`.
+- Validation: py_compile/import smoke tests passed; full CI verification pending.
+
+### 2026-10-30 — Safe genre cleanup workflow for chart and language clutter (#48)
+- Added genre_cleanup module with clean_genre_clutter and aliases, preserving separators and real genres; mood removal is explicit.
+- Added MCP tool clean_genre_clutter with per-track diffs and skip for no-change tracks.
+- Registered tool and updated security tool set.
+
+### 2026-10-30 — Add cross-process locking to JobStore (#55)
+
+- Wrapped all `JobStore` reads/writes in a cross-process file lock (`.jobs.lock` per jobs directory) with an in-process `RLock`, mirroring the established `StageManifestStore` pattern.
+- `next_batch`, `complete_batch`, `release_batch`, `add_track`, `set_skipped`, `load_job`, `list_jobs`, `job_status`, `preview_batch`, and `peek_pending` now load and persist under the lock, so concurrent agents cannot claim overlapping tokens or lose status updates.
+- Writes are now atomic (temp file + `os.replace`) to avoid partial job files; directories are created as needed.
+- Added `transact`/`mutate` helpers for atomic job updates and documented concurrent-agent support plus `release_batch`/`--resume` recovery in `docs/OPENROUTER_AGENT.md`.
+- Validation: `py_compile` and import smoke passed; manual thread-concurrency smoke confirmed 20/20 unique claims across 5 threads. Full suite to be verified by CI.
+
+### 2026-10-30 — Add coverage reporting and floors (issue #66)
+
+- Added `pytest-cov` to dev dependencies.
+- Configured pytest to emit `term-missing` and XML coverage reports with a 73% floor.
+- Added `[tool.coverage.run]`/`[tool.coverage.report]` config with `source = ["musicbee_tagger_mcp"]` and `if __name__ == "__main__":` exclusion.
+- Updated `health.yml` test leg with coverage command, write-path (>=80%) and uncovered-module guards, and artifact upload.
+- Pushed branch; opened PR.
 ### 2026-10-30 — Issue #70: tests/conftest.py isolation, network guard, timeouts, markers
 - Added tests/conftest.py with autouse app-data isolation (MUSICBEE_TAGGER_DATA_DIR/HOME/APPDATA -> tmp_path), autouse socket/urlopen network blocker with @pytest.mark.network opt-out, and pytest_collection_modifyitems skips for windows/requires_audio_fixtures markers.
 - Registered network, slow, windows, requires_audio_fixtures markers; enabled --strict-markers, --timeout=120, and -W error::DeprecationWarning:musicbee_tagger_mcp in pyproject.toml; added pytest-timeout dev dependency.
@@ -544,3 +586,75 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Re-checked branch codex/issue-67-write-path-tests at 2890005; working tree clean.
 - Verified all GitHub Actions checks green on PR #107.
 - No further code changes required; coverage goals remain met.
+### 2026-10-30 — Issue #7: Parse filename clues variants, subtitles, track numbers
+- Rewrote filename_parser bracket extraction to preserve balanced/nested/mixed bracket text in candidates while still returning bracket clues separately.
+- Preserved meaningful numeric suffixes such as `_2020` while still stripping short track-number suffixes.
+- Avoided treating hyphenated titles (`99-Luftballons`, `7-Seconds`) as leading track numbers.
+- Sanitized invisible Unicode format characters throughout parser outputs.
+- Retained both Artist/Title orderings and multi-segment subtitle joins.
+- Updated and added regression tests in tests/test_investigator_tools.py.
+
+
+### 2026-10-31 — Issue #7: refine filename clue parsing (type-aware brackets)
+- Made bracket matching type-aware so mixed bracket types are handled without falsely pairing unrelated brackets.
+- Preserved existing behavior for nested/mixed brackets, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Added regression tests for mixed, nested mixed, unmatched, and multilingual bracket cases.
+- Validation: py_compile passed; CI run 41171857420 succeeded.
+### 2026-10-31 — Issue #7: verification and completion pass
+- Reviewed current implementation on `codex/issue-7-filename-clues` (HEAD 828a7bf): type-aware bracket matching, preserved bracketed title text, meaningful `_2020` suffix handling, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Ran full test suite with repository venv and `PYTHONPATH=src`: 183 passed, 30 skipped.
+- Ran pylint errors-only on `src`: clean.
+- No code changes required; branch and PR #114 already contain the implementation.
+
+### 2026-10-31 — Issue #7: whitespace normalization and track stem cleanup
+- Normalized internal whitespace in `clean_stem` and track-number-stripped stems.
+- Preserved existing bracket, suffix, hyphenated-title, and invisible-character behavior.
+- Validation: py_compile passed; push and CI pending.
+
+### 2026-10-31 — Issue #7: normalize whitespace in filename stem parsing
+- Normalized internal whitespace in `clean_stem` and track-number extraction so invisible-character sanitization does not leave irregular spacing.
+- Preserved existing type-aware bracket matching, meaningful `_2020` suffix handling, hyphenated-title distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #7: robust bracket extraction for unmatched openers
+- Reworked `_extract_bracket_contents` to scan each opener independently, so an unmatched outer opener no longer suppresses valid inner bracket clues.
+- Preserved type-aware matching, nested/mixed brackets, unmatched closer handling, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #7: raw filename basename handling
+- Updated `raw_filename` to use the final path component consistently (backslash/forward slash safe) and sanitize it.
+- Re-ran focused filename parser tests and full suite: 183 passed, 30 skipped.
+- Validation: local tests via CI-style venv passed; push and CI pending.
+
+### 2026-10-31 — Issue #7: final verification and handoff
+- Reviewed implementation against acceptance criteria: preserved bracketed title text, nested/mixed bracket handling, meaningful `_2020` suffix preservation, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Verified existing regression tests in tests/test_investigator_tools.py cover all cases and multilingual examples.
+- No code changes required; branch and PR #114 already contain the implementation.
+- Validation: CI run 41174737658 succeeded.
+
+### 2026-10-31 — Issue #7: verify filename clue parser robustness
+- Re-reviewed `src/musicbee_tagger_mcp/filename_parser.py` against acceptance criteria: preserved bracketed title text, type-aware nested/mixed bracket extraction, meaningful `_2020` suffix preservation, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and three-or-more segment subtitles.
+- Confirmed multilingual regression coverage in `tests/test_investigator_tools.py`.
+- Validation: py_compile passed; existing PR #114 CI green.
+### 2026-11-01 — Issue #7: filename clue parsing final pass
+
+- Created branch `claude/issue-7-filename-clues` from `codex/issue-7-filename-clues`.
+- Minor hardening: trim stem before trailing `_N` suffix stripping in `clean_stem`.
+- Verified CI (Repo Health) green on PR #117 for Python 3.11/3.12/3.14 and Windows bundle.
+- Preserved bracketed title text, nested/mixed bracket handling, meaningful `_2020` suffixes, hyphenated title distinction, invisible-char sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+
+
+### 2026-11-01 — Issue #7: final robustness review and handoff
+- Re-reviewed filename_parser against acceptance criteria; no code changes required.
+- Manual smoke checks passed for brackets, suffixes, track numbers, invisible chars, hypotheses, subtitles, multilingual examples.
+- CI green on PR #117.
+## 2026-10-31 - Issue #78 follow-up
+- Generalized agent loop module aliases (`scripts/agent_loop.py`, `scripts/agent.py`) to re-export the full OpenRouter loop API while retaining backend-aware entry points.
+- Made `openrouter_agent.run` forward job ids and tolerate loop `main(argv)` calling conventions.
+- Updated system prompt wording to include "tagger" for generalized agent usage.
+- Hardened Cline MCP config generation for string server commands.
+- Updated OpenRouter `load_system_prompt` to accept optional backend arguments.
+### 2026-10-31 — Issue #98 agent tool usage helpers
+- Added scripts/commands.py with run_commands validation, execution, and gh_issue_comment wrapper.
+- Registered run_commands and gh_issue_comment in openrouter agent TOOLS and LOCAL_TOOLS.
+- Added gh helper skills (.agents and release copies).

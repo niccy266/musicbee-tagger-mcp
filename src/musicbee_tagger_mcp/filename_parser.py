@@ -12,26 +12,100 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 
-# Regex patterns for brackets: (), [], 【】, （）, 「」
-BRACKET_REGEX = re.compile(r"[\(\[\{\【\（\「]([^\)\]\}\】\）\」]+)[\)\]\}\】\）\」]")
+# Opening/closing bracket pairs handled by the parser.  Matching is type-aware
+# so that mixed bracket types are handled without falsely pairing unrelated
+# brackets (e.g. a stray "]" does not close an open "(").
+_BRACKET_PAIRS = {
+    "(": ")",
+    "[": "]",
+    "{": "}",
+    "【": "】",
+    "（": "）",
+    "「": "」",
+}
+_OPENING_BRACKETS = "".join(_BRACKET_PAIRS.keys())
+_CLOSING_BRACKETS = "".join(_BRACKET_PAIRS.values())
+_OPEN_TO_CLOSE = dict(_BRACKET_PAIRS)
+_CLOSE_TO_OPEN = {v: k for k, v in _BRACKET_PAIRS.items()}
 # Regex for 4-digit years (1920-2030)
 YEAR_REGEX = re.compile(r"\b(19\d\d|20[0-2]\d)\b")
 # Common file extensions to strip
 AUDIO_EXTS = {".mp3", ".ogg", ".flac", ".m4a", ".wav", ".aac", ".wma", ".aiff", ".opus"}
 
+# Invisible Unicode format characters (bidi marks, zero-width, BOM) that carry
+# no visible content and break matching.  Mirrors field_map._INVISIBLE_RE.
+_INVISIBLE_RE = re.compile(
+    "[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]"
+)
+
+
+def _sanitize(text: Any) -> str:
+    """Remove invisible formatting characters without altering visible text."""
+    if text is None:
+        return ""
+    return _INVISIBLE_RE.sub("", str(text))
+
+
+def _extract_bracket_contents(text: str) -> List[str]:
+    """Extract top-level balanced bracket contents, preserving nested text.
+
+    Matching is type-aware: each opener must close with its own closer.
+    Nested brackets are kept inside their outer clue, and separate
+    top-level groups each produce their own clue.  Mismatched or unmatched
+    brackets are left untouched in the source text and produce no clue, so
+    real title text is never lost.
+    """
+    results: List[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i] in _OPEN_TO_CLOSE:
+            stack: List[str] = [text[i]]
+            j = i + 1
+            matched = False
+            while j < n and stack:
+                ch = text[j]
+                if ch in _OPEN_TO_CLOSE:
+                    stack.append(ch)
+                elif ch in _CLOSE_TO_OPEN:
+                    if _OPEN_TO_CLOSE[stack[-1]] == ch:
+                        stack.pop()
+                        if not stack:
+                            matched = True
+                            break
+                    else:
+                        # Mismatched closer: this group is not a valid
+                        # bracket pair; abandon it.
+                        break
+                j += 1
+            if matched:
+                results.append(text[i + 1 : j])
+                i = j + 1
+                continue
+        i += 1
+    return results
+
 
 def clean_stem(filename: str) -> str:
-    """Strip extension and normalize whitespace."""
+    """Strip extension and normalize whitespace.
+
+    A trailing ``_N`` suffix is treated as a track number and stripped, but
+    meaningful multi-digit suffixes such as ``_2020`` are preserved.
+    """
     # Accept either a bare filename or a relative/absolute path; only the
     # final component is treated as the filename stem.
     stem = str(filename).replace("\\", "/").rsplit("/", 1)[-1]
+    stem = _sanitize(stem)
     for ext in AUDIO_EXTS:
         if stem.lower().endswith(ext):
             stem = stem[:-len(ext)]
             break
-    # Remove trailing duplicate suffixes like _1, _2
-    stem = re.sub(r"_\d+$", "", stem)
-    return stem.strip()
+    # Remove trailing track-number suffixes like _1, _2 (but not _2020).
+    stem = stem.strip()
+    stem = re.sub(r"_\d{1,3}$", "", stem)
+    # Normalize internal whitespace (including any left by sanitization).
+    stem = re.sub(r"\s+", " ", stem).strip()
+    return stem
 
 
 def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
@@ -48,14 +122,15 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
     # Preserve up to two levels of (relative) folder context as hints without
     # exposing an absolute path.  This keeps country/year clues from layouts
     # such as "Country/Year/track.mp3".
-    _parts = [part for part in str(filename).replace("\\", "/").split("/") if part]
+    _parts = [_sanitize(part) for part in str(filename).replace("\\", "/").split("/") if part]
     folder_parts = _parts[-3:-1] if len(_parts) >= 2 else []
     relative_path_hint = "/".join(folder_parts + [_parts[-1]]) if _parts else str(filename)
+    relative_path_hint = _sanitize(relative_path_hint)
 
-    # 1. Extract bracketed segments
-    brackets = BRACKET_REGEX.findall(raw_stem)
-    cleaned_stem = BRACKET_REGEX.sub(" ", raw_stem)
-    cleaned_stem = re.sub(r"\s+", " ", cleaned_stem).strip()
+    # 1. Extract bracketed segments (without removing them from the stem, so
+    #    the full title text is preserved in candidates).
+    brackets = _extract_bracket_contents(raw_stem)
+    cleaned_stem = re.sub(r"\s+", " ", raw_stem).strip()
 
     # 2. Extract year if present in brackets or text
     detected_year: Optional[str] = None
@@ -63,13 +138,16 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
     if year_match:
         detected_year = year_match.group(1)
 
-    # 3. Check for leading track number (e.g. "01 - ...", "01. ...", "01 ...")
+    # 3. Check for leading track number (e.g. "01 - ...", "01. ...", "01 ...").
+    #    Hyphenated titles such as "99-Luftballons" or "7-Seconds" are NOT
+    #    treated as track numbers: a hyphen alone (without surrounding
+    #    whitespace) does not separate a track number from its title.
     track_num: Optional[int] = None
-    track_match = re.match(r"^(\d{1,3})[\s\.\-_]+(.+)$", cleaned_stem)
+    track_match = re.match(r"^(\d{1,3})(?:\s+[-_.]?\s*|_+|\.)(.+)$", cleaned_stem)
     if track_match:
         try:
             track_num = int(track_match.group(1))
-            cleaned_stem = track_match.group(2).strip()
+            cleaned_stem = re.sub(r"\s+", " ", track_match.group(2)).strip()
         except ValueError:
             pass
 
@@ -93,7 +171,7 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
     # Separate bracket clues: distinguish year vs regional/subtitle notes
     context_clues: List[str] = []
     for b in brackets:
-        b_clean = b.strip()
+        b_clean = _sanitize(b).strip()
         if not b_clean:
             continue
         if YEAR_REGEX.fullmatch(b_clean):
@@ -109,7 +187,7 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
             context_clues.append(folder)
 
     return {
-        "raw_filename": Path(filename).name,
+        "raw_filename": _sanitize(str(filename).replace("\\", "/").rsplit("/", 1)[-1]),
         "cleaned_stem": cleaned_stem,
         "track_number_guess": track_num,
         "artist_guess": artist_guess,
