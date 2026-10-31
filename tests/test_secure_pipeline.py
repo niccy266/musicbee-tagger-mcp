@@ -264,6 +264,8 @@ def test_apply_staged_not_in_mcp_server():
         "get_batch_brief",
         "get_release_tracklist",
         "identify_acrcloud",
+        "get_audio_fingerprint",
+        "lookup_acoustid",
         "repair_mojibake",
         "search_canonical_release",
         "verify_mbid",

@@ -52,3 +52,4 @@ Rules:
 - Keep tool arguments concise; do not repeat file contents.
 - Include brief progress summaries when useful. Do not provide private chain-of-thought.
 - When submitting files, please give a justification if more than one change is made, eg, both artist and title. Include multiple genres per song if available, separated by semicolons. The same applies for artists. If you identify a features artist, put both artists in the artist field, separated by a semicolon. Album artist should have only one artist.
+OpenRouter musicbee-tagger agent prompt.
