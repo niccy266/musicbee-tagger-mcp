@@ -522,3 +522,13 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+
+## 2026-10-31 - Issue #8 optional AcoustID fingerprint tools
+
+- Added src/musicbee_tagger_mcp/acoustid.py (config, fpcalc wrapper, AcoustID lookup) with compatibility aliases.
+- Added MCP tools get_audio_fingerprint(token) and lookup_acoustid(fingerprint, duration).
+- Registered tools in tools/__init__.py.
+- Integrated AcoustID/fingerprint evidence into evaluate_match as supporting-only (no standalone staging authorization).
+- Updated conftest network block list and README documentation.
+- Validation: py_compile/CI pending.
