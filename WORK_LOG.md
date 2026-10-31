@@ -1,3 +1,9 @@
+### 2026-10-29 — Add staged-change audit for duplicate, conflicting, empty, or low-confidence stages (#49)
+
+- Added read-only staged-change audit (`StagingManager.audit_staged_changes()` plus aliases and MCP tool `audit_staged_changes`) that inspects pending manifests without applying or discarding them.
+- Detects multiple pending stages for the same file, overlapping/conflicting field changes, empty diffs, and unusually low forensic scores.
+- Report includes stage IDs, file identity, notes/reason, diffs, score scale/meaning, thresholds, and grouped findings.
+- Added CLI `--audit` and `cmd_audit` helpers in `staged_review`/`apply_staged`.
 ### 2026-10-30 — Issue #68: harden MCP tool wrappers for offline tests
 
 - Updated `tools/musicbrainz.py` `get_release_tracklist` to omit `duration_seconds` when unknown, harden zero-media/404/transport paths, and resolve MusicBrainz client in a patch-friendly way.
