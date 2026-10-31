@@ -97,7 +97,9 @@ def clean_stem(filename: str) -> str:
             break
     # Remove trailing track-number suffixes like _1, _2 (but not _2020).
     stem = re.sub(r"_\d{1,3}$", "", stem)
-    return stem.strip()
+    # Normalize internal whitespace (including any left by sanitization).
+    stem = re.sub(r"\s+", " ", stem).strip()
+    return stem
 
 
 def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
@@ -139,7 +141,7 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
     if track_match:
         try:
             track_num = int(track_match.group(1))
-            cleaned_stem = track_match.group(2).strip()
+            cleaned_stem = re.sub(r"\s+", " ", track_match.group(2)).strip()
         except ValueError:
             pass
 
