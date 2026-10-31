@@ -505,6 +505,14 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
 
+### 2026-10-30 — Add cross-process locking to JobStore (#55)
+
+- Wrapped all `JobStore` reads/writes in a cross-process file lock (`.jobs.lock` per jobs directory) with an in-process `RLock`, mirroring the established `StageManifestStore` pattern.
+- `next_batch`, `complete_batch`, `release_batch`, `add_track`, `set_skipped`, `load_job`, `list_jobs`, `job_status`, `preview_batch`, and `peek_pending` now load and persist under the lock, so concurrent agents cannot claim overlapping tokens or lose status updates.
+- Writes are now atomic (temp file + `os.replace`) to avoid partial job files; directories are created as needed.
+- Added `transact`/`mutate` helpers for atomic job updates and documented concurrent-agent support plus `release_batch`/`--resume` recovery in `docs/OPENROUTER_AGENT.md`.
+- Validation: `py_compile` and import smoke passed; manual thread-concurrency smoke confirmed 20/20 unique claims across 5 threads. Full suite to be verified by CI.
+
 ### 2026-10-30 — Add coverage reporting and floors (issue #66)
 
 - Added `pytest-cov` to dev dependencies.
