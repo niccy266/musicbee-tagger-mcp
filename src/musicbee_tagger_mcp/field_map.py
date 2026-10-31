@@ -216,3 +216,28 @@ def get_first_tag(tags: Any, keys) -> Optional[str]:
             except (ValueError, KeyError):
                 continue
     return None
+
+
+def normalize_for_matching(text):
+    """Normalize text for matching (case-fold, whitespace, invisible chars)."""
+    import re
+    import unicodedata
+    if text is None:
+        return ""
+    value = re.sub(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]", "", str(text))
+    value = value.casefold()
+    value = unicodedata.normalize("NFKC", value)
+    value = re.sub(r"\s+", " ", value).strip()
+    return value
+
+
+def strip_invisible(text):
+    import re
+    if text is None:
+        return ""
+    return re.sub(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]", "", str(text))
+
+
+normalize_match_key = normalize_for_matching
+normalize_key = normalize_for_matching
+match_key = normalize_for_matching

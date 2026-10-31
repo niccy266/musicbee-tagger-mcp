@@ -578,6 +578,18 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #18: Last.fm canonical-title resolver compatibility hardening
+
+- Rebased branch onto latest master.
+- Hardened LastFmClient constructor, positional APIs, cyrillic policy, ranking, and compatibility aliases.
+- Validation: GitHub Actions CI all jobs pass (test 3.11/3.12/3.14, lint-score, windows-mcpb, dependency-audit).
+
+### 2026-10-31 — Issue #18: harden lastfm resolver aliases, signatures, config
+- Improved LastFmConfig constructor to accept common API key/secret/base URL/timeout aliases.
+- Improved LastFmClient.track_search/track_get_info and build_search_passes/resolve_lastfm to accept title/track/name/song/path/filename and sidecar aliases.
+- Added compatibility aliases for normalize/transliteration/variant/split/folder/sidecar/build/rank/web-search helpers.
+- Validation: py_compile and pylint errors-only passed locally; full verification via GitHub Actions CI.
 ### 2026-10-29 — Issue #47 duplicate file registration across jobs
 
 - Added JobStore duplicate detection: jobs_containing_token and aliases detect when a file token is already registered in another active job.
