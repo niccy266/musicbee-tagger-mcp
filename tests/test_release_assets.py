@@ -40,6 +40,7 @@ def test_release_configs_use_supported_claude_shapes():
 
     assert marketplace["plugins"][0]["source"] == "./plugins/musicbee-tagger"
     assert plugin["mcpServers"] == "./.mcp.json"
+    assert plugin_server["type"] == "stdio"
     assert plugin_server["command"] == "cmd.exe"
     assert plugin_server["args"][-1] == server["args"][-1]
     assert plugin_server["env"] == server["env"]
@@ -213,6 +214,7 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "read_track_metadata",
         "extract_filename_clues",
         "get_batch_brief",
+        "resolve_track_token",
         "search_canonical_release",
         "verify_mbid",
         "preview_tags",

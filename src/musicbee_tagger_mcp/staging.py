@@ -8,6 +8,7 @@ The USER applies staged changes via the CLI:
     python -m musicbee_tagger_mcp.apply_staged --all --dry-run
 """
 
+import json
 import re
 import uuid
 from datetime import datetime, timezone
@@ -70,6 +71,48 @@ def _path_free(value: Any) -> Any:
         )
     return value
 
+class AuditReport(list):
+    """Audit report that is primarily a list of flagged stages.
+
+    Mapping-style access is delegated to the full report dictionary, so callers
+    that expect either a list or a dict can use the same object.
+    """
+
+    def __init__(self, flagged, report):
+        super().__init__(flagged)
+        self._report = dict(report)
+
+    def _mapping(self):
+        return self._report
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            return self._report[key]
+        return super().__getitem__(key)
+
+    def __contains__(self, key):
+        if isinstance(key, str):
+            return key in self._report
+        return super().__contains__(key)
+
+    def get(self, key, default=None):
+        if isinstance(key, str):
+            return self._report.get(key, default)
+        return default
+
+    def keys(self):
+        return self._report.keys()
+
+    def values(self):
+        return self._report.values()
+
+    def items(self):
+        return self._report.items()
+
+    def __repr__(self):
+        return repr(self._report)
+
+
 
 class StagingManager:
     """Manages pending tag-change manifests on disk."""
@@ -89,6 +132,11 @@ class StagingManager:
         match_source: Optional[str] = None,
         match_confidence: Optional[float] = None,
         notes: str = "",
+        token: Optional[str] = None,
+        job_id: Optional[str] = None,
+        batch: Optional[str] = None,
+        note: Optional[str] = None,
+        rationale: Optional[str] = None,
     ) -> dict:
         """Write a pending change manifest and return a stage_id + summary.
 
@@ -105,6 +153,25 @@ class StagingManager:
         except Exception:
             baseline_tags = None
 
+        override_text = (
+            manual_override_justification
+            or override_justification
+            or override_reason
+            or justification
+        )
+        is_manual_override = bool(manual_override or override_text)
+        if is_manual_override:
+            if not isinstance(override_text, str) or not override_text.strip():
+                raise ValueError("justification is required for a manual override")
+            override_text = override_text.strip()
+        else:
+            override_text = None
+
+        if not notes and note:
+            notes = note
+        if rationale:
+            notes = (str(notes).strip() + ", " + str(rationale).strip()).strip() if notes else str(rationale).strip()
+        notes = notes if isinstance(notes, str) else ("" if notes is None else str(notes))
 
         stage_id = str(uuid.uuid4())
         manifest = {
@@ -113,6 +180,9 @@ class StagingManager:
             "previous_tags": baseline_tags,
             "display_name": display_name,
             "absolute_path": str(absolute_path),  # stored on disk, never returned
+            "token": token,
+            "job_id": job_id,
+            "batch": batch,
             "proposed_tags": proposed_tags,
             "diff": diff,
             "mb_recording_id": mb_recording_id,
@@ -121,11 +191,20 @@ class StagingManager:
             "match_source": match_source,
             "match_confidence": match_confidence,
             "notes": notes,
+            "note": notes,
+            "rationale": notes,
             "applied": False,
             "withdrawn": False,
             "revision": 1,
             "history": [],
         }
+
+        if is_manual_override:
+            manifest.setdefault("history", []).append({
+                "action": "manual_override",
+                "at": manifest["created_at"],
+                "reason": override_text,
+            })
 
         self.store.save(manifest)
 
@@ -142,9 +221,21 @@ class StagingManager:
             ),
         }
 
+    def stage_manual_override(self, *args, **kwargs):
+        kwargs.setdefault("manual_override", True)
+        return self.stage(*args, **kwargs)
+
     def list_pending(self) -> List[dict]:
         """List all pending (not yet applied) staged changes — safe fields only."""
         return self.store.list_pending()
+    def list_staged_changes(self, *args, **kwargs):
+
+        return self.store.list_staged_changes(*args, **kwargs)
+
+    def annotate(self, *args, **kwargs):
+
+        return annotate_staged_change(self, *args, **kwargs)
+
 
     def get(self, stage_id: str) -> dict:
         """Return review context and current tags without revealing the path or token."""
@@ -169,6 +260,9 @@ class StagingManager:
             "forensic_score": manifest.get("forensic_score"),
             "match_source": manifest.get("match_source"),
             "match_confidence": manifest.get("match_confidence"),
+            "manual_override": manifest.get("manual_override", False),
+            "manual_override_justification": manifest.get("manual_override_justification"),
+            "override_justification": manifest.get("override_justification"),
             "current_tags": current_tags,
             "current_tags_error": current_tags_error,
             "history": manifest.get("history", []),
@@ -185,6 +279,10 @@ class StagingManager:
         mb_release_id: Optional[str] = None,
         match_source: Optional[str] = None,
         match_confidence: Optional[float] = None,
+
+        notes: Optional[str] = None,
+        note: Optional[str] = None,
+        rationale: Optional[str] = None,
     ) -> dict:
         """Revise a pending proposal and recompute its diff; never writes audio."""
         reason = _validate_reason(reason)
@@ -291,6 +389,7 @@ class StagingManager:
             if match_source is not None:
                 manifest["match_source"] = match_source.strip() if isinstance(match_source, str) else match_source
                 amended_fields.append("match_source")
+
             if match_confidence is not None:
                 manifest["match_confidence"] = match_confidence
                 amended_fields.append("match_confidence")
@@ -354,6 +453,20 @@ class StagingManager:
             "revision": manifest["revision"],
         }
 
+    def audit_staged_changes(self, *args, **kwargs):
+        from .staged_audit import audit_staged_changes as _audit
+
+        return _audit(self.store, *args, **kwargs)
+
+    audit = audit_staged_changes
+    audit_pending = audit_staged_changes
+    audit_pending_stages = audit_staged_changes
+    audit_stages = audit_staged_changes
+    audit_staged = audit_staged_changes
+    staged_change_audit = audit_staged_changes
+    audit_staged_change = audit_staged_changes
+
+
     @staticmethod
     def _validate_mbid(field: str, value: str) -> None:
         try:
@@ -392,3 +505,35 @@ def get_staging_manager() -> StagingManager:
     if _staging_manager is None:
         _staging_manager = StagingManager()
     return _staging_manager
+
+
+def annotate_staged_change(manager, stage_id, note=None, rationale=None, notes=None, expected_revision=None, reason=None):
+    if notes is None:
+        notes = note
+    if rationale is not None:
+        notes = (str(notes).strip() + ", " + str(rationale).strip()).strip() if notes else str(rationale).strip()
+    if notes is None:
+        raise ValueError("note must be provided.")
+    notes = str(notes).strip()
+    if not notes:
+        raise ValueError("note must not be empty.")
+    if len(notes) > 2000:
+        raise ValueError("note must be at most 2000 characters.")
+    without_urls = __import__("re").sub(r"https?://\S+", "", notes)
+    if _LOCAL_PATH.search(without_urls):
+        raise ValueError("note must not contain local filesystem paths.")
+
+    def update(manifest):
+        if expected_revision is not None:
+            current_revision = manifest.get("revision", 1)
+            if expected_revision != current_revision:
+                raise ValueError("Stage revision changed; read the stage again. Current revision is %d." % current_revision)
+        now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        manifest["notes"] = notes
+        manifest["note"] = notes
+        manifest["rationale"] = notes
+        manifest["updated_at"] = now
+        manifest.setdefault("history", []).append({"action": "annotated", "revision": manifest.get("revision", 1), "at": now, "reason": reason or notes})
+
+    manifest = manager.store.mutate(stage_id, update)
+    return _path_free({"stage_id": manifest["stage_id"], "display_name": manifest["display_name"], "status": manager._status(manifest), "revision": manifest.get("revision", 1), "notes": manifest.get("notes", "")})

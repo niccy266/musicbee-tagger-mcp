@@ -19,6 +19,9 @@ dev = [
     "build>=1.2.2",
     "pylint>=3.0",
     "pytest>=8.0.0",
+    "pytest-timeout>=2.3.0",
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
 ]
 release = [
     "build>=1.2.2",
@@ -37,6 +40,26 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--strict-markers --timeout=120 -W error::DeprecationWarning:musicbee_tagger_mcp"
+timeout = 120
+filterwarnings = ["error::DeprecationWarning:musicbee_tagger_mcp"]
+markers = [
+    "network: allow network access in this test",
+    "slow: slow-running test",
+    "windows: Windows-only test",
+    "requires_audio_fixtures: requires committed audio fixtures and ffmpeg",
+]
 
 [tool.uv]
 cache-dir = ".uv-cache"
+
+
+[tool.coverage.run]
+source = ["musicbee_tagger_mcp"]
+
+[tool.coverage.report]
+exclude_lines = [
+    'if __name__ == "__main__":',
+]
+show_missing = true
+fail_under = 73

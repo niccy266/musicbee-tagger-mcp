@@ -103,11 +103,18 @@ def make_error(
     """
     safe_message = message
     if path_free:
-        # Remove anything that looks like a Windows absolute path or a POSIX
-        # absolute path so call sites never accidentally leak locations.
+        # Remove anything that looks like an absolute filesystem path so call
+        # sites never accidentally leak locations.  Cover POSIX paths, Windows
+        # drive paths (any case, either separator), and UNC paths (backslash or
+        # slash form) including names that contain spaces, ``#`` and ``&``.
         import re
 
-        safe_message = re.sub(r"[A-Za-z]:\\.*", "[path]", safe_message)
+        # Windows drive paths: C:\... or C:/...
+        safe_message = re.sub(r"[A-Za-z]:[\\/].*", "[path]", safe_message)
+        # UNC paths: \\server\share\... or //server/share/...
+        safe_message = re.sub(r"\\\\[^\s]*", "[path]", safe_message)
+        safe_message = re.sub(r"(?<!:)//[^\s/]+(?:/[^\s]*)?", "[path]", safe_message)
+        # POSIX absolute path at the end of the message (or whole token).
         safe_message = re.sub(r"(?<!\S)/\S+$", "[path]", safe_message)
 
     result: dict = {"error_code": code, "error": safe_message}

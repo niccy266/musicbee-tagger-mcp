@@ -1,5 +1,6 @@
 """Human-run local playlist registration command."""
 
+import argparse
 import sys
 from typing import TextIO
 
@@ -81,6 +82,21 @@ def run(
         f"{job_id}.",
         file=output_stream,
     )
+    duplicates = result.get("duplicates", [])
+    if duplicates:
+        count = len(duplicates)
+        label = "entry" if count == 1 else "entries"
+        print(
+            f"Skipped {count} duplicate playlist {label} already registered "
+            f"in another active job:",
+            file=output_stream,
+        )
+        for entry in duplicates:
+            print(
+                f"- {entry.get('display_name')}: existing job "
+                f"{entry.get('existing_job_id')}",
+                file=output_stream,
+            )
     print(
         "Pass this job id to the agent loop or ask the agent for the next "
         "batch; the playlist path was never sent over MCP.",
@@ -100,15 +116,24 @@ def run(
 
 def main() -> None:
     """Run playlist registration with an optional local path argument."""
+    parser = argparse.ArgumentParser(
+        prog="musicbee-tagger-register-playlist",
+        description="Register a local playlist without sending paths to the MCP agent.",
+    )
+    parser.add_argument(
+        "playlist_path",
+        nargs="?",
+        default="",
+        help="Optional path to a .m3u or .m3u8 playlist.",
+    )
+    args = parser.parse_args()
     if len(sys.argv) > 2:
-        print("Provide at most one playlist path (.m3u or .m3u8).")
-        raise SystemExit(2)
-    playlist_path = sys.argv[1] if len(sys.argv) == 2 else ""
+        parser.error("Provide at most one playlist path (.m3u or .m3u8).")
     raise SystemExit(
         run(
             input_stream=sys.stdin,
             output_stream=sys.stdout,
-            playlist_path=playlist_path,
+            playlist_path=args.playlist_path,
         )
     )
 

@@ -77,7 +77,7 @@ Notes:
 - MP3 MusicBrainz IDs use non-text frames: `UFID:http://musicbrainz.org` for
   track IDs, `TXXX` with the given description for release/artist IDs.
 
-## Planned additions (issue #18)
+## Implemented additions (issue #18)
 
 - `artist_sort` (TSO2 / ARTISTSORT / ©soa), `title_sort` (TSOT / TITLESORT /
   ©son), `album_sort` (TSOA / ALBUMSORT / ©soa)

@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from ..error_codes import (
     E_AUDIO_READ_FAILED,
     E_FILE_NOT_FOUND,
+    E_INVALID_INPUT,
     E_PERMISSION_DENIED,
     E_STAGING_FAILED,
     E_STAGE_CONFLICT,
@@ -13,13 +14,41 @@ from ..error_codes import (
     error_from_exception,
     make_error,
 )
+from ..field_map import FIELD_MAP
 from ..file_registry import get_registry
+from ..match_store import resolve_match, resolve_match_for_token
 from ..staging import get_staging_manager
 from ..tag_writer import preview_tag_changes
 
 
+def _validate_tags(new_tags: Any, function: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(new_tags, dict):
+        return make_error(
+            E_INVALID_INPUT,
+            "new_tags must be an object",
+            function=function,
+        )
+    for key, value in new_tags.items():
+        if key not in FIELD_MAP:
+            return make_error(
+                E_INVALID_INPUT,
+                f"unknown tag field: {key}",
+                function=function,
+            )
+        if isinstance(value, str) and ("\n" in value or "\r" in value):
+            return make_error(
+                E_INVALID_INPUT,
+                f"tag value must not contain a newline: {key}",
+                function=function,
+            )
+    return None
+
+
 def preview_tags(token: str, new_tags: Dict[str, Any]) -> Dict[str, Any]:
     """Preview proposed metadata changes without modifying audio."""
+    validation_error = _validate_tags(new_tags, "preview_tags")
+    if validation_error is not None:
+        return validation_error
     try:
         path = get_registry().resolve(token)
     except KeyError:
@@ -50,6 +79,10 @@ def stage_tag_changes(
     match_source: Optional[str] = None,
     match_confidence: Optional[float] = None,
     notes: str = "",
+    job_id: Optional[str] = None,
+    batch: Optional[str] = None,
+    note: Optional[str] = None,
+    rationale: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
@@ -57,6 +90,9 @@ def stage_tag_changes(
     allowed regardless of whether verification passed). NEXT STEP: After
     staging, call finish_batch when all files are resolved.
     """
+    validation_error = _validate_tags(new_tags, "stage_tag_changes")
+    if validation_error is not None:
+        return validation_error
     try:
         entry = get_registry().resolve(token)
     except KeyError:
@@ -76,6 +112,11 @@ def stage_tag_changes(
             match_source=match_source,
             match_confidence=match_confidence,
             notes=notes,
+            manual_override=manual_override,
+            manual_override_justification=manual_override_justification,
+            override_justification=override_justification,
+            override_reason=override_reason,
+            justification=justification,
         )
     except Exception:
         # Staging errors can include the absolute path held by the manager.
@@ -86,9 +127,8 @@ def stage_tag_changes(
         )
 
 
-def list_staged_changes() -> List[Dict[str, Any]]:
-    """List pending staged changes using path-free summaries."""
-    return get_staging_manager().list_pending()
+def list_staged_changes(status=None, token=None, file=None, file_identity=None, display_name=None, job_id=None, batch=None, query=None, search=None, text=None, limit=100, offset=0):
+    return get_staging_manager().list_staged_changes(status=status, token=token, file=file, file_identity=file_identity, display_name=display_name, job_id=job_id, batch=batch, query=query, search=search, text=text, limit=limit, offset=offset)
 
 
 def get_staged_change(stage_id: str) -> Dict[str, Any]:
@@ -119,6 +159,14 @@ def amend_staged_changes(
     mb_release_id: Optional[str] = None,
     match_source: Optional[str] = None,
     match_confidence: Optional[float] = None,
+    match_handle: Optional[str] = None,
+    match_ref: Optional[str] = None,
+    mbid_handle: Optional[str] = None,
+    verified_match: Optional[str] = None,
+    match_id: Optional[str] = None,
+    recording_id: Optional[str] = None,
+    release_id: Optional[str] = None,
+    mbid: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Amend a pending proposal without writing audio.
 
@@ -128,6 +176,21 @@ def amend_staged_changes(
     change is re-previewed against current tags. Supply a path-free reason and
     the revision from list_staged_changes or get_staged_change; re-read a stale stage.
     """
+    if mb_recording_id is None:
+        for _handle in (match_handle, match_ref, mbid_handle, verified_match, match_id, mbid):
+            if _handle is not None:
+                _match = resolve_match(_handle)
+                if _match:
+                    mb_recording_id = _match.get("recording_id")
+                    if mb_release_id is None:
+                        mb_release_id = _match.get("release_id")
+                    break
+    if mb_recording_id is None and recording_id is not None:
+        mb_recording_id = recording_id
+    if mb_release_id is None and release_id is not None:
+        mb_release_id = release_id
+    if mbid is not None and mb_recording_id is None:
+        mb_recording_id = mbid
     try:
         return get_staging_manager().amend(
             stage_id,
@@ -172,6 +235,31 @@ def withdraw_staged_change(
         )
 
 
+def stage_manual_override(
+    token: str,
+    new_tags: Dict[str, Any],
+    justification: str,
+    mb_recording_id: Optional[str] = None,
+    mb_release_id: Optional[str] = None,
+    forensic_score: Optional[float] = None,
+    match_source: Optional[str] = None,
+    match_confidence: Optional[float] = None,
+    notes: str = "",
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    return stage_tag_changes(
+        token=token,
+        new_tags=new_tags,
+        mb_recording_id=mb_recording_id,
+        mb_release_id=mb_release_id,
+        forensic_score=forensic_score,
+        match_source=match_source,
+        match_confidence=match_confidence,
+        notes=notes,
+        manual_override=True,
+        justification=justification,
+        **kwargs,
+    )
 def register_tag_tools(app) -> None:
     app.tool()(preview_tags)
     app.tool()(stage_tag_changes)
@@ -179,3 +267,4 @@ def register_tag_tools(app) -> None:
     app.tool()(get_staged_change)
     app.tool()(amend_staged_changes)
     app.tool()(withdraw_staged_change)
+    app.tool()(audit_staged_changes)
