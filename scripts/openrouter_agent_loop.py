@@ -665,6 +665,40 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_commands",
+            "description": "Run a list of shell commands. Pass commands as an array of non-empty strings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "commands": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["commands"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "gh_issue_comment",
+            "description": "Post a comment to a GitHub issue using the gh CLI.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "issue": {"type": "string"},
+                    "body": {"type": "string"},
+                    "repo": {"type": "string"}
+                },
+                "required": ["issue", "body"]
+            }
+        }
+    },
+
 ]
 
 def _search_canonical_release(artist, title, duration_seconds=None):
@@ -926,6 +960,36 @@ list_recent_tracks = get_recent_tracks
 recent_tracks = get_recent_tracks
 get_seen_tracks = get_recent_tracks
 
+try:
+    from . import commands as _commands_helper
+except Exception:  # pragma: no cover - import fallback for script execution
+    try:
+        import commands as _commands_helper
+    except Exception:
+        try:
+            from scripts import commands as _commands_helper
+        except Exception:
+            _commands_helper = None
+
+if _commands_helper is not None:
+    run_commands = _commands_helper.run_commands
+    gh_issue_comment = _commands_helper.gh_issue_comment
+    validate_commands = _commands_helper.validate_commands
+    validate_run_commands = _commands_helper.validate_run_commands
+    validate_run_commands_input = _commands_helper.validate_run_commands_input
+    check_commands = _commands_helper.check_commands
+else:
+    def run_commands(commands=None):
+        return {"error": "commands helper unavailable"}
+
+    gh_issue_comment = run_commands
+    validate_commands = lambda value: "commands helper unavailable"
+    validate_run_commands = validate_commands
+    validate_run_commands_input = validate_commands
+    check_commands = validate_commands
+
+
+
 LOCAL_TOOLS = {
     "read_memory": lambda: read_memory(),
     "write_memory": lambda text="", mode="replace": write_memory(text, mode=mode),
@@ -949,6 +1013,9 @@ LOCAL_TOOLS = {
     "get_staged_change": get_staged_change,
     "list_staged_changes": lambda: list_staged_changes(),
     "web_search": lambda query, max_results=5: web_search(query, max_results),
+    "run_commands": lambda commands=None: run_commands(commands),
+    "gh_issue_comment": lambda issue=None, body="", repo=None: gh_issue_comment(issue, body, repo=repo),
+
     "identify_acrcloud": lambda token: _identify_acrcloud(token),
     "propose_artist_split": lambda artist_field, split_ampersand=False, split_comma=False: propose_artist_split(artist_field, split_ampersand=split_ampersand, split_comma=split_comma),
     "search_musicbrainz_artist": lambda name, limit=5: search_musicbrainz_artist(name, limit),
