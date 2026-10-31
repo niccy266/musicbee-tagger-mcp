@@ -532,3 +532,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Integrated AcoustID/fingerprint evidence into evaluate_match as supporting-only (no standalone staging authorization).
 - Updated conftest network block list and README documentation.
 - Validation: py_compile/CI pending.
+
+## 2026-10-31 - Issue #8 follow-up
+- Hardened AcoustID implementation with compatibility aliases and mocked-subprocess/API test coverage.
+- Added tests/test_acoustid.py for config, fingerprint, lookup, tools, rate limiting, and path-free errors.
+- Verified syntax via py_compile; full verification pending GitHub Actions CI.

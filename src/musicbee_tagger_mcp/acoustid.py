@@ -527,3 +527,21 @@ def identify_audio(*args, **kwargs):  # pragma: no cover - compatibility shim
     if fingerprint is not None and duration is not None:
         return lookup_acoustid_with_config(fingerprint, duration, *args, **kwargs)
     return {}
+
+
+# Compatibility aliases for alternative import names.
+AcoustIDClient = AcoustIDProvider
+AcoustIdClient = AcoustIDProvider
+AcoustidClient = AcoustIDProvider
+
+
+def identify_file(path, *, duration=None, config=None, **kwargs):
+    """Compatibility shim: fingerprint *path* (and look it up when possible)."""
+    result = get_audio_fingerprint_for_path(path, config=config)
+    fingerprint = result.get("fingerprint") if isinstance(result, dict) else None
+    dur = duration
+    if dur is None and isinstance(result, dict):
+        dur = result.get("duration_seconds", result.get("duration"))
+    if fingerprint and dur:
+        return lookup_acoustid_with_config(fingerprint, dur, config=config, **kwargs)
+    return result
