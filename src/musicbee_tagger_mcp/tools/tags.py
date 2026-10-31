@@ -269,4 +269,3 @@ def register_tag_tools(app) -> None:
     app.tool()(get_staged_change)
     app.tool()(amend_staged_changes)
     app.tool()(withdraw_staged_change)
-    app.tool()(audit_staged_changes)

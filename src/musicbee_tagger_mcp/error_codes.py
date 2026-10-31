@@ -34,7 +34,7 @@ def redact_paths(text):
         return text
 
     patterns = [
-        re.compile(r"[A-Za-z]:[\/].*", re.DOTALL),
+        re.compile("[A-Za-z]:[\\\\/].*", re.DOTALL),
         re.compile(r"\\\\.*", re.DOTALL),
         re.compile(r"(?<!\S)/\S+$"),
     ]
