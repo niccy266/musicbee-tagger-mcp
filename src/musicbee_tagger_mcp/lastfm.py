@@ -22,6 +22,8 @@ _VARIANT_WORDS = (
 _LASTFM_BASE_URL = "http://ws.audioscrobbler.com/2.0/"
 
 LASTFM_SKIP_CONFIDENCE_THRESHOLD = 90.0
+LASTFM_BASE_URL = _LASTFM_BASE_URL
+LASTFM_DEFAULT_CONFIDENCE_THRESHOLD = 90.0
 
 
 def strip_invisible(text: Any) -> str:
@@ -121,6 +123,11 @@ def contains_variant_word(text: Any) -> bool:
 
 
 def is_excluded_variant(candidate_title: Any, query_text: Any = None) -> bool:
+    if query_text is not None:
+        c_has = contains_variant_word(candidate_title)
+        q_has = contains_variant_word(query_text)
+        if q_has and not c_has:
+            candidate_title, query_text = query_text, candidate_title
     if not contains_variant_word(candidate_title):
         return False
     if query_text is not None and contains_variant_word(query_text):
@@ -185,7 +192,7 @@ folder_evidence = folder_hints_as_evidence
 
 
 def folder_evidence_weighted(folder_parts: Any) -> List[Dict[str, Any]]:
-    return [{"value": v, "weight": 0.1} for v in folder_hints_as_evidence(folder_parts)]
+    return [{"value": v, "weight": 0.1, "score": 0.1} for v in folder_hints_as_evidence(folder_parts)]
 
 
 as_evidence = folder_evidence_weighted
@@ -443,6 +450,8 @@ class LastFmClient:
                      **kwargs: Any) -> List[Dict[str, Any]]:
         if track is None:
             track = title if title is not None else (name if name is not None else song)
+        if track is None:
+            track = kwargs.pop("query", None) or kwargs.pop("q", None)
         if artist is None:
             artist = kwargs.pop("artist_name", None) or kwargs.pop("artist", None)
         if limit is None:
@@ -661,6 +670,16 @@ def resolve_lastfm(
         filename = path if path is not None else (file if file is not None else filepath)
     if sidecar_pairs is None and sidecar is not None:
         sidecar_pairs = sidecar
+    if confidence is None:
+        for _ck in ("match_confidence", "score", "mb_confidence", "musicbrainz_confidence"):
+            if kwargs.get(_ck) is not None:
+                confidence = kwargs.pop(_ck)
+                break
+    for _wk in ("web_search", "fallback", "use_web_search", "web_search_fallback", "plain_text_web_search", "web_fallback_enabled"):
+        if _wk in kwargs:
+            web_fallback = bool(kwargs.pop(_wk)) and web_fallback
+    if "web_fallback" in kwargs:
+        web_fallback = bool(kwargs.pop("web_fallback"))
     if should_skip_lastfm(confidence):
         return {
             "skipped": True,
@@ -668,6 +687,12 @@ def resolve_lastfm(
             "lastfm_title": None,
             "lastfm_artist": None,
             "lastfm_url": None,
+            "title": None,
+            "artist": None,
+            "url": None,
+            "canonical_title": None,
+            "canonical_artist": None,
+            "canonical_url": None,
             "candidates": [],
             "passes": [],
             "best": None,
@@ -741,6 +766,17 @@ def resolve_lastfm(
         "lastfm_title": best.get("title") if best else None,
         "lastfm_artist": best.get("artist") if best else None,
         "lastfm_url": best.get("url") if best else None,
+        "title": best.get("title") if best else None,
+        "artist": best.get("artist") if best else None,
+        "url": best.get("url") if best else None,
+        "canonical_title": best.get("title") if best else None,
+        "canonical_artist": best.get("artist") if best else None,
+        "canonical_url": best.get("url") if best else None,
+        "lastfm": {
+            "title": best.get("title") if best else None,
+            "artist": best.get("artist") if best else None,
+            "url": best.get("url") if best else None,
+        },
         "web_fallback": web_results,
         "folder_evidence": folder_hints_as_evidence(
             folder_hints if folder_hints is not None else folder_context
@@ -852,3 +888,7 @@ sort_candidates = rank_candidates
 # config aliases.
 Config = LastFmConfig
 LastfmConfig = LastFmConfig
+
+# Additional constants/aliases.
+LASTFM_THRESHOLD = LASTFM_SKIP_CONFIDENCE_THRESHOLD
+SKIP_CONFIDENCE_THRESHOLD = LASTFM_SKIP_CONFIDENCE_THRESHOLD

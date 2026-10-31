@@ -534,3 +534,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Improved LastFmClient.track_search/track_get_info and build_search_passes/resolve_lastfm to accept title/track/name/song/path/filename and sidecar aliases.
 - Added compatibility aliases for normalize/transliteration/variant/split/folder/sidecar/build/rank/web-search helpers.
 - Validation: py_compile and pylint errors-only passed locally; full verification via GitHub Actions CI.
+
+### 2026-10-31 — Issue #18: resolver robustness hardening
+- Improved variant-word detection to whole-word matching and argument-order tolerance.
+- Added confidence/web-fallback kwarg aliases and extra result keys (title/artist/url/canonical/lastfm dict).
+- Added folder evidence score alias, query aliases for track_search, and metadata_reader normalize aliases.
+- Validation: 171 passed, 30 skipped (pytest); imports verified.
