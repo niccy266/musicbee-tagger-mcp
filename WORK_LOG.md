@@ -532,3 +532,14 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Verified package import isolation (server does not import physical write modules).
 - MusicBrainz User-Agent already uses public email contact.
 - Retained exact expected tool-set check.
+
+### 2026-10-31 — Issue #10 verification pass
+
+- Verified redact_paths handles URL-decoded payloads and serialized Windows paths.
+- Confirmed MCP server import isolation from physical write modules (tag_applier, tag_format_writers, apply_staged, staged_apply not imported).
+- Confirmed source files are UTF-8 clean; only prior BOM removal needed.
+- MusicBrainz User-Agent uses public email contact (repo is private).
+- Audio fixtures remain tracked; autouse protection fixture guards against modification.
+- Shell-access security boundary documented in docs/THREAT_MODEL.md.
+- Retained exact expected MCP tool-set check.
+- Full test suite: 171 passed, 30 skipped.
