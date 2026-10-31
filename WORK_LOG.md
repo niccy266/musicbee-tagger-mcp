@@ -587,6 +587,25 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
 
+### 2026-10-31 — Issue #45: register and reorder jobs in album and track order
+
+- JobStore now captures album, album artist, disc, track, title, artist, and release metadata when tracks are registered or jobs are created, and sorts tracks by album/disc/track by default while keeping ambiguous single tracks stable.
+- Added reorder/sort/order/arrange/group/organize method aliases plus explicit token-order reordering and pending-only reordering.
+- Added album grouping reports (album_groups and aliases) with single-track/ambiguous item reporting.
+- register_playlist now reads audio metadata during registration, stores it on job tracks, reorders the job, and the CLI reports album groupings.
+- Added matching module-level wrappers and MCP tool registration for the new ordering/grouping operations.
+- Validation: py_compile passed for changed modules; smoke-tested ordering, grouping, explicit reorder, and pending-only reorder. CI pending.
+
+### 2026-10-31 — Issue #45 album/track ordering follow-up
+- Removed duplicate `add_track`/`append_track`/`add_registered_entry` definitions that caused pylint E0102 failures.
+- Added module-level registry resolution and track enrichment from the file registry so reorder/group/create operations can resolve album/disc/track metadata from tokens.
+- Verified lint and test suites pass via GitHub Actions CI (run 41175729366) on PR #115.
+### 2026-10-31 — Issue #45 album/track ordering follow-up
+
+- Removed duplicate `add_track`/`append_track`/`add_registered_entry` definitions that caused pylint E0102 failures.
+- Added module-level registry resolution and track enrichment from the file registry so reorder/group/create operations can resolve album/disc/track metadata from tokens.
+- Verified lint and test suites pass via GitHub Actions CI (run 41175729366) on PR #115.
+
 
 ## 2026-10-31 - Issue #8 optional AcoustID fingerprint tools
 
