@@ -87,8 +87,44 @@ resolve to the newest model in a family.
   the model rather than raising.
 - Tool results are truncated to 6 KB per message to bound context growth.
 
+## Concurrency and recovery
+
+`JobStore` serializes reads and writes for one data directory with a cross-process file lock (`.jobs.lock` in the jobs directory). Multiple `openrouter_agent_loop.py` processes, MCP servers, or CLI commands sharing a data directory therefore cannot claim the same pending tokens, and `complete_batch`/`release_batch` updates are not lost.
+
+- `next_batch` claims tokens atomically under the lock; a second process sees the updated `in_progress` statuses and skips them.
+- Writes are persisted atomically (temporary file + replace) to avoid partial job files.
+- Interrupted or failed runs can be recovered by calling `release_batch` for the affected tokens (returns them to `pending`, moving them to the end of the queue) or by restarting the agent loop with `--resume`, which releases stuck in-progress tokens from the previous run before claiming new work.
+
+If a process is killed while holding the lock, the operating system releases the file lock automatically; the job file remains consistent because writes are atomic.
+
 ## Costs
 
 A batch of 10 files typically needs 15-40 tool-call turns; with a small model
 this is well under USD 0.05 per batch. Check current pricing at
 https://openrouter.ai/models.
+
+## Generic agent entry point and Cline backend
+
+The shared entry point ``scripts/agent_loop_script.py`` (also available as
+``scripts/agent_loop.py`` and ``scripts/agent.py``) selects a backend with
+``--agent`` / ``--agent-type`` / ``--backend``:
+
+```sh
+# Built-in OpenRouter / OpenAI-style function calling (default)
+python scripts/agent_loop_script.py --agent openrouter [job_id]
+
+# Local Cline installation (npm install -g cline)
+python scripts/agent_loop_script.py --agent cline [job_id]
+```
+
+The Cline backend delegates to a locally installed ``cline`` executable. Install
+and authenticate it first:
+
+```sh
+npm i -g cline
+cline auth
+```
+
+Cline is given the MusicBee Tagger MCP tools through its MCP configuration and
+uses the same opaque-token, path-free workflow as the OpenRouter backend. The
+OpenRouter backend remains the default and uses OpenAI-style function calling.

@@ -174,6 +174,29 @@ server environment:
 
 The tool returns identification evidence only. It never stages tags or writes
 audio files.
+
+### AcoustID audio fingerprinting (optional)
+
+The optional `get_audio_fingerprint` and `lookup_acoustid` MCP tools use the
+Chromaprint `fpcalc` executable and the AcoustID web service. Both are
+opt-in: if the binary or API key are missing the tools return a path-free,
+actionable status instead of raising.
+
+Configuration:
+
+- `FPCALC_PATH` (or `ACOUSTID_FPCALC` / `CHROMAPRINT_FPCALC`) -- path to
+  the `fpcalc` executable. On Windows this may point to `K:	oolspcalc.exe`;
+  the value is never echoed back to callers.
+- `ACOUSTID_API_KEY` (or `ACOUSTID_CLIENT` / `ACOUSTID_KEY`) -- AcoustID
+  client API key.
+- `ACOUSTID_TIMEOUT` (optional; defaults to 20 seconds)
+- `ACOUSTID_ENDPOINT` (optional; defaults to `https://api.acoustid.org/v2/lookup`)
+
+Install Chromaprint separately (`fpcalc` is not bundled). Chromaprint is
+licensed under the LGPL; this project invokes it as an external process and
+ships no Chromaprint code. AcoustID lookups also require a free client API key
+from AcoustID. AcoustID matches are evidence only and never authorize staging
+by themselves; they feed the strict verification gate.
 The generated CLI launchers set the same value, so the MCP server, playlist
 registration command, and apply CLI use the same persistent data directory.
 

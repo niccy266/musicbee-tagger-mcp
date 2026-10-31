@@ -111,8 +111,16 @@
       "description": "Suggest repairs for text corrupted by common encoding errors."
     },
     {
+      "name": "flag_for_review",
+      "description": "Record a durable, path-free human-review flag for an uncertain registered track."
+    },
+    {
       "name": "identify_acrcloud",
       "description": "Identify a registered track using ACRCloud (opt-in fallback)."
+    },
+    {
+      "name": "resolve_track_token",
+      "description": "Resolve a registered track token from identifying file information."
     }
   ],
   "keywords": [

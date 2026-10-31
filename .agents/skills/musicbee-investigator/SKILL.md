@@ -39,7 +39,7 @@ flowchart TD
     C --> D["4. Search & Web Investigation"]
     D --> E["5. Eval Gate: verify_mbid()"]
     E -->|Confidence ≥ 75%| F["6. stage_tag_changes()"]
-    E -->|Confidence < 75%| G["Report for human review"]
+    E -->|Confidence < 75%| G["flag_for_review(token, reason)"]
     F --> H["Instruct user to run apply_staged CLI"]
 ```
 
@@ -86,7 +86,7 @@ verify_mbid(
 ```
 * Verify `duration_diff_seconds <= 2.5s` (exact match) or `<= 6.0s`.
 * Verify `verified: true` and `confidence >= 75.0`.
-* If verification fails or flags major mismatches, do NOT stage. Re-investigate or ask the user.
+* If verification fails or flags major mismatches, do NOT stage. Record a durable human-review flag with `flag_for_review(token, reason)` (include candidate/verification summary when useful) and re-investigate or ask the user.
 * If later review shows that an existing proposal is wrong, inspect it with `get_staged_change`, then amend or withdraw it. Report unresolved candidates and the reason they remain pending in your final summary.
 
 ### Step 6: Stage Tag Changes
