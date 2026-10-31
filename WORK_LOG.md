@@ -1,3 +1,9 @@
+### 2026-11-01 — Issue #97: Fix undefined agentRunId in poller.mjs
+
+- Verified `/app/poller.mjs` uses the defined `agentLabel` variable in all agent-identification comment bodies (e.g. `//agent-${agentLabel} claimed/released issue #...`); no reference to the undefined `agentRunId` remains.
+- Confirmed `node --check /app/poller.mjs` passes.
+- Branch: codex/issue-97-poller-agentrunid.
+
 ### 2026-10-30 — Issue #69: Windows test suite and parametrised path handling
 
 - Updated `.github/workflows/health.yml` (local change; could not be pushed due to token scope) to run the full suite on `ubuntu-latest` and `windows-latest`.
