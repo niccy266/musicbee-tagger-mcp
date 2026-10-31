@@ -901,12 +901,24 @@ class JobStore:
             or kwargs.get("ids", None)
             or kwargs.get("order_tokens", None)
         )
+        _known_sort_fields = {'album', 'album_name', 'album_title', 'disc', 'disc_number', 'disc_no', 'disc_num', 'track', 'track_number', 'track_no', 'track_num', 'title', 'artist', 'release', 'release_id'}
         if order is None and positional:
             if isinstance(positional[0], (list, tuple)):
-                order = list(positional.pop(0))
+                candidate = [str(x).strip() for x in positional[0]]
+                if candidate and all(x.lower() in _known_sort_fields for x in candidate):
+                    kwargs["sort_by"] = candidate
+                    positional.pop(0)
+                else:
+                    order = list(positional.pop(0))
             elif all(isinstance(x, str) for x in positional) and len(positional) > 1:
-                order = list(positional)
-                positional = []
+                if all(str(x).strip().lower() in _known_sort_fields for x in positional):
+                    kwargs["sort_by"] = list(positional)
+                    positional = []
+                else:
+                    order = list(positional)
+                    positional = []
+            elif len(positional) == 1 and isinstance(positional[0], str) and positional[0].strip().lower() in _known_sort_fields:
+                kwargs["sort_by"] = positional.pop(0)
         pending_only = kwargs.get("pending_only", kwargs.get("pending", kwargs.get("only_pending", kwargs.get("pending_tracks_only", False))))
         if isinstance(pending_only, str):
             pending_only = pending_only.strip().lower() in {"true", "1", "yes", "pending", "only"}
