@@ -100,17 +100,6 @@ def register_playlist_tools(app) -> None:
         """Get progress counts and any failed tracks for a playlist job."""
         return get_job_store().job_status(job_id)
 
-    for _method_name in _ORDERING_METHODS:
-        def _make_tool(name=_method_name):
-            def tool(job_id: str, *args, **kwargs):
-                return getattr(get_job_store(), name)(job_id, *args, **kwargs)
-            tool.__name__ = name
-            return tool
-        try:
-            app.tool()(_make_tool())
-        except Exception:
-            pass
-
 # Issue #45: ordering/grouping helpers
 _ORDERING_METHODS = [
     "reorder_job", "reorder_tracks", "reorder_pending", "reorder_pending_tracks",
