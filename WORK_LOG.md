@@ -573,3 +573,10 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Re-reviewed `src/musicbee_tagger_mcp/filename_parser.py` against acceptance criteria: preserved bracketed title text, type-aware nested/mixed bracket extraction, meaningful `_2020` suffix preservation, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and three-or-more segment subtitles.
 - Confirmed multilingual regression coverage in `tests/test_investigator_tools.py`.
 - Validation: py_compile passed; existing PR #114 CI green.
+### 2026-11-01 — Issue #7: filename clue parsing final pass
+
+- Created branch `claude/issue-7-filename-clues` from `codex/issue-7-filename-clues`.
+- Minor hardening: trim stem before trailing `_N` suffix stripping in `clean_stem`.
+- Verified CI (Repo Health) green on PR #117 for Python 3.11/3.12/3.14 and Windows bundle.
+- Preserved bracketed title text, nested/mixed bracket handling, meaningful `_2020` suffixes, hyphenated title distinction, invisible-char sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+
