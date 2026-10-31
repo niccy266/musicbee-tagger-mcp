@@ -8,8 +8,36 @@ import json
 import os
 import tempfile
 import uuid
-from pathlib import Path
+import re
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, Optional
+
+
+def _is_absolute_path(value: object) -> bool:
+    """Best-effort absolute-path check across POSIX and Windows path flavors."""
+    text = str(value)
+    # POSIX absolute path.
+    if text.startswith("/"):
+        return True
+    # Windows drive letter (any case) or UNC path.
+    if re.match(r"^[A-Za-z]:[\\/]", text) is not None:
+        return True
+    if text.startswith("\\\\") or text.startswith("//"):
+        return True
+    # pathlib PurePath objects from either flavor.
+    for pure in (PurePosixPath(text), PureWindowsPath(text)):
+        try:
+            if pure.is_absolute():
+                return True
+        except (TypeError, ValueError):
+            continue
+    # Host pathlib.Path (covers the current platform).
+    try:
+        if Path(text).is_absolute():
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
 
 from .data_paths import ensure_data_subdirectory
 
@@ -38,10 +66,10 @@ class FileRegistry:
         Raises:
             FileNotFoundError: if the path does not exist on disk.
         """
-        p = Path(path).expanduser().resolve()
+        p = Path(str(path)).expanduser().resolve()
         if not p.is_file():
             raise FileNotFoundError("File not found")
-        s = Path(store_path) if store_path else p
+        s = Path(str(store_path)) if store_path else p
         existing = self.token_for_path(s)
         if existing is not None:
             return {"token": existing, "display_name": p.name,
@@ -83,7 +111,7 @@ class FileRegistry:
         try:
             record = json.loads(record_path.read_text(encoding="utf-8"))
             path = Path(record["path"])
-            if record["token"] != normalized_token or not (path.is_absolute() or path.as_posix().startswith("/")):
+            if record["token"] != normalized_token or not _is_absolute_path(path):
                 raise ValueError
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
             raise KeyError("Unknown file token") from None
@@ -160,7 +188,7 @@ class FileRegistry:
                     token = str(uuid.UUID(record_path.stem))
                     record = json.loads(record_path.read_text(encoding="utf-8"))
                     path = Path(record["path"])
-                    if record["token"] == token and path.is_absolute():
+                    if record["token"] == token and _is_absolute_path(path):
                         entries[token] = {"token": token, "display_name": path.name}
                 except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
                     continue

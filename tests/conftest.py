@@ -42,6 +42,7 @@ def isolate_app_data(tmp_path, monkeypatch):
 
     monkeypatch.setenv("MUSICBEE_TAGGER_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setenv("APPDATA", str(tmp_path))
 
     import musicbee_tagger_mcp.data_paths as data_paths
