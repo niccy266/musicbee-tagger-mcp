@@ -543,3 +543,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Shell-access security boundary documented in docs/THREAT_MODEL.md.
 - Retained exact expected MCP tool-set check.
 - Full test suite: 171 passed, 30 skipped.
+
+## 2026-10-31 — Issue #10 agent verification
+
+- Re-ran full suite locally against issue-10 source: 171 passed, 30 skipped.
+- Confirmed CI on PR #116 is green across Python 3.11/3.12/3.14 and Windows MCPB.
+- No further code changes required; acceptance criteria already satisfied by commits 415e630 and 2c6f531.
