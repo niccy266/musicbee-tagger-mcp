@@ -233,6 +233,7 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "update_batch_operation",
         "repair_mojibake",
         "identify_acrcloud",
+        "flag_for_review",
     }
 
 

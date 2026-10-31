@@ -3,6 +3,7 @@
 from typing import Any, Callable, Dict, List, Optional
 
 from ..file_registry import FileRegistry, get_registry
+from ..metadata_reader import read_audio_metadata
 from ..playlist import parse_m3u_playlist, translate_audio_path
 
 
@@ -75,6 +76,15 @@ def register_playlist(
             result = registry.register(str(entry_path), store_path=store_p)
             entry = {"line": line_number, **result}
             if job_store is not None and job_id is not None:
+                metadata = {}
+                try:
+                    audio_metadata = read_audio_metadata(str(entry_path))
+                    tags = audio_metadata.get("tags", {}) if isinstance(audio_metadata, dict) else {}
+                    if isinstance(tags, dict):
+                        metadata.update(tags)
+                except Exception:
+                    metadata = {}
+                job_store.add_track(job_id, result["token"], result["display_name"], **metadata)
                 track_result = job_store.add_track(
                     job_id, result["token"], result["display_name"],
                     allow_duplicate=proceed,
@@ -112,6 +122,10 @@ def register_playlist(
     if job_store is not None and job_id is not None:
         try:
             job_store.set_skipped(job_id, len(skipped))
+        except Exception:
+            pass
+        try:
+            job_store.reorder_job(job_id)
         except Exception:
             pass
     return {

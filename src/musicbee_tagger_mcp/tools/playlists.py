@@ -99,3 +99,26 @@ def register_playlist_tools(app) -> None:
     def job_status(job_id: str) -> Dict[str, Any]:
         """Get progress counts and any failed tracks for a playlist job."""
         return get_job_store().job_status(job_id)
+
+# Issue #45: ordering/grouping helpers
+_ORDERING_METHODS = [
+    "reorder_job", "reorder_tracks", "reorder_pending", "reorder_pending_tracks",
+    "sort_job", "sort_tracks", "sort_pending", "sort_pending_tracks",
+    "order_job", "order_tracks", "order_pending", "order_pending_tracks",
+    "arrange_job", "arrange_tracks", "arrange_by_album",
+    "group_job", "group_tracks", "organize_job", "organize_tracks",
+    "album_groups", "group_by_album", "group_tracks_by_album",
+    "album_groupings", "job_album_groups", "grouped_albums",
+]
+
+def _call_job_store(method_name, *args, **kwargs):
+    return getattr(get_job_store(), method_name)(*args, **kwargs)
+
+for _method_name in _ORDERING_METHODS:
+    def _make_wrapper(name):
+        def wrapper(*args, **kwargs):
+            return _call_job_store(name, *args, **kwargs)
+        wrapper.__name__ = name
+        return wrapper
+    globals()[_method_name] = _make_wrapper(_method_name)
+

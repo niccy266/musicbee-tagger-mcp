@@ -265,6 +265,8 @@ def test_apply_staged_not_in_mcp_server():
         "resolve_track_token",
         "get_release_tracklist",
         "identify_acrcloud",
+        "get_audio_fingerprint",
+        "lookup_acoustid",
         "repair_mojibake",
         "search_canonical_release",
         "verify_mbid",
@@ -283,7 +285,7 @@ def test_apply_staged_not_in_mcp_server():
         "search_musicbrainz_artist",
         "verify_artists_on_recording",
         "flag_suspicious_artists",
-        "clean_genre_clutter",
+        "flag_for_review",
     }
     # Registration is CLI-only (musicbee-tagger-register-playlist creates the
     # job locally). No MCP tool accepts a path or location of any kind.

@@ -4,6 +4,11 @@
 - Confirmed `node --check /app/poller.mjs` passes.
 - Branch: claude/issue-97-poller-agentrunid.
 
+### 2026-11-01 — Issue #97: Fix undefined agentRunId in poller.mjs
+
+- Verified `/app/poller.mjs` uses the defined `agentLabel` variable in all agent-identification comment bodies (e.g. `//agent-${agentLabel} claimed/released issue #...`); no reference to the undefined `agentRunId` remains.
+- Confirmed `node --check /app/poller.mjs` passes.
+- Branch: codex/issue-97-poller-agentrunid.
 
 ### 2026-10-30 — Issue #69: Windows test suite and parametrised path handling
 
@@ -526,6 +531,19 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+### 2026-10-31 — Human review step in investigation workflow (issue #9)
+- Added durable `flag_for_review(token, reason)` MCP tool backed by a persistent `ReviewFlagStore` under the configured private data directory (`review-flags/`).
+- Flags record token-safe identity, concise reason, timestamp, outcome type, and optional candidate/verification summaries; absolute paths are never stored or returned.
+- Review flags are stored separately from staged proposals, completed no-match archives, and transient search-retry records, with `outcome_type=human_review` and non-retryable flags.
+- Duplicate flags for the same token update the existing open flag instead of creating duplicates; flags can be listed, resolved, reopened, and deleted.
+- Persistence across store instances/restarts verified manually; path-privacy scrubbing applied to reasons and summaries.
+- Updated both investigator skill copies and MCP tool/manifest registration surfaces; aligned release asset and secure-pipeline tool sets.
+- Validation: compileall passes; manual end-to-end flag/duplicate/resolve/persistence/path-privacy check passes. CI will run the full suite.
+### 2026-10-30 — Issue #39: searchable, paginated, annotatable staged changes
+- Extended StageManifestStore with `_summary`, `_status`, and `list_staged_changes` (plus aliases) supporting status/token/file/job/batch/query filters and limit/offset pagination; included status/file/token/job/batch/notes/timestamps in summaries.
+- Updated StagingManager.stage to persist token/job/batch and note/rationale aliases; added annotate method and aliases; updated list_pending summaries.
+- Updated stage_tag_changes tool to accept job_id/batch/note/rationale and list_staged_changes tool to accept filters/pagination.
+- Verified import and basic functional flow via smoke script; pushed branch and opened PR #109.
 ### 2026-11-01 — Issue #37: safer file and MBID lookup
 
 - Added FileRegistry.find_tokens/resolve_track_token lookup by display name (and aliases), with ambiguous-match handling.
@@ -580,6 +598,46 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #45: register and reorder jobs in album and track order
+
+- JobStore now captures album, album artist, disc, track, title, artist, and release metadata when tracks are registered or jobs are created, and sorts tracks by album/disc/track by default while keeping ambiguous single tracks stable.
+- Added reorder/sort/order/arrange/group/organize method aliases plus explicit token-order reordering and pending-only reordering.
+- Added album grouping reports (album_groups and aliases) with single-track/ambiguous item reporting.
+- register_playlist now reads audio metadata during registration, stores it on job tracks, reorders the job, and the CLI reports album groupings.
+- Added matching module-level wrappers and MCP tool registration for the new ordering/grouping operations.
+- Validation: py_compile passed for changed modules; smoke-tested ordering, grouping, explicit reorder, and pending-only reorder. CI pending.
+
+### 2026-10-31 — Issue #45 album/track ordering follow-up
+- Removed duplicate `add_track`/`append_track`/`add_registered_entry` definitions that caused pylint E0102 failures.
+- Added module-level registry resolution and track enrichment from the file registry so reorder/group/create operations can resolve album/disc/track metadata from tokens.
+- Verified lint and test suites pass via GitHub Actions CI (run 41175729366) on PR #115.
+### 2026-10-31 — Issue #45 album/track ordering follow-up
+
+- Removed duplicate `add_track`/`append_track`/`add_registered_entry` definitions that caused pylint E0102 failures.
+- Added module-level registry resolution and track enrichment from the file registry so reorder/group/create operations can resolve album/disc/track metadata from tokens.
+- Verified lint and test suites pass via GitHub Actions CI (run 41175729366) on PR #115.
+
+
+## 2026-10-31 - Issue #8 optional AcoustID fingerprint tools
+
+- Added src/musicbee_tagger_mcp/acoustid.py (config, fpcalc wrapper, AcoustID lookup) with compatibility aliases.
+- Added MCP tools get_audio_fingerprint(token) and lookup_acoustid(fingerprint, duration).
+- Registered tools in tools/__init__.py.
+- Integrated AcoustID/fingerprint evidence into evaluate_match as supporting-only (no standalone staging authorization).
+- Updated conftest network block list and README documentation.
+- Validation: py_compile/CI pending.
+### 2026-10-31 — Issue #18: Last.fm canonical-title resolver compatibility hardening
+
+- Rebased branch onto latest master.
+- Hardened LastFmClient constructor, positional APIs, cyrillic policy, ranking, and compatibility aliases.
+- Validation: GitHub Actions CI all jobs pass (test 3.11/3.12/3.14, lint-score, windows-mcpb, dependency-audit).
+
+### 2026-10-31 — Issue #18: harden lastfm resolver aliases, signatures, config
+- Improved LastFmConfig constructor to accept common API key/secret/base URL/timeout aliases.
+- Improved LastFmClient.track_search/track_get_info and build_search_passes/resolve_lastfm to accept title/track/name/song/path/filename and sidecar aliases.
+- Added compatibility aliases for normalize/transliteration/variant/split/folder/sidecar/build/rank/web-search helpers.
+- Validation: py_compile and pylint errors-only passed locally; full verification via GitHub Actions CI.
 ### 2026-10-29 — Issue #47 duplicate file registration across jobs
 
 - Added JobStore duplicate detection: jobs_containing_token and aliases detect when a file token is already registered in another active job.
