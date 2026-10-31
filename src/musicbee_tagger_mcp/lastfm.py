@@ -680,7 +680,13 @@ def resolve_lastfm(
             web_fallback = bool(kwargs.pop(_wk)) and web_fallback
     if "web_fallback" in kwargs:
         web_fallback = bool(kwargs.pop("web_fallback"))
-    if should_skip_lastfm(confidence):
+    _threshold = 90.0
+    for _tk in ("threshold", "skip_threshold", "confidence_threshold", "lastfm_skip_confidence_threshold"):
+        if _tk in kwargs and kwargs.get(_tk) is not None:
+            _threshold = kwargs.pop(_tk)
+            break
+    # monkey: store for skip check
+    if should_skip_lastfm(confidence, threshold=_threshold):
         return {
             "skipped": True,
             "reason": "confidence_very_high",
