@@ -50,7 +50,7 @@ def preview_tags(token: str, new_tags: Dict[str, Any]) -> Dict[str, Any]:
         return validation_error
     try:
         path = get_registry().resolve(token)
-    except KeyError:
+    except Exception:
         return make_error(
             E_UNKNOWN_TOKEN,
             "unknown or unregistered token",
@@ -95,7 +95,7 @@ def stage_tag_changes(
         return validation_error
     try:
         entry = get_registry().resolve(token)
-    except KeyError:
+    except Exception:
         return make_error(
             E_UNKNOWN_TOKEN,
             "unknown or unregistered token",
@@ -129,7 +129,10 @@ def stage_tag_changes(
 
 def list_staged_changes() -> List[Dict[str, Any]]:
     """List pending staged changes using path-free summaries."""
-    return get_staging_manager().list_pending()
+    try:
+        return get_staging_manager().list_pending()
+    except Exception:
+        return [make_error(E_STAGING_FAILED, "unable to list staged changes", function="list_staged_changes")]
 
 
 def get_staged_change(stage_id: str) -> Dict[str, Any]:

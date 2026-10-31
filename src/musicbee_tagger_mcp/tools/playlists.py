@@ -13,7 +13,10 @@ from ..job_store import get_job_store
 
 def list_jobs() -> Dict[str, Any]:
     """List available playlist jobs using path-free summaries."""
-    return {"jobs": get_job_store().list_jobs()}
+    try:
+        return {"jobs": get_job_store().list_jobs()}
+    except Exception:
+        return {"error": "Unable to list playlist jobs"}
 
 
 def next_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
@@ -73,8 +76,10 @@ def register_playlist_tools(app) -> None:
     @app.tool()
     def list_jobs() -> Dict[str, Any]:
         """List playlist jobs that still have pending tracks."""
-        return {"jobs": get_job_store().list_jobs()}
-
+        try:
+            return {"jobs": get_job_store().list_jobs()}
+        except Exception:
+            return {"error": "Unable to list playlist jobs"}
     @app.tool()
     def next_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
         """Get the next batch (default 10) of unprocessed tokens for a job."""

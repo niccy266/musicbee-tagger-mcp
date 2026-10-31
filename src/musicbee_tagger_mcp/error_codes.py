@@ -21,13 +21,21 @@ import urllib.parse
 
 
 def redact_paths(text):
-    """Remove anything that looks like a filesystem path from *text*."""
+    """Remove anything that looks like a filesystem path from *text*.
+
+    Handles plain text, URL-encoded payloads, and serialized/escaped Windows
+    paths. Non-string containers are sanitized recursively.
+    """
+    if isinstance(text, dict):
+        return {key: redact_paths(value) for key, value in text.items()}
+    if isinstance(text, (list, tuple, set)):
+        return [redact_paths(value) for value in text]
     if not isinstance(text, str):
         return text
 
     patterns = [
-        re.compile(r"[A-Za-z]:[\\/].*"),
-        re.compile(r"\\\\.*"),
+        re.compile(r"[A-Za-z]:[\/].*", re.DOTALL),
+        re.compile(r"\\\\.*", re.DOTALL),
         re.compile(r"(?<!\S)/\S+$"),
     ]
 
@@ -35,7 +43,7 @@ def redact_paths(text):
     for _ in range(10):
         previous = current
         try:
-            decoded = urllib.parse.unquote(current)
+            decoded = urllib.parse.unquote(current, errors="replace")
         except Exception:
             decoded = current
         current = decoded

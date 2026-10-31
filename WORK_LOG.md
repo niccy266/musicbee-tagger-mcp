@@ -573,3 +573,10 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Confirmed shell-access security boundary documented in docs/THREAT_MODEL.md.
 - Retained exact expected MCP tool-set check.
 - Validation: full suite 171 passed, 30 skipped (CI).
+
+## 2026-10-31 - Issue #10 follow-up hardening (agent)
+
+- Strengthened redact_paths for URL-decoded and serialized Windows paths and recursive containers.
+- Hardened registry resolution and list_staged_changes/list_jobs error paths.
+- Retained exact MCP tool-set check and documented fixture/security boundaries.
+- Validation: compileall passed; CI pending.
