@@ -540,3 +540,7 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added confidence/web-fallback kwarg aliases and extra result keys (title/artist/url/canonical/lastfm dict).
 - Added folder evidence score alias, query aliases for track_search, and metadata_reader normalize aliases.
 - Validation: 171 passed, 30 skipped (pytest); imports verified.
+
+### 2026-10-31 — Issue #18: threshold kwarg support
+- Added confidence threshold override support in resolve_lastfm.
+- Validation: 171 passed, 30 skipped.
