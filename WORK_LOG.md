@@ -522,3 +522,11 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+### 2026-10-30 — Issue #7: Parse filename clues variants, subtitles, track numbers
+- Rewrote filename_parser bracket extraction to preserve balanced/nested/mixed bracket text in candidates while still returning bracket clues separately.
+- Preserved meaningful numeric suffixes such as `_2020` while still stripping short track-number suffixes.
+- Avoided treating hyphenated titles (`99-Luftballons`, `7-Seconds`) as leading track numbers.
+- Sanitized invisible Unicode format characters throughout parser outputs.
+- Retained both Artist/Title orderings and multi-segment subtitle joins.
+- Updated and added regression tests in tests/test_investigator_tools.py.
