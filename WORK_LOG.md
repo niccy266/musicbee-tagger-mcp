@@ -522,3 +522,13 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - job_status exposes candidate metadata and manual override audit entries.
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
+
+## 2026-10-31 - Issue #10 release-readiness gaps
+
+- Hardened path redaction in error_codes.py (redact_paths) and applied to MCP error paths.
+- Removed BOM from tests/test_acrcloud.py.
+- Added audio fixture protection fixture and docs/AUDIO_FIXTURES.md.
+- Documented shell-access security boundary in docs/THREAT_MODEL.md.
+- Verified package import isolation (server does not import physical write modules).
+- MusicBrainz User-Agent already uses public email contact.
+- Retained exact expected tool-set check.
