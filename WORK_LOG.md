@@ -743,3 +743,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added scripts/commands.py with run_commands validation, execution, and gh_issue_comment wrapper.
 - Registered run_commands and gh_issue_comment in openrouter agent TOOLS and LOCAL_TOOLS.
 - Added gh helper skills (.agents and release copies).
+### 2026-10-31 — Issue #39: searchable, paginated, annotatable staged changes (follow-up)
+- Fixed stage_tag_changes tool to persist token/job/batch/note/rationale and expose annotate/audit tools.
+- Added annotate_staged_change tool and aliases; annotate now increments revision and redacts paths.
+- Made StagingManager.stage accept manual override parameters (fixing latent NameError).
+- Added status/file/token/job/batch/query filters and pagination aliases to StageManifestStore.list_staged_changes.
+- Updated CI contract/release manifest expected tool names for annotate_staged_change.

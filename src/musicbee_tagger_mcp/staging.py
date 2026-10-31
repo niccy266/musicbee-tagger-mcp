@@ -137,6 +137,11 @@ class StagingManager:
         batch: Optional[str] = None,
         note: Optional[str] = None,
         rationale: Optional[str] = None,
+        manual_override: bool = False,
+        manual_override_justification: Optional[str] = None,
+        override_justification: Optional[str] = None,
+        override_reason: Optional[str] = None,
+        justification: Optional[str] = None,
     ) -> dict:
         """Write a pending change manifest and return a stage_id + summary.
 
@@ -286,6 +291,22 @@ class StagingManager:
     ) -> dict:
         """Revise a pending proposal and recompute its diff; never writes audio."""
         reason = _validate_reason(reason)
+        if not notes and note:
+            notes = note
+        if rationale:
+            notes = (str(notes).strip() + ", " + str(rationale).strip()).strip() if notes else str(rationale).strip()
+        if notes is not None:
+            notes = notes if isinstance(notes, str) else ("" if notes is None else str(notes))
+            stripped_notes = notes.strip()
+            if stripped_notes:
+                if len(stripped_notes) > 2000:
+                    raise ValueError("note must be at most 2000 characters.")
+                without_urls = __import__("re").sub(r"https?://\\S+", "", stripped_notes)
+                if _LOCAL_PATH.search(without_urls):
+                    raise ValueError("note must not contain local filesystem paths.")
+            else:
+                notes = None
+
         if (
             isinstance(expected_revision, bool)
             or not isinstance(expected_revision, int)
@@ -351,6 +372,9 @@ class StagingManager:
             and not remove_fields
             and mb_recording_id is None
             and mb_release_id is None
+            and notes is None
+            and note is None
+            and rationale is None
         ):
             raise ValueError("Provide tag fields, fields to remove, or a MusicBrainz ID to amend.")
 
@@ -393,6 +417,12 @@ class StagingManager:
             if match_confidence is not None:
                 manifest["match_confidence"] = match_confidence
                 amended_fields.append("match_confidence")
+            if notes:
+                manifest["notes"] = notes
+                manifest["note"] = notes
+                manifest["rationale"] = notes
+                amended_fields.append("notes")
+
             manifest["proposed_tags"] = proposed
             manifest["diff"] = diff
             manifest["revision"] = current_revision + 1
@@ -528,12 +558,16 @@ def annotate_staged_change(manager, stage_id, note=None, rationale=None, notes=N
             current_revision = manifest.get("revision", 1)
             if expected_revision != current_revision:
                 raise ValueError("Stage revision changed; read the stage again. Current revision is %d." % current_revision)
+        current_revision = manifest.get("revision", 1)
+        if expected_revision is not None and expected_revision != current_revision:
+            raise ValueError("Stage revision changed; read the stage again. Current revision is %d." % current_revision)
         now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
         manifest["notes"] = notes
         manifest["note"] = notes
         manifest["rationale"] = notes
+        manifest["revision"] = current_revision + 1
         manifest["updated_at"] = now
-        manifest.setdefault("history", []).append({"action": "annotated", "revision": manifest.get("revision", 1), "at": now, "reason": reason or notes})
+        manifest.setdefault("history", []).append({"action": "annotated", "revision": manifest["revision"], "at": now, "reason": reason or notes})
 
     manifest = manager.store.mutate(stage_id, update)
     return _path_free({"stage_id": manifest["stage_id"], "display_name": manifest["display_name"], "status": manager._status(manifest), "revision": manifest.get("revision", 1), "notes": manifest.get("notes", "")})

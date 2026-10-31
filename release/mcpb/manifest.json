@@ -75,6 +75,10 @@
       "description": "Soft-withdraw a pending proposal with a reason; withdrawn stages cannot be applied."
     },
     {
+      "name": "annotate_staged_change",
+      "description": "Attach an optional note or rationale to a staged change."
+    },
+    {
       "name": "next_batch",
       "description": "Claim the next batch of work from a locally registered playlist job."
     },

@@ -83,6 +83,11 @@ def stage_tag_changes(
     batch: Optional[str] = None,
     note: Optional[str] = None,
     rationale: Optional[str] = None,
+    manual_override: bool = False,
+    manual_override_justification: Optional[str] = None,
+    override_justification: Optional[str] = None,
+    override_reason: Optional[str] = None,
+    justification: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
@@ -112,6 +117,11 @@ def stage_tag_changes(
             match_source=match_source,
             match_confidence=match_confidence,
             notes=notes,
+            token=token,
+            job_id=job_id,
+            batch=batch,
+            note=note,
+            rationale=rationale,
             manual_override=manual_override,
             manual_override_justification=manual_override_justification,
             override_justification=override_justification,
@@ -127,8 +137,8 @@ def stage_tag_changes(
         )
 
 
-def list_staged_changes(status=None, token=None, file=None, file_identity=None, display_name=None, job_id=None, batch=None, query=None, search=None, text=None, limit=100, offset=0):
-    return get_staging_manager().list_staged_changes(status=status, token=token, file=file, file_identity=file_identity, display_name=display_name, job_id=job_id, batch=batch, query=query, search=search, text=text, limit=limit, offset=offset)
+def list_staged_changes(**kwargs):
+    return get_staging_manager().list_staged_changes(**kwargs)
 
 
 def get_staged_change(stage_id: str) -> Dict[str, Any]:
@@ -267,4 +277,29 @@ def register_tag_tools(app) -> None:
     app.tool()(get_staged_change)
     app.tool()(amend_staged_changes)
     app.tool()(withdraw_staged_change)
+    app.tool()(annotate_staged_change)
     app.tool()(audit_staged_changes)
+
+
+def annotate_staged_change(stage_id, **kwargs):
+    try:
+        return get_staging_manager().annotate(stage_id, **kwargs)
+    except (FileNotFoundError, ValueError) as error:
+        return error_from_exception(error, function='annotate_staged_change')
+    except Exception:
+        return make_error(E_STAGE_CONFLICT, 'unable to annotate staged change', function='annotate_staged_change')
+
+def audit_staged_changes(**kwargs):
+    try:
+        report = get_staging_manager().audit_staged_changes(**kwargs)
+    except Exception:
+        return make_error(E_STAGING_FAILED, 'unable to audit staged changes', function='audit_staged_changes')
+    if hasattr(report, "_report"):
+        return dict(report._report)
+    if isinstance(report, dict):
+        return dict(report)
+    try:
+        return {"flagged": list(report), "stages": list(report)}
+    except Exception:
+        return {"flagged": [], "stages": []}
+
