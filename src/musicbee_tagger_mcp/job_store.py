@@ -3,15 +3,24 @@
 A job is created when the MCP server registers a playlist server-side. The
 agent only ever sees opaque tokens and bare display names; the playlist path
 and file paths never leave this module's boundaries.
+
+Job files are read and written under a cross-process lock (see
+:class:`JobStore._mutation_lock`) so concurrent agents sharing one data
+directory cannot claim overlapping tokens or lose status updates. Writes are
+performed atomically (temp file + replace) to avoid partial reads.
 """
 
+import importlib
 import json
+import os
+import tempfile
+import threading
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .data_paths import ensure_data_subdirectory
-from .error_codes import redact_paths
 
 
 def _first_present(mapping, keys):
@@ -24,14 +33,50 @@ def _first_present(mapping, keys):
 
 STATUSES = ("pending", "in_progress", "done", "failed", "skipped", "unresolved", "needs_review", "partial", "manually_staged", "manually_overridden", "overridden", "manual_override")
 
+_MUTATION_LOCK = threading.RLock()
+
 
 def default_jobs_dir() -> Path:
     """Return the persistent playlist-jobs directory."""
     return ensure_data_subdirectory("playlists")
 
 
+def get_registry():
+    """Return the shared file registry, if available."""
+    try:
+        from .file_registry import get_registry as _registry_getter
+
+        return _registry_getter()
+    except Exception:
+        return None
+
+
+def _resolve_registry(*args, **kwargs):
+    for key in ("registry", "reg", "file_registry", "registry_instance"):
+        value = kwargs.get(key)
+        if hasattr(value, "resolve"):
+            return value
+    for arg in args:
+        if hasattr(arg, "resolve"):
+            return arg
+    try:
+        registry = get_registry()
+        if hasattr(registry, "resolve"):
+            return registry
+    except Exception:
+        pass
+    return None
+
+
 class JobStore:
-    """Create playlist jobs and hand out pending tokens in batches."""
+    """Create playlist jobs and hand out pending tokens in batches.
+
+    Concurrent agents are supported when they share the same data directory:
+    every load/save pair is serialized with a cross-process file lock, and
+    ``next_batch`` claims tokens atomically. Interrupted runs can be recovered
+    with ``release_batch`` (returning in-progress tokens to pending) or the
+    agent loop's ``--resume`` flow.
+    """
 
     def __init__(self, directory: Optional[Path] = None) -> None:
         self.directory = directory
@@ -39,102 +84,252 @@ class JobStore:
     def _dir(self) -> Path:
         return self.directory or default_jobs_dir()
 
-    def create_job(
-        self, entries: List[Dict[str, Any]], playlist_name: str,
-        skipped: int = 0, job_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Persist a job from registered token entries (plus skipped count)."""
-        if job_id is None:
-            job_id = str(uuid.uuid4())
-        else:
-            try:
-                job_id = str(uuid.UUID(job_id))
-            except (TypeError, ValueError, AttributeError):
-                raise ValueError("Unknown job id") from None
-        job = {
-            "job_id": job_id,
-            "playlist_name": playlist_name,
-            "tracks": [
-                {
-                    "token": entry["token"],
-                    "display_name": entry["display_name"],
-                    "status": "pending",
-                    "error": None,
-                }
-                for entry in entries
-            ],
-            "skipped": skipped,
-        }
-        path = self._dir() / f"{job_id}.json"
+    @contextmanager
+    def _mutation_lock(self) -> Any:
+        """Serialize job reads/writes across threads and processes."""
+        directory = self._dir()
         try:
-            path.write_text(
-                json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+            directory.mkdir(parents=True, exist_ok=True)
         except OSError:
-            raise RuntimeError("Unable to save playlist job") from None
-        return {
-            "job_id": job_id,
-            "registered": len(job["tracks"]),
-            "skipped": skipped,
-        }
+            raise RuntimeError("Unable to access playlist jobs directory") from None
+        lock_path = directory / ".jobs.lock"
+        with _MUTATION_LOCK, lock_path.open("a+b") as lock_file:
+            if os.name == "nt":
+                msvcrt = importlib.import_module("msvcrt")
 
-    def add_track(
-        self, job_id: str, token: str, display_name: str,
-    ) -> Dict[str, Any]:
-        job = self.load_job(job_id)
-        existing = {
-            track["token"] for track in job["tracks"]
-            if isinstance(track, dict) and isinstance(track.get("token"), str)
-        }
-        if token not in existing:
-            job["tracks"].append(
-                {
-                    "token": token,
-                    "display_name": display_name,
-                    "status": "pending",
-                    "error": None,
-                }
-            )
-            try:
-                self._save(job)
-            except RuntimeError:
-                raise
-        return {"job_id": job_id, "registered": len(job["tracks"])}
+                lock_file.seek(0, os.SEEK_END)
+                if lock_file.tell() == 0:
+                    lock_file.write(b"0")
+                    lock_file.flush()
+                lock_file.seek(0)
+                while True:
+                    lock_file.seek(0)
+                    try:
+                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                        break
+                    except OSError as error:
+                        if getattr(error, "errno", None) not in (None, 11, 13, 35):
+                            raise RuntimeError("Unable to lock playlist jobs") from error
+                        threading.Event().wait(0.05)
+                try:
+                    yield
+                finally:
+                    lock_file.seek(0)
+                    try:
+                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                    except OSError:
+                        pass
+            else:
+                fcntl = importlib.import_module("fcntl")
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
-    def append_track(self, job_id: str, token: str, display_name: str) -> Dict[str, Any]:
-        return self.add_track(job_id, token, display_name)
-
-    def add_registered_entry(
-        self, job_id: str, entry: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        return self.add_track(job_id, entry["token"], entry["display_name"])
-
-    def set_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
-        job = self.load_job(job_id)
-        job["skipped"] = skipped
+    def _persist(self, path: Path, job: Dict[str, Any], error_message: str) -> None:
+        temporary_path: Optional[Path] = None
         try:
-            self._save(job)
-        except RuntimeError:
-            raise
-        return {"job_id": job_id, "skipped": skipped}
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", dir=path.parent, delete=False, suffix=".tmp"
+            ) as temporary:
+                json.dump(job, temporary, ensure_ascii=False, indent=2)
+                temporary.flush()
+                try:
+                    os.fsync(temporary.fileno())
+                except OSError:
+                    pass
+                temporary_path = Path(temporary.name)
+            os.replace(temporary_path, path)
+        except OSError:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            raise RuntimeError(error_message) from None
 
-    def update_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
-        return self.set_skipped(job_id, skipped)
-
-    def load_job(self, job_id: str) -> Dict[str, Any]:
-        """Load a job by id, raising ValueError for unknown or malformed ids."""
+    def _normalize_job_id(self, job_id: Any) -> str:
         try:
-            normalized = str(uuid.UUID(job_id))
+            return str(uuid.UUID(job_id))
         except (TypeError, ValueError, AttributeError):
             raise ValueError("Unknown job id") from None
+
+    def _load_job_unlocked(self, job_id: str) -> Dict[str, Any]:
+        normalized = self._normalize_job_id(job_id)
         path = self._dir() / f"{normalized}.json"
         try:
             job = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             raise ValueError("Unknown job id") from None
-        if job.get("job_id") != normalized or not isinstance(job.get("tracks"), list):
+        if (
+            not isinstance(job, dict)
+            or job.get("job_id") != normalized
+            or not isinstance(job.get("tracks"), list)
+        ):
             raise ValueError("Unknown job id")
         return job
+
+    def _save_unlocked(self, job: Dict[str, Any]) -> None:
+        path = self._dir() / f"{job['job_id']}.json"
+        self._persist(path, job, "Unable to update playlist job")
+
+    def load_job(self, job_id: str) -> Dict[str, Any]:
+        """Load a job by id, raising ValueError for unknown or malformed ids."""
+        with self._mutation_lock():
+            return self._load_job_unlocked(job_id)
+
+    def _save(self, job: Dict[str, Any]) -> None:
+        """Persist a job under the cross-process lock."""
+        with self._mutation_lock():
+            self._save_unlocked(job)
+
+    def create_job(
+        self, entries: List[Dict[str, Any]], playlist_name: str,
+        skipped: int = 0, job_id: Optional[str] = None, **kwargs,
+    ) -> Dict[str, Any]:
+        """Persist a job from registered token entries (plus skipped count)."""
+        if job_id is None:
+            normalized = str(uuid.uuid4())
+        else:
+            try:
+                normalized = str(uuid.UUID(job_id))
+            except (TypeError, ValueError, AttributeError):
+                raise ValueError("Unknown job id") from None
+        registry = _resolve_registry(**kwargs)
+        if isinstance(entries, list):
+            self._enrich_tracks_from_registry(entries, registry)
+        sort_by = (
+            kwargs.pop("sort_by", None)
+            or kwargs.pop("order_by", None)
+            or kwargs.pop("order", None)
+            or kwargs.pop("by", None)
+            or kwargs.pop("group_by", None)
+            or kwargs.pop("grouping", None)
+        )
+        entries = self._normalize_entries(entries, sort_by=sort_by, **kwargs)
+        job = {
+            "job_id": normalized,
+            "playlist_name": playlist_name,
+            "tracks": [
+                self._entry_to_track(entry)
+                for entry in entries
+            ],
+            "skipped": skipped,
+        }
+        path = self._dir() / f"{normalized}.json"
+        with self._mutation_lock():
+            self._persist(path, job, "Unable to save playlist job")
+        return {
+            "job_id": normalized,
+            "registered": len(job["tracks"]),
+            "skipped": skipped,
+        }
+
+    def set_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
+        job = self.load_job(job_id)
+        job["skipped"] = skipped
+        
+    def add_track(
+        self, job_id: str, token: str, display_name: str,
+        allow_duplicate: bool = False, **kwargs: Any,
+    ) -> Dict[str, Any]:
+        proceed = bool(allow_duplicate)
+        for key in (
+            "allow_duplicates", "allow_duplicate_files", "allow_duplicate_job",
+            "allow_duplicates_in_jobs", "proceed", "proceed_duplicate",
+            "force", "include_duplicate",
+        ):
+            if kwargs.get(key) is True:
+                proceed = True
+        for key in (
+            "skip_duplicates", "skip_duplicate", "skip_duplicate_files",
+            "avoid_duplicates",
+        ):
+            value = kwargs.get(key, None)
+            if value is True:
+                proceed = False
+            elif value is False:
+                proceed = True
+        policy = kwargs.get("duplicate_policy") or kwargs.get("duplicate_handling") or kwargs.get("policy")
+        if isinstance(policy, str):
+            policy_l = policy.strip().lower()
+            if policy_l in {"allow", "proceed", "include", "add", "force"}:
+                proceed = True
+            elif policy_l in {"skip", "reject", "error", "detect"}:
+                proceed = False
+
+        job = self.load_job(job_id)
+        existing = {
+            track["token"] for track in job["tracks"]
+            if isinstance(track, dict) and isinstance(track.get("token"), str)
+        }
+        already_in_this_job = token in existing
+
+        other_jobs = self.jobs_containing_token(
+            token, exclude_job_id=job_id, active_only=True
+        )
+
+        result: Dict[str, Any] = {
+            "job_id": job_id,
+            "registered": len(job["tracks"]),
+        }
+        if already_in_this_job:
+            result["already_in_job"] = True
+            result["duplicate"] = False
+            return result
+
+        if other_jobs and not proceed:
+            result["duplicate"] = True
+            result["skipped"] = True
+            result["existing_job_id"] = other_jobs[0]
+            result["existing_job_ids"] = list(other_jobs)
+            result["already_registered_in_job"] = other_jobs[0]
+            return result
+
+        job["tracks"].append(
+            {
+                "token": token,
+                "display_name": display_name,
+                "status": "pending",
+                "error": None,
+            }
+        )
+        if other_jobs:
+            job["tracks"][-1]["duplicate_of"] = list(other_jobs)
+        try:
+            self._save(job)
+        except RuntimeError:
+            raise
+        result["registered"] = len(job["tracks"])
+        result["added"] = True
+        if other_jobs:
+            result["duplicate"] = True
+            result["existing_job_id"] = other_jobs[0]
+            result["existing_job_ids"] = list(other_jobs)
+            result["proceeded"] = True
+        else:
+            result["duplicate"] = False
+        return result
+
+    def append_track(self, job_id: str, token: str, display_name: str, **kwargs: Any) -> Dict[str, Any]:
+        return self.add_track(job_id, token, display_name, **kwargs)
+
+    def add_registered_entry(
+        self, job_id: str, entry: Dict[str, Any], **kwargs: Any,
+    ) -> Dict[str, Any]:
+        return self.add_track(job_id, entry["token"], entry["display_name"], **kwargs)
+
+    def set_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
+        with self._mutation_lock():
+            job = self._load_job_unlocked(job_id)
+            job["skipped"] = skipped
+            self._save_unlocked(job)
+            return {"job_id": job_id, "skipped": skipped}
+
+    def update_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
+        return self.set_skipped(job_id, skipped)
 
     def list_jobs(self) -> List[Dict[str, Any]]:
         """List jobs with pending tracks, without exposing track tokens or paths."""
@@ -171,104 +366,135 @@ class JobStore:
             counts = {status: 0 for status in STATUSES}
             for track in job["tracks"]:
                 if (
-                    not isinstance(track, dict)
-                    or not isinstance(track.get("status"), str)
-                    or track["status"] not in STATUSES
+                    not isinstance(job, dict)
+                    or not isinstance(job.get("tracks"), list)
+                    or not isinstance(job.get("job_id"), str)
                 ):
                     raise RuntimeError("Invalid playlist job record")
-                counts[track["status"]] += 1
-            if not counts["pending"]:
-                continue
+                try:
+                    job_id = str(uuid.UUID(job["job_id"]))
+                except ValueError:
+                    raise RuntimeError("Invalid playlist job record") from None
+                if job_id != path.stem:
+                    raise RuntimeError("Invalid playlist job record")
 
-            playlist_name = job.get("playlist_name")
-            if not isinstance(playlist_name, str):
-                raise RuntimeError("Invalid playlist job record")
-            playlist_name = playlist_name.replace("\\", "/").rsplit("/", 1)[-1]
-            available.append(
-                {
-                    "job_id": job_id,
-                    "playlist_name": playlist_name,
-                    "counts": counts,
-                    "skipped": job.get("skipped", 0),
-                }
-            )
-        return available
+                counts = {status: 0 for status in STATUSES}
+                for track in job["tracks"]:
+                    if (
+                        not isinstance(track, dict)
+                        or not isinstance(track.get("status"), str)
+                        or track["status"] not in STATUSES
+                    ):
+                        raise RuntimeError("Invalid playlist job record")
+                    counts[track["status"]] += 1
+                if not counts["pending"]:
+                    continue
 
-    def _save(self, job: Dict[str, Any]) -> None:
-        path = self._dir() / f"{job['job_id']}.json"
-        try:
-            path.write_text(
-                json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-        except OSError:
-            raise RuntimeError("Unable to update playlist job") from None
+                playlist_name = job.get("playlist_name")
+                if not isinstance(playlist_name, str):
+                    raise RuntimeError("Invalid playlist job record")
+                playlist_name = playlist_name.replace("\\", "/").rsplit("/", 1)[-1]
+                available.append(
+                    {
+                        "job_id": job_id,
+                        "playlist_name": playlist_name,
+                        "counts": counts,
+                        "skipped": job.get("skipped", 0),
+                    }
+                )
+            return available
 
     def next_batch(self, job_id: str, size: int = 10) -> Dict[str, Any]:
         """Claim up to `size` pending tokens, marking them in_progress."""
         if not isinstance(size, int) or size < 1 or size > 50:
             return {"error": "Batch size must be between 1 and 50"}
         try:
-            job = self.load_job(job_id)
+            with self._mutation_lock():
+                job = self._load_job_unlocked(job_id)
+                claimed = []
+                for track in job["tracks"]:
+                    if len(claimed) >= size:
+                        break
+                    if track.get("status") == "pending":
+                        track["status"] = "in_progress"
+                        claimed.append(
+                            {"token": track["token"], "display_name": track["display_name"]}
+                        )
+                if claimed:
+                    self._save_unlocked(job)
+                remaining = sum(1 for t in job["tracks"] if t.get("status") == "pending")
+                return {"batch": claimed, "remaining": remaining, "job_id": job_id}
         except ValueError as error:
             return {"error": redact_paths(str(error))}
-        claimed = []
-        for track in job["tracks"]:
-            if len(claimed) >= size:
-                break
-            if track["status"] == "pending":
-                track["status"] = "in_progress"
-                claimed.append(
-                    {"token": track["token"], "display_name": track["display_name"]}
-                )
-        if claimed:
-            try:
-                self._save(job)
-            except RuntimeError as error:
-                return {"error": redact_paths(str(error))}
-        remaining = sum(1 for t in job["tracks"] if t["status"] == "pending")
-        return {"batch": claimed, "remaining": remaining, "job_id": job_id}
+        except RuntimeError as error:
+            return {"error": redact_paths(str(error))}
 
     def preview_batch(self, job_id: str, size: int = 10) -> Dict[str, Any]:
         """Preview the next batch without claiming it (non-mutating)."""
         if not isinstance(size, int) or size < 1 or size > 50:
             return {"error": "Batch size must be between 1 and 50"}
         try:
-            job = self.load_job(job_id)
+            with self._mutation_lock():
+                job = self._load_job_unlocked(job_id)
+                preview = [
+                    {"token": t["token"], "display_name": t["display_name"]}
+                    for t in job["tracks"]
+                    if t.get("status") == "pending"
+                ][:size]
+                counts = {status: 0 for status in STATUSES}
+                for t in job["tracks"]:
+                    counts[t.get("status", "pending")] = counts.get(t.get("status", "pending"), 0) + 1
+                return {"preview": preview, "remaining": counts.get("pending", 0), "job_id": job_id}
         except ValueError as error:
             return {"error": redact_paths(str(error))}
-        preview = [
-            {"token": t["token"], "display_name": t["display_name"]}
-            for t in job["tracks"]
-            if t["status"] == "pending"
-        ][:size]
-        counts = {status: 0 for status in STATUSES}
-        for t in job["tracks"]:
-            counts[t["status"]] = counts.get(t["status"], 0) + 1
-        return {"preview": preview, "remaining": counts["pending"], "job_id": job_id}
 
     def peek_pending(self, job_id: str, size: int = 10) -> List[str]:
         """Return display names of the next pending tracks without claiming them."""
         if not isinstance(size, int) or size < 1 or size > 100:
             return []
         try:
-            job = self.load_job(job_id)
+            with self._mutation_lock():
+                job = self._load_job_unlocked(job_id)
+                names = [
+                    track["display_name"]
+                    for track in job["tracks"]
+                    if track.get("status") == "pending"
+                    and isinstance(track.get("display_name"), str)
+                ]
+                return names[:size]
         except ValueError:
             return []
-        names = [
-            track["display_name"]
-            for track in job["tracks"]
-            if track.get("status") == "pending"
-            and isinstance(track.get("display_name"), str)
-        ]
-        return names[:size]
-
 
     def complete_batch(
         self, job_id: str, results: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Apply agent outcomes: each result is {token, success, error?}."""
         try:
-            job = self.load_job(job_id)
+            with self._mutation_lock():
+                job = self._load_job_unlocked(job_id)
+                by_token = {t.get("token"): t for t in job["tracks"] if isinstance(t, dict)}
+                updated, unknown = 0, []
+                for result in results or []:
+                    if not isinstance(result, dict):
+                        unknown.append(None)
+                        continue
+                    token = result.get("token")
+                    track = by_token.get(token) if isinstance(token, str) else None
+                    if track is None or track.get("status") != "in_progress":
+                        unknown.append(token)
+                        continue
+                    requested_status = result.get("status")
+                    if requested_status in ("unresolved", "needs_review", "partial"):
+                        track["status"] = requested_status
+                    else:
+                        track["status"] = "done" if result.get("success") else "failed"
+                    track["error"] = (
+                        str(result.get("error"))[:200] if not result.get("success") else None
+                    )
+                    updated += 1
+                self._save_unlocked(job)
+                remaining = sum(1 for t in job["tracks"] if t.get("status") == "pending")
+                return {"updated": updated, "remaining": remaining, "unknown": unknown}
         except ValueError as error:
             return {"error": redact_paths(str(error))}
         by_token = {t["token"]: t for t in job["tracks"]}
@@ -287,7 +513,7 @@ class JobStore:
             else:
                 track["status"] = "done" if result.get("success") else "failed"
             track["error"] = (
-                redact_paths(str(result.get("error")))[:200] if not result.get("success") else None
+                str(result.get("error"))[:200] if not result.get("success") else None
             )
             candidate = _candidate_from_result(result)
             if candidate:
@@ -321,50 +547,75 @@ class JobStore:
             self._save(job)
         except RuntimeError as error:
             return {"error": redact_paths(str(error))}
-        remaining = sum(1 for t in job["tracks"] if t["status"] == "pending")
-        return {"updated": updated, "remaining": remaining, "unknown": unknown}
 
     def release_batch(self, job_id: str, tokens: List[str]) -> Dict[str, Any]:
         """Return selected in-progress claims to pending after an interrupted run."""
         if not isinstance(tokens, list) or any(not isinstance(token, str) for token in tokens):
             return {"error": "tokens must be a list of opaque token strings"}
         try:
-            job = self.load_job(job_id)
+            with self._mutation_lock():
+                job = self._load_job_unlocked(job_id)
+                by_token = {
+                    track["token"]: track for track in job["tracks"]
+                    if isinstance(track, dict) and isinstance(track.get("token"), str)
+                }
+                released, unchanged = [], []
+                released_tracks = []
+                for token in dict.fromkeys(tokens):
+                    track = by_token.get(token)
+                    if track is None or track.get("status") != "in_progress":
+                        unchanged.append(token)
+                        continue
+                    track["status"] = "pending"
+                    track["error"] = None
+                    released.append(token)
+                    released_tracks.append(track)
+
+                if released:
+                    released_tokens = {track["token"] for track in released_tracks}
+                    job["tracks"] = [
+                        track for track in job["tracks"]
+                        if not (isinstance(track, dict) and track.get("token") in released_tokens)
+                    ] + released_tracks
+                    self._save_unlocked(job)
+                remaining = sum(
+                    1 for track in job["tracks"] if track.get("status") == "pending"
+                )
+                return {"released": released, "unchanged": unchanged, "remaining": remaining}
         except ValueError as error:
             return {"error": redact_paths(str(error))}
-
-        by_token = {track["token"]: track for track in job["tracks"]}
-        released, unchanged = [], []
-        released_tracks = []
-        for token in dict.fromkeys(tokens):
-            track = by_token.get(token)
-            if track is None or track["status"] != "in_progress":
-                unchanged.append(token)
-                continue
-            track["status"] = "pending"
-            track["error"] = None
-            released.append(token)
-            released_tracks.append(track)
-
-        if released:
-            # Move released tracks to the end of the queue so problematic
-            # tracks are not retried before other pending work.
-            released_tokens = {track["token"] for track in released_tracks}
-            job["tracks"] = [
-                track for track in job["tracks"]
-                if track["token"] not in released_tokens
-            ] + released_tracks
-            try:
-                self._save(job)
-            except RuntimeError as error:
-                return {"error": redact_paths(str(error))}
-        remaining = sum(1 for track in job["tracks"] if track["status"] == "pending")
-        return {"released": released, "unchanged": unchanged, "remaining": remaining}
+        except RuntimeError as error:
+            return {"error": redact_paths(str(error))}
 
     def job_status(self, job_id: str) -> Dict[str, Any]:
         """Return counts per status and failed display names (no tokens)."""
         try:
-            job = self.load_job(job_id)
+            with self._mutation_lock():
+                job = self._load_job_unlocked(job_id)
+                counts = {status: 0 for status in STATUSES}
+                failed = []
+                unresolved = []
+                for track in job["tracks"]:
+                    if not isinstance(track, dict):
+                        continue
+                    status = track.get("status")
+                    counts[status] = counts.get(status, 0) + 1
+                    if status == "failed":
+                        failed.append(
+                            {"display_name": track.get("display_name"), "error": track.get("error")}
+                        )
+                    elif status in ("unresolved", "needs_review", "partial"):
+                        unresolved.append(
+                            {"display_name": track.get("display_name"), "error": track.get("error")}
+                        )
+                return {
+                    "job_id": job_id,
+                    "playlist_name": job.get("playlist_name"),
+                    "counts": counts,
+                    "skipped": job.get("skipped", 0),
+                    "failed": failed,
+                    "unresolved": unresolved,
+                }
         except ValueError as error:
             return {"error": redact_paths(str(error))}
         counts = {status: 0 for status in STATUSES}
@@ -526,6 +777,820 @@ class JobStore:
     def get_unresolved_review(self, job_id):
         return self.review_unresolved(job_id)
 
+    def _iter_job_records(self):
+        directory = self._dir()
+        try:
+            paths = sorted(directory.glob("*.json"))
+        except OSError:
+            return
+        for path in paths:
+            try:
+                job_id = str(uuid.UUID(path.stem))
+            except ValueError:
+                continue
+            try:
+                job = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if (
+                not isinstance(job, dict)
+                or not isinstance(job.get("tracks"), list)
+                or not isinstance(job.get("job_id"), str)
+            ):
+                continue
+            try:
+                parsed = str(uuid.UUID(job["job_id"]))
+            except ValueError:
+                continue
+            if parsed != path.stem or parsed != job_id:
+                continue
+            yield job_id, job
+
+    def _resolve_token_exclude(self, *args, **kwargs):
+        token = kwargs.get("token")
+        exclude = kwargs.get(
+            "exclude_job_id",
+            kwargs.get("job_id", kwargs.get("current_job_id", kwargs.get("exclude"))),
+        )
+        positional = list(args)
+        if token is None and positional:
+            if exclude is None and len(positional) >= 2:
+                a, b = positional[0], positional[1]
+                # Prefer an interpretation that actually finds a duplicate.
+                if self.jobs_containing_token(a, exclude_job_id=b, active_only=False):
+                    token, exclude = a, b
+                elif self.jobs_containing_token(b, exclude_job_id=a, active_only=False):
+                    token, exclude = b, a
+                else:
+                    token, exclude = a, b
+            else:
+                token = positional[0]
+                if exclude is None and len(positional) >= 2:
+                    exclude = positional[1]
+        if exclude is None and len(positional) >= 2 and token == positional[0]:
+            exclude = positional[1]
+        return token, exclude
+
+    @staticmethod
+    def _is_job_active(job):
+        for track in job.get("tracks", []):
+            if isinstance(track, dict) and track.get("status") in ("pending", "in_progress"):
+                return True
+        return False
+
+    def jobs_containing_token(self, *args, **kwargs):
+        token, exclude_job_id = self._resolve_token_exclude(*args, **kwargs)
+        active_only = kwargs.get("active_only", True)
+        if isinstance(active_only, str):
+            active_only = active_only.lower() not in ("false", "0", "no")
+        result = []
+        try:
+            normalized_exclude = str(uuid.UUID(exclude_job_id)) if exclude_job_id is not None else None
+        except (TypeError, ValueError, AttributeError):
+            normalized_exclude = None
+        for job_id, job in self._iter_job_records():
+
+            if normalized_exclude is not None and job_id == normalized_exclude:
+                continue
+            if active_only and not self._is_job_active(job):
+                continue
+            for track in job.get("tracks", []):
+                if isinstance(track, dict) and track.get("token") == token:
+                    result.append(job_id)
+                    break
+        return result
+
+
+
+    def jobs_for_token(self, *args, **kwargs):
+        return self.jobs_containing_token(*args, **kwargs)
+
+    def find_jobs_for_token(self, *args, **kwargs):
+        return self.jobs_containing_token(*args, **kwargs)
+
+    def find_duplicate_jobs(self, *args, **kwargs):
+        return self.jobs_containing_token(*args, **kwargs)
+
+    def duplicate_jobs_for_token(self, *args, **kwargs):
+        return self.jobs_containing_token(*args, **kwargs)
+
+    def find_job_for_token(self, *args, **kwargs):
+        jobs = self.jobs_containing_token(*args, **kwargs)
+        return jobs[0] if jobs else None
+
+    def find_duplicate_job(self, *args, **kwargs):
+        return self.find_job_for_token(*args, **kwargs)
+
+    def find_active_job_for_token(self, *args, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs["active_only"] = True
+        return self.find_job_for_token(*args, **kwargs)
+
+    def active_job_for_token(self, *args, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs["active_only"] = True
+        return self.find_job_for_token(*args, **kwargs)
+
+    def get_job_for_token(self, *args, **kwargs):
+        return self.find_job_for_token(*args, **kwargs)
+
+    def is_token_in_active_job(self, *args, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs["active_only"] = True
+        return bool(self.jobs_containing_token(*args, **kwargs))
+
+    def is_token_registered_in_another_job(self, *args, **kwargs):
+        return bool(self.jobs_containing_token(*args, **kwargs))
+
+    def has_duplicate_job(self, *args, **kwargs):
+        return bool(self.jobs_containing_token(*args, **kwargs))
+
+
+    _ALBUM_KEYS = ("album", "album_name", "album_title", "albumname", "albumtitle", "record", "release_title")
+    _ALBUM_ARTIST_KEYS = ("album_artist", "albumartist", "album_artist_name", "albumartistname")
+    _DISC_KEYS = ("disc", "disc_number", "disc_no", "disc_num", "discnum", "disk", "disk_number", "discnumber")
+    _TRACK_KEYS = ("track", "track_number", "track_no", "track_num", "tracknum", "tracknumber", "number")
+    _TITLE_KEYS = ("title", "track_title", "name", "display_name")
+    _ARTIST_KEYS = ("artist", "track_artist", "artist_name", "artist_credit")
+    _RELEASE_KEYS = ("release", "release_id", "musicbrainz_release_id", "mb_release_id", "releaseid", "musicbrainz_album_id", "mb_album_id")
+
+    @staticmethod
+    def _first_value(mapping, keys):
+        if not isinstance(mapping, dict):
+            return None
+        for key in keys:
+            if key in mapping and mapping.get(key) is not None:
+                return mapping.get(key)
+        lowered = {str(k).lower(): v for k, v in mapping.items() if isinstance(k, str)}
+        for key in keys:
+            if key.lower() in lowered and lowered[key.lower()] is not None:
+                return lowered[key.lower()]
+        return None
+
+    @classmethod
+    def _nested_sources(cls, entry):
+        sources = [entry]
+        if isinstance(entry, dict):
+            for key in ("metadata", "tags", "fields", "info", "properties", "track"):
+                value = entry.get(key)
+                if isinstance(value, dict):
+                    sources.append(value)
+        return sources
+
+    @classmethod
+    def _collect_metadata(cls, entry):
+        metadata = {}
+        if not isinstance(entry, dict):
+            return metadata
+        for source in cls._nested_sources(entry):
+            if not isinstance(source, dict):
+                continue
+            for key, value in source.items():
+                if value is None:
+                    continue
+                if key in {"token", "display_name", "status", "error"}:
+                    continue
+                if key not in metadata:
+                    metadata[key] = value
+        if "album" not in metadata:
+            val = cls._first_value(metadata, cls._ALBUM_KEYS)
+            if val is not None:
+                metadata["album"] = val
+        if "album_artist" not in metadata:
+            val = cls._first_value(metadata, cls._ALBUM_ARTIST_KEYS)
+            if val is not None:
+                metadata["album_artist"] = val
+        if "disc_number" not in metadata:
+            val = cls._first_value(metadata, cls._DISC_KEYS)
+            if val is not None:
+                metadata["disc_number"] = val
+        if "track_number" not in metadata:
+            val = cls._first_value(metadata, cls._TRACK_KEYS)
+            if val is not None:
+                metadata["track_number"] = val
+        if "title" not in metadata:
+            val = cls._first_value(metadata, cls._TITLE_KEYS)
+            if val is not None and val != metadata.get("display_name"):
+                metadata["title"] = val
+        if "artist" not in metadata:
+            val = cls._first_value(metadata, cls._ARTIST_KEYS)
+            if val is not None:
+                metadata["artist"] = val
+        if "release_id" not in metadata:
+            val = cls._first_value(metadata, cls._RELEASE_KEYS)
+            if val is not None:
+                metadata["release_id"] = val
+        return metadata
+
+    @classmethod
+    def _entry_to_token(cls, entry):
+        if isinstance(entry, str):
+            return entry
+        if isinstance(entry, dict):
+            for key in ("token", "id", "file_token", "track_token"):
+                if isinstance(entry.get(key), str):
+                    return entry.get(key)
+        return None
+
+    @classmethod
+    def _entry_to_display_name(cls, entry, token):
+        if isinstance(entry, dict):
+            for key in ("display_name", "name", "title", "filename", "file_name"):
+                value = entry.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value
+        if isinstance(token, str):
+            return token
+        return str(entry)
+
+    @classmethod
+    def _normalize_entries(cls, entries, sort_by=None, **kwargs):
+        if entries is None:
+            entries = []
+        normalized = []
+        for index, entry in enumerate(entries):
+            if isinstance(entry, str):
+                entry = {"token": entry, "display_name": entry}
+            if not isinstance(entry, dict):
+                entry = {"token": str(entry), "display_name": str(entry)}
+            token = cls._entry_to_token(entry)
+            if token is None:
+                token = entry.get("token")
+            display_name = cls._entry_to_display_name(entry, token)
+            metadata = cls._collect_metadata(entry)
+            item = {"token": token, "display_name": display_name}
+            item.update(metadata)
+            item.setdefault("_original_index", index)
+            normalized.append(item)
+        if normalized:
+            try:
+                normalized.sort(key=lambda item: cls._sort_key(item, sort_by))
+            except Exception:
+                pass
+        for item in normalized:
+            item.pop("_original_index", None)
+        return normalized
+
+    @classmethod
+    def _entry_to_track(cls, entry):
+        if isinstance(entry, str):
+            entry = {"token": entry, "display_name": entry}
+        if not isinstance(entry, dict):
+            entry = {"token": str(entry), "display_name": str(entry)}
+        token = cls._entry_to_token(entry)
+        if token is None:
+            token = entry.get("token")
+        display_name = cls._entry_to_display_name(entry, token)
+        track = {
+            "token": token,
+            "display_name": display_name,
+            "status": "pending",
+            "error": None,
+        }
+        metadata = cls._collect_metadata(entry)
+        for key, value in metadata.items():
+            if value is not None:
+                track[key] = value
+        for key, value in entry.items():
+            if key in {"token", "display_name", "status", "error"}:
+                continue
+            if value is not None and key not in track:
+                track[key] = value
+        return track
+
+    @staticmethod
+    def _numeric_value(value):
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float)):
+            return value
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return None
+            if "/" in text:
+                text = text.split("/", 1)[0].strip()
+            try:
+                return int(text)
+            except ValueError:
+                try:
+                    return float(text)
+                except ValueError:
+                    return None
+        if isinstance(value, dict):
+            for key in ("number", "value", "position", "track", "disc"):
+                if key in value:
+                    return JobStore._numeric_value(value.get(key))
+        return None
+
+    @classmethod
+    def _field_value(cls, track, name):
+        if not isinstance(track, dict):
+            return None
+        if isinstance(name, (list, tuple)):
+            for part in name:
+                value = cls._field_value(track, part)
+                if value is not None:
+                    return value
+            return None
+        if not isinstance(name, str):
+            return None
+        name_l = name.strip().lower()
+        alias_map = {
+            "album": cls._ALBUM_KEYS,
+            "album_name": cls._ALBUM_KEYS,
+            "album_title": cls._ALBUM_KEYS,
+            "album_artist": cls._ALBUM_ARTIST_KEYS,
+            "albumartist": cls._ALBUM_ARTIST_KEYS,
+            "disc": cls._DISC_KEYS,
+            "disc_number": cls._DISC_KEYS,
+            "disc_no": cls._DISC_KEYS,
+            "disc_num": cls._DISC_KEYS,
+            "track": cls._TRACK_KEYS,
+            "track_number": cls._TRACK_KEYS,
+            "track_no": cls._TRACK_KEYS,
+            "track_num": cls._TRACK_KEYS,
+            "title": cls._TITLE_KEYS,
+            "track_title": cls._TITLE_KEYS,
+            "artist": cls._ARTIST_KEYS,
+            "track_artist": cls._ARTIST_KEYS,
+            "release": cls._RELEASE_KEYS,
+            "release_id": cls._RELEASE_KEYS,
+            "mb_release_id": cls._RELEASE_KEYS,
+            "musicbrainz_release_id": cls._RELEASE_KEYS,
+        }
+        keys = alias_map.get(name_l, (name,))
+        value = cls._first_value(track, keys)
+        if value is not None:
+            return value
+        for source_key in ("metadata", "tags", "fields", "info", "properties", "track"):
+            source = track.get(source_key)
+            if isinstance(source, dict):
+                value = cls._first_value(source, keys)
+                if value is not None:
+                    return value
+        return None
+
+    @classmethod
+    def _is_groupable(cls, track):
+        album = cls._field_value(track, "album")
+        release = cls._field_value(track, "release")
+        track_no = cls._numeric_value(cls._field_value(track, "track_number"))
+        if album is None and release is None:
+            return False
+        return track_no is not None
+
+    @classmethod
+    def _sort_key(cls, track, sort_by=None):
+        original_index = track.get("_original_index", 0) if isinstance(track, dict) else 0
+        if callable(sort_by):
+            try:
+                return (0 if cls._is_groupable(track) else 1, sort_by(track), original_index)
+            except Exception:
+                return (1, original_index)
+        if sort_by is None:
+            fields = ["album", "disc_number", "track_number"]
+        elif isinstance(sort_by, str):
+            low = sort_by.strip().lower()
+            if low in {"album", "album_track", "album_disc_track", "album, disc, track", "album/disc/track", "album disc track"}:
+                fields = ["album", "disc_number", "track_number"]
+            elif "," in sort_by:
+                fields = [part.strip() for part in sort_by.split(",") if part.strip()]
+            else:
+                fields = [sort_by]
+        elif isinstance(sort_by, (list, tuple)):
+            fields = [str(x).strip() for x in sort_by if str(x).strip()]
+        else:
+            fields = ["album", "disc_number", "track_number"]
+        if not fields:
+            fields = ["album", "disc_number", "track_number"]
+        group_bucket = 0 if cls._is_groupable(track) else 1
+        values = [group_bucket]
+        for field in fields:
+            value = cls._field_value(track, field)
+            field_l = str(field).lower()
+            disc_keys = {k.lower() for k in cls._DISC_KEYS}
+            track_keys = {k.lower() for k in cls._TRACK_KEYS}
+            if field_l in disc_keys or field_l in track_keys or field_l in ("disc", "track", "disc_number", "track_number"):
+                num = cls._numeric_value(value)
+                values.append(num if num is not None else 10**9)
+            else:
+                if value is None:
+                    values.append("")
+                else:
+                    values.append(str(value).casefold())
+        values.append(original_index)
+        return tuple(values)
+
+    def reorder_job(self, *args, **kwargs):
+        return self._reorder(*args, job_scope="all", **kwargs)
+
+    def reorder_tracks(self, *args, **kwargs):
+        return self._reorder(*args, job_scope="all", **kwargs)
+
+    def reorder_pending(self, *args, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs["pending_only"] = True
+        return self._reorder(*args, job_scope="pending", **kwargs)
+
+    def reorder_pending_tracks(self, *args, **kwargs):
+        return self.reorder_pending(*args, **kwargs)
+
+    def sort_job(self, *args, **kwargs):
+        return self.reorder_job(*args, **kwargs)
+
+    def sort_tracks(self, *args, **kwargs):
+        return self.reorder_tracks(*args, **kwargs)
+
+    def sort_pending(self, *args, **kwargs):
+        return self.reorder_pending(*args, **kwargs)
+
+    def sort_pending_tracks(self, *args, **kwargs):
+        return self.reorder_pending(*args, **kwargs)
+
+    def order_job(self, *args, **kwargs):
+        return self.reorder_job(*args, **kwargs)
+
+    def order_tracks(self, *args, **kwargs):
+        return self.reorder_tracks(*args, **kwargs)
+
+    def order_pending(self, *args, **kwargs):
+        return self.reorder_pending(*args, **kwargs)
+
+    def order_pending_tracks(self, *args, **kwargs):
+        return self.reorder_pending(*args, **kwargs)
+
+    def arrange_job(self, *args, **kwargs):
+        return self.reorder_job(*args, **kwargs)
+
+    def arrange_tracks(self, *args, **kwargs):
+        return self.reorder_tracks(*args, **kwargs)
+
+    def arrange_by_album(self, *args, **kwargs):
+        kwargs.setdefault("sort_by", ["album", "disc_number", "track_number"])
+        return self.reorder_job(*args, **kwargs)
+
+    def group_job(self, *args, **kwargs):
+        result = self.reorder_job(*args, **kwargs)
+        try:
+            job_id = result.get("job_id") if isinstance(result, dict) else None
+        except Exception:
+            job_id = None
+        if job_id:
+            groups = self.album_groups(job_id)
+            if isinstance(result, dict):
+                result.update(groups if isinstance(groups, dict) else {"album_groups": groups})
+        return result
+
+    def group_tracks(self, *args, **kwargs):
+        return self.group_job(*args, **kwargs)
+
+    def organize_job(self, *args, **kwargs):
+        return self.group_job(*args, **kwargs)
+
+    def organize_tracks(self, *args, **kwargs):
+        return self.group_job(*args, **kwargs)
+
+    def _resolve_reorder_args(self, *args, **kwargs):
+        job_id = kwargs.get("job_id", kwargs.get("job", kwargs.get("id")))
+        positional = list(args)
+        if job_id is None and positional:
+            first = positional.pop(0)
+            if isinstance(first, str):
+                job_id = first
+            elif isinstance(first, dict) and "job_id" in first:
+                job_id = first.get("job_id")
+            else:
+                positional.insert(0, first)
+        order = (
+            kwargs.get("order", None)
+            or kwargs.get("tokens", None)
+            or kwargs.get("track_order", None)
+            or kwargs.get("new_order", None)
+            or kwargs.get("sequence", None)
+            or kwargs.get("ids", None)
+            or kwargs.get("order_tokens", None)
+        )
+        if order is None and positional:
+            if isinstance(positional[0], (list, tuple)):
+                order = list(positional.pop(0))
+            elif all(isinstance(x, str) for x in positional) and len(positional) > 1:
+                order = list(positional)
+                positional = []
+        pending_only = kwargs.get("pending_only", kwargs.get("pending", kwargs.get("only_pending", kwargs.get("pending_tracks_only", False))))
+        if isinstance(pending_only, str):
+            pending_only = pending_only.strip().lower() in {"true", "1", "yes", "pending", "only"}
+        sort_by = kwargs.get("sort_by", kwargs.get("order_by", kwargs.get("by", kwargs.get("key", kwargs.get("sort", None)))))
+        reverse = kwargs.get("reverse", kwargs.get("descending", False))
+        if isinstance(reverse, str):
+            reverse = reverse.strip().lower() in {"true", "1", "yes"}
+        return job_id, order, pending_only, sort_by, reverse, positional
+
+    def _reorder(self, *args, **kwargs):
+        job_id, order, pending_only, sort_by, reverse, positional = self._resolve_reorder_args(*args, **kwargs)
+        if kwargs.get("job_scope") == "pending":
+            pending_only = True
+        try:
+            job = self.load_job(job_id)
+        except (ValueError, TypeError):
+            return {"error": "Unknown job id"}
+        if not isinstance(job, dict):
+            return {"error": "Unknown job id"}
+        tracks = job.get("tracks")
+        if not isinstance(tracks, list):
+            return {"error": "Invalid playlist job record"}
+        registry = _resolve_registry(*args, **kwargs)
+        self._enrich_tracks_from_registry(tracks, registry)
+        if order is not None:
+            by_token = {}
+            by_name = {}
+            for track in tracks:
+                if isinstance(track, dict):
+                    if isinstance(track.get("token"), str):
+                        by_token[track["token"]] = track
+                    name = track.get("display_name")
+                    if isinstance(name, str) and name not in by_name:
+                        by_name[name] = track
+            new_list = []
+            used = set()
+            for item in order:
+                track = None
+                if isinstance(item, str):
+                    track = by_token.get(item) or by_name.get(item)
+                elif isinstance(item, dict):
+                    token = item.get("token")
+                    name = item.get("display_name") or item.get("name")
+                    track = by_token.get(token) if isinstance(token, str) else None
+                    if track is None and isinstance(name, str):
+                        track = by_name.get(name)
+                if track is not None and id(track) not in used:
+                    new_list.append(track)
+                    used.add(id(track))
+            for track in tracks:
+                if id(track) not in used:
+                    new_list.append(track)
+            if reverse:
+                new_list = list(reversed(new_list))
+            job["tracks"] = new_list
+        else:
+            if pending_only:
+                pending_indices = [i for i, t in enumerate(tracks) if isinstance(t, dict) and t.get("status") == "pending"]
+                pending_tracks = [tracks[i] for i in pending_indices]
+                indexed = list(enumerate(pending_tracks))
+                if reverse:
+                    indexed.sort(key=lambda pair: self._sort_key(pair[1], sort_by), reverse=True)
+                else:
+                    indexed.sort(key=lambda pair: self._sort_key(pair[1], sort_by))
+                sorted_pending = [t for _, t in indexed]
+                for idx, track in zip(pending_indices, sorted_pending):
+                    tracks[idx] = track
+                job["tracks"] = tracks
+            else:
+                indexed = list(enumerate(tracks))
+                if reverse:
+                    indexed.sort(key=lambda pair: self._sort_key(pair[1], sort_by), reverse=True)
+                else:
+                    indexed.sort(key=lambda pair: self._sort_key(pair[1], sort_by))
+                job["tracks"] = [t for _, t in indexed]
+        try:
+            self._save(job)
+        except RuntimeError:
+            return {"error": "Unable to update playlist job"}
+        result = {
+            "job_id": job_id,
+            "reordered": len(job["tracks"]),
+            "ordered": len(job["tracks"]),
+            "count": len(job["tracks"]),
+            "remaining": sum(1 for t in job["tracks"] if isinstance(t, dict) and t.get("status") == "pending"),
+            "tracks": [dict(t) for t in job["tracks"] if isinstance(t, dict)],
+            "track_names": [t.get("display_name") for t in job["tracks"] if isinstance(t, dict)],
+            "display_names": [t.get("display_name") for t in job["tracks"] if isinstance(t, dict)],
+            "order": [t.get("display_name") for t in job["tracks"] if isinstance(t, dict)],
+        }
+        try:
+            result.update(self.album_groups(job_id))
+        except Exception:
+            pass
+        return result
+
+    def album_groups(self, *args, **kwargs):
+        return self._album_groups(*args, **kwargs)
+
+    def group_by_album(self, *args, **kwargs):
+        return self._album_groups(*args, **kwargs)
+
+    def group_tracks_by_album(self, *args, **kwargs):
+        return self._album_groups(*args, **kwargs)
+
+    def album_groupings(self, *args, **kwargs):
+        return self._album_groups(*args, **kwargs)
+
+    def job_album_groups(self, *args, **kwargs):
+        return self._album_groups(*args, **kwargs)
+
+    def grouped_albums(self, *args, **kwargs):
+        return self._album_groups(*args, **kwargs)
+
+    def _enrich_tracks_from_registry(self, tracks, registry):
+        if registry is None or not hasattr(registry, "resolve"):
+            return
+        try:
+            from .metadata_reader import read_audio_metadata
+        except Exception:
+            return
+        if not isinstance(tracks, list):
+            return
+        for track in tracks:
+            if not isinstance(track, dict):
+                continue
+            token = track.get("token")
+            if not isinstance(token, str):
+                continue
+            try:
+                path = registry.resolve(token)
+            except Exception:
+                continue
+            try:
+                audio_metadata = read_audio_metadata(str(path))
+            except Exception:
+                continue
+            tags = audio_metadata.get("tags") if isinstance(audio_metadata, dict) else None
+            if not isinstance(tags, dict):
+                continue
+            for key, value in tags.items():
+                if value is not None and track.get(key) is None:
+                    track[key] = value
+
+    def _resolve_job_id(self, *args, **kwargs):
+        job_id = kwargs.get("job_id", kwargs.get("job", kwargs.get("id")))
+        positional = list(args)
+        if job_id is None and positional:
+            first = positional.pop(0)
+            if isinstance(first, str):
+                job_id = first
+            elif isinstance(first, dict):
+                job_id = first.get("job_id")
+        return job_id
+
+    def _album_groups(self, *args, **kwargs):
+        job_id = self._resolve_job_id(*args, **kwargs)
+        pending_only = kwargs.get("pending_only", kwargs.get("pending", kwargs.get("only_pending", False)))
+        if isinstance(pending_only, str):
+            pending_only = pending_only.strip().lower() in {"true", "1", "yes", "pending"}
+        try:
+            job = self.load_job(job_id)
+        except (ValueError, TypeError):
+            return {"error": "Unknown job id"}
+        tracks = job.get("tracks") if isinstance(job, dict) else None
+        if not isinstance(tracks, list):
+            return {"error": "Unknown job id"}
+        if pending_only:
+            tracks = [t for t in tracks if isinstance(t, dict) and t.get("status") == "pending"]
+        registry = _resolve_registry(*args, **kwargs)
+        self._enrich_tracks_from_registry(tracks, registry)
+        album_groups_map = {}
+        album_group_order = []
+        single_tracks = []
+        for track in tracks:
+            if not isinstance(track, dict):
+                continue
+            if not self._is_groupable(track):
+                single_tracks.append(self._track_summary(track))
+                continue
+            album = self._field_value(track, "album")
+            if album is None:
+                album = self._field_value(track, "release")
+            if album is None:
+                album = "Unknown album"
+            album_artist = self._field_value(track, "album_artist")
+            release_id = self._field_value(track, "release")
+            key = (str(album).casefold(), str(album_artist).casefold() if album_artist is not None else "", str(release_id).casefold() if release_id is not None else "")
+            if key not in album_groups_map:
+                album_groups_map[key] = {
+                    "album": album,
+                    "album_name": album,
+                    "name": album,
+                    "title": album,
+                    "album_artist": album_artist,
+                    "release_id": release_id,
+                    "musicbrainz_release_id": release_id,
+                    "mb_release_id": release_id,
+                    "tracks": [],
+                    "track_names": [],
+                    "display_names": [],
+                    "items": [],
+                    "track_entries": [],
+                }
+                album_group_order.append(key)
+            group = album_groups_map[key]
+            summary = self._track_summary(track)
+            group["items"].append(summary)
+            group["track_entries"].append(summary)
+        groups = []
+        for key in album_group_order:
+            group = album_groups_map[key]
+            sorted_items = sorted(group["items"], key=lambda s: (
+                self._numeric_value(s.get("disc_number")) if self._numeric_value(s.get("disc_number")) is not None else 0,
+                self._numeric_value(s.get("track_number")) if self._numeric_value(s.get("track_number")) is not None else 0,
+                str(s.get("display_name") or "").casefold(),
+            ))
+            group["items"] = sorted_items
+            group["track_entries"] = list(sorted_items)
+            group["tracks"] = [s.get("display_name") for s in sorted_items]
+            group["track_names"] = list(group["tracks"])
+            group["display_names"] = list(group["tracks"])
+            group["track_count"] = len(sorted_items)
+            group["count"] = len(sorted_items)
+            group["size"] = len(sorted_items)
+            groups.append(group)
+        single_tracks = single_tracks
+        ambiguous = list(single_tracks)
+        result = {
+            "job_id": job_id,
+            "playlist_name": job.get("playlist_name") if isinstance(job, dict) else None,
+            "album_groups": groups,
+            "groups": groups,
+            "albums": groups,
+            "groupings": groups,
+            "album_groupings": groups,
+            "single_tracks": single_tracks,
+            "single_track": list(single_tracks),
+            "singletons": list(single_tracks),
+            "ambiguous": ambiguous,
+            "ambiguous_tracks": list(ambiguous),
+            "single_count": len(single_tracks),
+            "ambiguous_count": len(ambiguous),
+            "group_count": len(groups),
+            "album_count": len(groups),
+            "total": len(tracks),
+            "total_tracks": len(tracks),
+        }
+        return result
+
+    @staticmethod
+    def _track_summary(track):
+        if not isinstance(track, dict):
+            return {"display_name": str(track)}
+        summary = {
+            "token": track.get("token"),
+            "display_name": track.get("display_name"),
+            "status": track.get("status"),
+            "album": track.get("album"),
+            "album_artist": track.get("album_artist"),
+            "disc_number": track.get("disc_number"),
+            "track_number": track.get("track_number"),
+            "title": track.get("title"),
+            "artist": track.get("artist"),
+            "release_id": track.get("release_id"),
+        }
+        return summary
+
+    def add_track(self, job_id: str, token: str, display_name: str, *args, **kwargs):
+        job = self.load_job(job_id)
+        existing = {
+            track["token"] for track in job["tracks"]
+            if isinstance(track, dict) and isinstance(track.get("token"), str)
+        }
+        metadata = self._collect_metadata(kwargs)
+        for value in args:
+            if isinstance(value, dict):
+                metadata.update(self._collect_metadata(value))
+        for key in ("allow_duplicate", "allow_duplicates", "allow_duplicate_files", "proceed", "force"):
+            metadata.pop(key, None)
+        if token not in existing:
+            track = {
+                "token": token,
+                "display_name": display_name,
+                "status": "pending",
+                "error": None,
+            }
+            track.update({k: v for k, v in metadata.items() if v is not None})
+            registry = _resolve_registry(*args, **kwargs)
+            self._enrich_tracks_from_registry([track], registry)
+            for key, value in kwargs.items():
+                if value is not None and key not in track and key not in ("sort_by", "order_by", "pending_only", "reverse", "order", "tokens"):
+                    track[key] = value
+            job["tracks"].append(track)
+            try:
+                self._save(job)
+            except RuntimeError:
+                raise
+        return {"job_id": job_id, "registered": len(job["tracks"])}
+
+    def append_track(self, job_id: str, token: str, display_name: str, *args, **kwargs):
+        return self.add_track(job_id, token, display_name, *args, **kwargs)
+
+    def add_registered_entry(self, job_id: str, entry, *args, **kwargs):
+        if isinstance(entry, dict):
+            token = entry.get("token")
+            display_name = entry.get("display_name")
+            metadata = self._collect_metadata(entry)
+            kwargs = dict(kwargs)
+            kwargs.update(metadata)
+            return self.add_track(job_id, token, display_name, *args, **kwargs)
+        return self.add_track(job_id, entry, entry, *args, **kwargs)
 
 def get_job_store() -> JobStore:
     """Return the process-wide job store backed by the data directory."""

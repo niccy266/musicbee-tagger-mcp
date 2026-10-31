@@ -75,11 +75,21 @@ def _exception_code(exc):
     return E_INTERNAL
 
 
-def make_error(code, message, *, function=None, path_free=True):
+def make_error(
+    code: str,
+    message: Any,
+    *,
+    function: Optional[str] = None,
+    path_free: bool = True,
+) -> dict:
+    """Build a path-safe MCP error dict."""
     if path_free and not isinstance(message, str):
         message = str(message)
     safe_message = redact_paths(message) if path_free else message
     result = {"error_code": code, "error": safe_message}
+    if function is not None:
+        result["function"] = function
+    return result
     if function is not None:
         result["function"] = function
     return result

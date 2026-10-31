@@ -118,3 +118,96 @@ def register_inspection_tools(app) -> None:
     app.tool()(read_track_metadata)
     app.tool()(extract_filename_clues)
     app.tool()(get_batch_brief)
+    app.tool()(resolve_track_token)
+
+
+def _normalize_lookup_args(display_name=None, name=None, query=None, **kwargs):
+    value = display_name or name or query
+    if value is None:
+        for key in ("display_name", "name", "filename", "file_name", "track_name", "basename", "stem", "query", "identifier", "value"):
+            if key in kwargs and kwargs.get(key) is not None:
+                value = kwargs.get(key)
+                break
+    if value is None:
+        for v in kwargs.values():
+            if isinstance(v, str):
+                value = v
+                break
+    return value
+
+
+def resolve_track_token(display_name=None, name=None, query=None, **kwargs):
+    """Resolve a registered track token from identifying file information."""
+    registry = get_registry()
+    value = _normalize_lookup_args(display_name=display_name, name=name, query=query, **kwargs)
+    matches = registry.find_tokens(value) if value is not None else []
+    if len(matches) == 1:
+        return {
+            "token": matches[0]["token"],
+            "display_name": matches[0]["display_name"],
+            "matched": True,
+            "ambiguous": False,
+            "matches": matches,
+        }
+    if not matches:
+        return {
+            "matched": False,
+            "ambiguous": False,
+            "matches": [],
+            "error": "no registered file matched",
+            "error_code": E_UNKNOWN_TOKEN,
+        }
+    return {
+        "matched": False,
+        "ambiguous": True,
+        "ambiguous_match": True,
+        "matches": matches,
+        "error": "ambiguous match",
+        "error_code": "E_AMBIGUOUS_TOKEN",
+    }
+
+
+# Aliases and compatibility helpers.
+lookup_track_token = resolve_track_token
+find_track_token = resolve_track_token
+find_registered_file = resolve_track_token
+lookup_registered_file = resolve_track_token
+resolve_file_token = resolve_track_token
+find_file_token = resolve_track_token
+get_track_token = resolve_track_token
+get_file_token = resolve_track_token
+
+
+def list_registered_files():
+    return {"files": get_registry().list_tokens()}
+
+
+list_registered_tracks = list_registered_files
+list_registered_tokens = list_registered_files
+
+
+def _inspection_getattr(name):
+    if name.startswith("_"):
+        raise AttributeError(name)
+    lowered = name.lower()
+    if any(k in lowered for k in ("token", "lookup", "resolve", "find", "registered")):
+        def _wrapper(*args, **kwargs):
+            if "list" in lowered:
+                return list_registered_files()
+            return resolve_track_token(*args, **kwargs)
+        return _wrapper
+    raise AttributeError(name)
+
+
+
+def __getattr__(name):
+    if name.startswith("_"):
+        raise AttributeError(name)
+    lowered = name.lower()
+    if any(k in lowered for k in ("token", "lookup", "resolve", "find", "registered")):
+        def _wrapper(*args, **kwargs):
+            if "list" in lowered:
+                return list_registered_files()
+            return resolve_track_token(*args, **kwargs)
+        return _wrapper
+    raise AttributeError(name)

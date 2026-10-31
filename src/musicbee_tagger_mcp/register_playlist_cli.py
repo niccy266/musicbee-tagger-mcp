@@ -82,6 +82,21 @@ def run(
         f"{job_id}.",
         file=output_stream,
     )
+    duplicates = result.get("duplicates", [])
+    if duplicates:
+        count = len(duplicates)
+        label = "entry" if count == 1 else "entries"
+        print(
+            f"Skipped {count} duplicate playlist {label} already registered "
+            f"in another active job:",
+            file=output_stream,
+        )
+        for entry in duplicates:
+            print(
+                f"- {entry.get('display_name')}: existing job "
+                f"{entry.get('existing_job_id')}",
+                file=output_stream,
+            )
     print(
         "Pass this job id to the agent loop or ask the agent for the next "
         "batch; the playlist path was never sent over MCP.",
@@ -95,6 +110,22 @@ def run(
         print(f"Skipped {count} playlist {label}:", file=output_stream)
         for entry in skipped:
             print(f"- Line {entry['line']}: {entry['error']}", file=output_stream)
+
+    try:
+        groups = get_job_store().album_groups(job_id)
+        group_count = groups.get("group_count", 0) if isinstance(groups, dict) else 0
+        if group_count:
+            print(f"Album groups: {group_count}", file=output_stream)
+            for group in groups.get("album_groups", []):
+                print(
+                    f"- {group.get('album')}: {group.get('track_count', 0)} track(s)",
+                    file=output_stream,
+                )
+        single_count = groups.get("single_count", 0) if isinstance(groups, dict) else 0
+        if single_count:
+            print(f"Single-track items: {single_count}", file=output_stream)
+    except Exception:
+        pass
 
     return 0
 
