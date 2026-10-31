@@ -89,6 +89,11 @@ class StagingManager:
         match_source: Optional[str] = None,
         match_confidence: Optional[float] = None,
         notes: str = "",
+        manual_override: bool = False,
+        manual_override_justification: Optional[str] = None,
+        override_justification: Optional[str] = None,
+        override_reason: Optional[str] = None,
+        justification: Optional[str] = None,
     ) -> dict:
         """Write a pending change manifest and return a stage_id + summary.
 
@@ -105,6 +110,19 @@ class StagingManager:
         except Exception:
             baseline_tags = None
 
+        override_text = (
+            manual_override_justification
+            or override_justification
+            or override_reason
+            or justification
+        )
+        is_manual_override = bool(manual_override or override_text)
+        if is_manual_override:
+            if not isinstance(override_text, str) or not override_text.strip():
+                raise ValueError("justification is required for a manual override")
+            override_text = override_text.strip()
+        else:
+            override_text = None
 
         stage_id = str(uuid.uuid4())
         manifest = {
@@ -121,11 +139,21 @@ class StagingManager:
             "match_source": match_source,
             "match_confidence": match_confidence,
             "notes": notes,
+            "manual_override": is_manual_override,
+            "manual_override_justification": override_text,
+            "override_justification": override_text,
             "applied": False,
             "withdrawn": False,
             "revision": 1,
             "history": [],
         }
+
+        if is_manual_override:
+            manifest.setdefault("history", []).append({
+                "action": "manual_override",
+                "at": manifest["created_at"],
+                "reason": override_text,
+            })
 
         self.store.save(manifest)
 
@@ -141,6 +169,10 @@ class StagingManager:
                 f"Run `python -m musicbee_tagger_mcp.apply_staged --stage-id {stage_id}` to apply."
             ),
         }
+
+    def stage_manual_override(self, *args, **kwargs):
+        kwargs.setdefault("manual_override", True)
+        return self.stage(*args, **kwargs)
 
     def list_pending(self) -> List[dict]:
         """List all pending (not yet applied) staged changes — safe fields only."""
@@ -169,6 +201,9 @@ class StagingManager:
             "forensic_score": manifest.get("forensic_score"),
             "match_source": manifest.get("match_source"),
             "match_confidence": manifest.get("match_confidence"),
+            "manual_override": manifest.get("manual_override", False),
+            "manual_override_justification": manifest.get("manual_override_justification"),
+            "override_justification": manifest.get("override_justification"),
             "current_tags": current_tags,
             "current_tags_error": current_tags_error,
             "history": manifest.get("history", []),

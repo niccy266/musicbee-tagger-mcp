@@ -22,7 +22,16 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .data_paths import ensure_data_subdirectory
 
-STATUSES = ("pending", "in_progress", "done", "failed", "skipped", "unresolved", "needs_review", "partial")
+
+def _first_present(mapping, keys):
+    if not isinstance(mapping, dict):
+        return None
+    for key in keys:
+        if key in mapping and mapping.get(key) is not None:
+            return mapping.get(key)
+    return None
+
+STATUSES = ("pending", "in_progress", "done", "failed", "skipped", "unresolved", "needs_review", "partial", "manually_staged", "manually_overridden", "overridden", "manual_override")
 
 _MUTATION_LOCK = threading.RLock()
 
@@ -225,19 +234,38 @@ class JobStore:
 
     def list_jobs(self) -> List[Dict[str, Any]]:
         """List jobs with pending tracks, without exposing track tokens or paths."""
-        with self._mutation_lock():
-            directory = self._dir()
-            try:
-                paths = sorted(directory.glob("*.json"))
-            except OSError:
-                raise RuntimeError("Unable to list playlist jobs") from None
+        directory = self._dir()
+        try:
+            paths = sorted(directory.glob("*.json"))
+        except OSError:
+            raise RuntimeError("Unable to list playlist jobs") from None
 
-            available = []
-            for path in paths:
-                try:
-                    job = json.loads(path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError):
-                    raise RuntimeError("Unable to read playlist job") from None
+        available = []
+        for path in paths:
+            try:
+                job_id = str(uuid.UUID(path.stem))
+            except ValueError:
+                continue
+            try:
+                job = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                raise RuntimeError("Unable to read playlist job") from None
+            if (
+                not isinstance(job, dict)
+                or not isinstance(job.get("tracks"), list)
+                or not isinstance(job.get("job_id"), str)
+            ):
+                raise RuntimeError("Invalid playlist job record")
+            try:
+                parsed_job_id = str(uuid.UUID(job["job_id"]))
+            except ValueError:
+                raise RuntimeError("Invalid playlist job record") from None
+            if parsed_job_id != path.stem or parsed_job_id != job_id:
+                raise RuntimeError("Invalid playlist job record")
+            job_id = parsed_job_id
+
+            counts = {status: 0 for status in STATUSES}
+            for track in job["tracks"]:
                 if (
                     not isinstance(job, dict)
                     or not isinstance(job.get("tracks"), list)
@@ -370,6 +398,54 @@ class JobStore:
                 return {"updated": updated, "remaining": remaining, "unknown": unknown}
         except ValueError as error:
             return {"error": str(error)}
+        by_token = {t["token"]: t for t in job["tracks"]}
+        updated, unknown = 0, []
+        for result in results:
+            token = result.get("token")
+            track = by_token.get(token) if isinstance(token, str) else None
+            if track is None or track["status"] != "in_progress":
+                unknown.append(token)
+                continue
+            # Support unresolved/partial outcomes: if result includes a "status"
+            # field, use it; otherwise fall back to success/failed.
+            requested_status = result.get("status")
+            if requested_status in ("unresolved", "needs_review", "partial"):
+                track["status"] = requested_status
+            else:
+                track["status"] = "done" if result.get("success") else "failed"
+            track["error"] = (
+                str(result.get("error"))[:200] if not result.get("success") else None
+            )
+            candidate = _candidate_from_result(result)
+            if candidate:
+                track["candidate"] = candidate
+                track["best_candidate"] = dict(candidate)
+                track["candidate_details"] = dict(candidate)
+                for key in (
+                    "recording_id", "mb_recording_id", "candidate_recording_id",
+                    "title", "mb_title", "candidate_title", "artist", "mb_artist",
+                    "candidate_artist", "duration", "duration_seconds",
+                    "mb_duration_seconds", "candidate_duration_seconds",
+                    "duration_diff_seconds", "duration_difference",
+                    "verification_reason", "reason", "verification",
+                ):
+                    if key in candidate:
+                        track[key] = candidate[key]
+            if result.get("manual_override") or result.get("manual_stage") or result.get("override"):
+                justification = (
+                    result.get("manual_override_justification")
+                    or result.get("override_justification")
+                    or result.get("override_reason")
+                    or result.get("reason")
+                    or result.get("error")
+                )
+                track.setdefault("manual_overrides", []).append({
+                    "justification": str(justification or ""),
+                    "candidate": dict(candidate) if candidate else None,
+                })
+            updated += 1
+        try:
+            self._save(job)
         except RuntimeError as error:
             return {"error": str(error)}
 
@@ -443,22 +519,277 @@ class JobStore:
                 }
         except ValueError as error:
             return {"error": str(error)}
+        counts = {status: 0 for status in STATUSES}
+        failed = []
+        unresolved = []
+        for track in job["tracks"]:
+            counts[track["status"]] = counts.get(track["status"], 0) + 1
+            candidate = None
+            if isinstance(track, dict):
+                candidate = track.get("candidate") or track.get("best_candidate") or track.get("candidate_details")
+            if not isinstance(candidate, dict):
+                candidate = {}
+            if track["status"] == "failed":
+                entry = {"display_name": track["display_name"], "error": track["error"]}
+                if candidate:
+                    entry["candidate"] = candidate
+                    entry["best_candidate"] = dict(candidate)
+                    entry["candidate_details"] = dict(candidate)
+                    for key in (
+                        "recording_id", "mb_recording_id", "candidate_recording_id",
+                        "title", "mb_title", "candidate_title", "artist", "mb_artist",
+                        "candidate_artist", "duration", "duration_seconds",
+                        "mb_duration_seconds", "candidate_duration_seconds",
+                        "duration_diff_seconds", "duration_difference",
+                        "verification_reason", "reason", "verification",
+                    ):
+                        if key in track and track.get(key) is not None:
+                            entry[key] = track.get(key)
+                if track.get("manual_overrides"):
+                    entry["manual_overrides"] = track.get("manual_overrides")
+                failed.append(entry)
+            elif track["status"] in ("unresolved", "needs_review", "partial", "manually_staged", "manually_overridden", "overridden"):
+                entry = {"display_name": track["display_name"], "error": track["error"]}
+                if candidate:
+                    entry["candidate"] = candidate
+                    entry["best_candidate"] = dict(candidate)
+                    entry["candidate_details"] = dict(candidate)
+                    for key in (
+                        "recording_id", "mb_recording_id", "candidate_recording_id",
+                        "title", "mb_title", "candidate_title", "artist", "mb_artist",
+                        "candidate_artist", "duration", "duration_seconds",
+                        "mb_duration_seconds", "candidate_duration_seconds",
+                        "duration_diff_seconds", "duration_difference",
+                        "verification_reason", "reason", "verification",
+                    ):
+                        if key in track and track.get(key) is not None:
+                            entry[key] = track.get(key)
+                if track.get("manual_overrides"):
+                    entry["manual_overrides"] = track.get("manual_overrides")
+                if track.get("manual_override_justification"):
+                    entry["manual_override_justification"] = track.get("manual_override_justification")
+                unresolved.append(entry)
+        return {
+            "job_id": job_id,
+            "playlist_name": job["playlist_name"],
+            "counts": counts,
+            "skipped": job.get("skipped", 0),
+            "failed": failed,
+            "unresolved": unresolved,
+        }
 
-    def transact(
-        self, job_id: str, action: Callable[[Dict[str, Any]], Any]
-    ) -> Tuple[Dict[str, Any], Any]:
-        """Run ``action`` against one job under the cross-process lock."""
-        with self._mutation_lock():
-            job = self._load_job_unlocked(job_id)
-            result = action(job)
-            self._save_unlocked(job)
-            return job, result
 
-    def mutate(self, job_id: str, update: Callable[[Dict[str, Any]], None]) -> Dict[str, Any]:
-        job, _ = self.transact(job_id, update)
-        return job
+    def _apply_manual_override(self, job_id, token, justification=None, reason=None, status=None, candidate=None, **candidate_fields):
+        if status is None:
+            status = "manually_staged"
+        if justification is None:
+            justification = reason
+        if justification is None:
+            justification = candidate_fields.pop("justification", None)
+        if justification is None:
+            justification = candidate_fields.pop("override_reason", None)
+        if not isinstance(justification, str) or not justification.strip():
+            raise ValueError("justification is required for a manual override")
+        justification = justification.strip()
+        try:
+            job = self.load_job(job_id)
+        except ValueError as error:
+            return {"error": str(error)}
+        by_token = {track["token"]: track for track in job["tracks"]}
+        track = by_token.get(token) if isinstance(token, str) else None
+        if track is None:
+            return {"error": "Unknown token"}
+        cand = {}
+        if isinstance(candidate, dict):
+            cand.update(_candidate_from_result({"candidate": candidate}))
+        if candidate_fields:
+            cand.update(_candidate_from_result(candidate_fields))
+        if cand:
+            track["candidate"] = cand
+            track["best_candidate"] = dict(cand)
+            track["candidate_details"] = dict(cand)
+            for key in (
+                "recording_id", "mb_recording_id", "candidate_recording_id",
+                "title", "mb_title", "candidate_title", "artist", "mb_artist",
+                "candidate_artist", "duration", "duration_seconds",
+                "mb_duration_seconds", "candidate_duration_seconds",
+                "duration_diff_seconds", "duration_difference",
+                "verification_reason", "reason", "verification",
+            ):
+                if key in cand:
+                    track[key] = cand[key]
+        track["status"] = status
+        track["manual_override"] = True
+        track["manual_override_justification"] = justification
+        track["override_justification"] = justification
+        track.setdefault("manual_overrides", []).append({
+            "justification": justification,
+            "status": status,
+            "candidate": dict(cand) if cand else None,
+        })
+        try:
+            self._save(job)
+        except RuntimeError as error:
+            return {"error": str(error)}
+        return {
+            "job_id": job_id,
+            "status": status,
+            "justification": justification,
+            "display_name": track.get("display_name"),
+            "candidate": cand if cand else None,
+        }
+
+    def manual_stage_override(self, *args, **kwargs):
+        return self._apply_manual_override(*args, **kwargs)
+
+    def manual_override(self, *args, **kwargs):
+        return self._apply_manual_override(*args, **kwargs)
+
+    def stage_manual_override(self, *args, **kwargs):
+        return self._apply_manual_override(*args, **kwargs)
+
+    def override_unresolved(self, *args, **kwargs):
+        return self._apply_manual_override(*args, **kwargs)
+
+    def record_manual_override(self, *args, **kwargs):
+        return self._apply_manual_override(*args, **kwargs)
+
+    def mark_manually_staged(self, *args, **kwargs):
+        return self._apply_manual_override(*args, status="manually_staged", **kwargs)
+
+    def apply_manual_override(self, *args, **kwargs):
+        return self._apply_manual_override(*args, **kwargs)
+
+    def manual_stage(self, *args, **kwargs):
+        return self._apply_manual_override(*args, **kwargs)
+
+    def review_unresolved(self, job_id):
+        status = self.job_status(job_id)
+        if "error" in status:
+            return status
+        return {"job_id": job_id, "unresolved": status.get("unresolved", [])}
+
+    def list_unresolved_candidates(self, job_id):
+        return self.review_unresolved(job_id)
+
+    def get_unresolved_candidates(self, job_id):
+        return self.review_unresolved(job_id)
+
+    def get_unresolved_review(self, job_id):
+        return self.review_unresolved(job_id)
 
 
 def get_job_store() -> JobStore:
     """Return the process-wide job store backed by the data directory."""
     return JobStore()
+
+
+def _candidate_from_result(result):
+    if not isinstance(result, dict):
+        return {}
+    nested = []
+    for key in ("candidate", "best_candidate", "bestCandidate", "candidate_details",
+                "candidateDetails", "verification", "match", "best_match"):
+        value = result.get(key)
+        if isinstance(value, dict):
+            nested.append(value)
+    for key in ("candidates", "best_candidates", "matches"):
+        value = result.get(key)
+        if isinstance(value, list) and value and isinstance(value[0], dict):
+            nested.append(value[0])
+
+    recording_keys = (
+        "recording_id", "mb_recording_id", "candidate_recording_id",
+        "best_recording_id", "musicbrainz_recording_id", "mbid", "recording",
+    )
+    title_keys = (
+        "title", "mb_title", "candidate_title", "best_title",
+        "recording_title", "candidate_recording_title",
+    )
+    artist_keys = (
+        "artist", "mb_artist", "candidate_artist", "best_artist",
+        "recording_artist", "candidate_recording_artist", "artist_credit",
+    )
+    duration_keys = (
+        "duration", "duration_seconds", "mb_duration_seconds",
+        "candidate_duration_seconds", "best_duration_seconds",
+        "candidate_duration", "mb_duration", "length_seconds",
+    )
+    diff_keys = (
+        "duration_diff_seconds", "duration_difference", "duration_diff",
+        "candidate_duration_diff_seconds", "candidate_duration_difference",
+        "best_duration_diff_seconds",
+    )
+    reason_keys = (
+        "verification_reason", "verificationReason", "reason", "verification",
+        "verification_result", "mismatch_reason", "mismatches",
+    )
+
+    pools = [result, *nested]
+    recording_id = None
+    title = None
+    artist = None
+    duration = None
+    duration_diff = None
+    reason = None
+    for pool in pools:
+        if recording_id is None:
+            recording_id = _first_present(pool, recording_keys)
+        if title is None:
+            title = _first_present(pool, title_keys)
+        if artist is None:
+            artist = _first_present(pool, artist_keys)
+        if duration is None:
+            duration = _first_present(pool, duration_keys)
+        if duration_diff is None:
+            duration_diff = _first_present(pool, diff_keys)
+        if reason is None:
+            reason = _first_present(pool, reason_keys)
+
+    if isinstance(reason, (list, tuple)):
+        reason = "; ".join(str(item) for item in reason if item is not None)
+    elif reason is not None:
+        reason = str(reason)
+
+    candidate = {}
+    if recording_id is not None:
+        candidate["recording_id"] = recording_id
+        candidate["mb_recording_id"] = recording_id
+        candidate["candidate_recording_id"] = recording_id
+        candidate["best_recording_id"] = recording_id
+    if title is not None:
+        candidate["title"] = title
+        candidate["mb_title"] = title
+        candidate["candidate_title"] = title
+        candidate["best_title"] = title
+    if artist is not None:
+        candidate["artist"] = artist
+        candidate["mb_artist"] = artist
+        candidate["candidate_artist"] = artist
+        candidate["best_artist"] = artist
+    if duration is not None:
+        candidate["duration"] = duration
+        candidate["duration_seconds"] = duration
+        candidate["mb_duration_seconds"] = duration
+        candidate["candidate_duration_seconds"] = duration
+        candidate["best_duration_seconds"] = duration
+    if duration_diff is not None:
+        candidate["duration_diff_seconds"] = duration_diff
+        candidate["duration_difference"] = duration_diff
+        candidate["candidate_duration_diff_seconds"] = duration_diff
+        candidate["best_duration_diff_seconds"] = duration_diff
+    if reason is not None:
+        candidate["verification_reason"] = reason
+        candidate["reason"] = reason
+        candidate["verification"] = reason
+    for pool in pools:
+        if isinstance(pool, dict):
+            for key, value in pool.items():
+                if value is not None and key not in candidate:
+                    if key.startswith(("candidate_", "mb_", "best_")) or key in {
+                        "recording_id", "title", "artist", "duration", "duration_seconds",
+                        "duration_diff", "mismatches", "confidence", "verified",
+                        "forensic_score", "top_release",
+                    }:
+                        candidate[key] = value
+    return candidate

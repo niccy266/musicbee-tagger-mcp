@@ -1,3 +1,14 @@
+### 2026-10-30 — Issue #68: harden MCP tool wrappers for offline tests
+
+- Updated `tools/musicbrainz.py` `get_release_tracklist` to omit `duration_seconds` when unknown, harden zero-media/404/transport paths, and resolve MusicBrainz client in a patch-friendly way.
+- Updated `tools/acrcloud.py` to map provider failures to `E_PROVIDER_FAILED` (and missing credentials to `E_PROVIDER_NOT_CONFIGURED`).
+- Updated `tools/text.py` to map `repair_mojibake` exceptions via `error_from_exception`.
+- Updated `tools/tags.py` to validate field names and newline values before preview/stage.
+- Updated `tools/queue.py` and `tools/operations.py` to return typed `E_*` errors for bad operation ids.
+- Added compatibility aliases in `artist_validation.py` and `tools/operations.py`.
+- Branch: codex/issue-68-tool-wrapper-tests.
+
+
 ### 2026-10-29 — Documentation/agent prompt consistency audit
 
 - Added a visible, consistent rule to agent-facing docs and prompts: do not run shell commands (bash, cmd, powershell, python, etc.) without first making absolutely sure the required action cannot be performed using an existing exposed tool; prefer the exposed tool and use a shell only as a last resort with justification.
@@ -493,6 +504,7 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+
 ### 2026-10-30 — Add cross-process locking to JobStore (#55)
 
 - Wrapped all `JobStore` reads/writes in a cross-process file lock (`.jobs.lock` per jobs directory) with an in-process `RLock`, mirroring the established `StageManifestStore` pattern.
@@ -500,3 +512,22 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Writes are now atomic (temp file + `os.replace`) to avoid partial job files; directories are created as needed.
 - Added `transact`/`mutate` helpers for atomic job updates and documented concurrent-agent support plus `release_batch`/`--resume` recovery in `docs/OPENROUTER_AGENT.md`.
 - Validation: `py_compile` and import smoke passed; manual thread-concurrency smoke confirmed 20/20 unique claims across 5 threads. Full suite to be verified by CI.
+
+### 2026-10-30 — Issue #70: tests/conftest.py isolation, network guard, timeouts, markers
+- Added tests/conftest.py with autouse app-data isolation (MUSICBEE_TAGGER_DATA_DIR/HOME/APPDATA -> tmp_path), autouse socket/urlopen network blocker with @pytest.mark.network opt-out, and pytest_collection_modifyitems skips for windows/requires_audio_fixtures markers.
+- Registered network, slow, windows, requires_audio_fixtures markers; enabled --strict-markers, --timeout=120, and -W error::DeprecationWarning:musicbee_tagger_mcp in pyproject.toml; added pytest-timeout dev dependency.
+- Marked test_real_files and test_field_map_roundtrip as requires_audio_fixtures; switched test_windows_mcpb to windows marker; added tests/test_ffmpeg_available.py.
+- Updated CI to assert ffmpeg and run the suite twice for determinism.
+
+### 2026-10-30 — Issue #57: store best MusicBrainz candidate details for unresolved tracks
+- complete_batch now persists best candidate metadata (recording ID, title, artist, duration, duration difference, verification reason) for unresolved/failed tracks.
+- job_status exposes candidate metadata, manual override audit entries, and unresolved review helpers.
+- Added manual staging override paths in job store, playlists tools, staging manager, and tag tools that require and record user justification.
+- Validation: py_compile passed; CI pending.
+
+
+### 2026-10-30 — Issue #57: store best MusicBrainz candidate details for unresolved tracks
+- complete_batch now persists best candidate metadata for unresolved/failed tracks.
+- job_status exposes candidate metadata and manual override audit entries.
+- Added manual staging override paths requiring and recording user justification.
+- Validation: py_compile passed; CI pending.

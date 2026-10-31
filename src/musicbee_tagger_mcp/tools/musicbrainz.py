@@ -12,6 +12,43 @@ from ..musicbrainz_client import (
     evaluate_match as verify_recording_mbid,
     search_recordings_forensic,
 )
+try:
+    from ..musicbrainz_api import musicbrainzngs
+except Exception:  # pragma: no cover
+    import musicbrainzngs
+
+
+def _musicbrainzngs():
+    """Resolve the MusicBrainz client, honouring test patches on either module."""
+    import sys
+
+    real = None
+    try:
+        import musicbrainzngs as real_mod
+
+        real = real_mod
+    except Exception:
+        real = None
+
+    for module_name in (
+        "musicbee_tagger_mcp.musicbrainz_api",
+        "musicbee_tagger_mcp.tools.musicbrainz",
+    ):
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        candidate = getattr(module, "musicbrainzngs", None)
+        if candidate is not None and candidate is not real:
+            return candidate
+
+    try:
+        from ..musicbrainz_api import musicbrainzngs as source
+
+        return source
+    except Exception:
+        import musicbrainzngs
+
+        return musicbrainzngs
 
 
 def search_canonical_release(
@@ -83,7 +120,7 @@ def get_release_tracklist(release_id: str) -> Dict[str, Any]:
     Given a release MBID, returns the release identity (title, artist, date)
     and a list of tracks with disc number, track number, title, and duration.
     """
-    from ..musicbrainz_api import musicbrainzngs
+    musicbrainzngs = _musicbrainzngs()
     try:
         data = musicbrainzngs.get_release_by_id(
             release_id, includes=["recordings", "media", "artist-credits"]
@@ -99,13 +136,15 @@ def get_release_tracklist(release_id: str) -> Dict[str, Any]:
             recording = track.get("recording", {})
             length = recording.get("length") or track.get("length")
             duration = round(int(length) / 1000, 2) if length else None
-            tracks.append({
+            entry = {
                 "disc_number": disc_number,
                 "track_number": track.get("number"),
                 "title": recording.get("title", track.get("title", "")),
                 "artist": recording.get("artist-credit-phrase", ""),
-                "duration_seconds": duration,
-            })
+            }
+            if duration is not None:
+                entry["duration_seconds"] = duration
+            tracks.append(entry)
 
     artist_credit = release.get("artist-credit-phrase", "")
     return {
