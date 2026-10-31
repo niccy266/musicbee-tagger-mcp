@@ -19,6 +19,7 @@ Relay rules (why this file differs from the first version):
     to the client.
 """
 
+import hmac
 import http.server
 import ipaddress
 import itertools
@@ -36,6 +37,10 @@ MCP_PORT = int(os.environ.get("MCP_PORT", "8443"))
 # Tool calls (fingerprinting, MusicBrainz lookups) can be slow; clients apply
 # their own timeouts on top of this.
 REQUEST_TIMEOUT = float(os.environ.get("MCP_REQUEST_TIMEOUT", "120"))
+
+# Optional bearer token for POST /mcp. When set, clients must send
+# "Authorization: Bearer <token>". When empty, no auth is required.
+AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
 
 CERT_DIR = Path(os.environ.get("MCP_CERT_DIR", "/certs"))
 CERT_FILE = CERT_DIR / os.environ.get("MCP_CERT_FILE", "cert.pem")
@@ -220,9 +225,19 @@ class MCPHTTPHandler(http.server.BaseHTTPRequestHandler):
         except (OSError, ValueError) as exc:
             return _rpc_error(msg["id"], -32603, f"MCP backend error: {exc}")
 
+    def _authorized(self) -> bool:
+        if not AUTH_TOKEN:
+            return True
+        supplied = self.headers.get("Authorization", "")
+        return hmac.compare_digest(supplied, f"Bearer {AUTH_TOKEN}")
+
     def do_POST(self):
         if self._path() != "/mcp":
             self._send_json(404, {"error": "not found"})
+            return
+        if not self._authorized():
+            # 403 rather than 401: a 401 makes some clients start an OAuth flow.
+            self._send_json(403, {"error": "missing or invalid bearer token"})
             return
         if _backend is None:
             self._send_json(503, _rpc_error(None, -32603, "backend not ready"))
@@ -334,7 +349,8 @@ def main() -> None:
 
     print(
         f"musicbee-tagger-mcp HTTPS listening on {MCP_HOST}:{MCP_PORT} "
-        f"(stdio backend: python -m {MCP_MODULE})",
+        f"(stdio backend: python -m {MCP_MODULE}; "
+        f"auth: {'bearer token required' if AUTH_TOKEN else 'NONE'})",
         flush=True,
     )
 
