@@ -112,6 +112,20 @@ def verify_artist_credit(
     }
 
 
+def propose_artist_split(
+    artist_field: str,
+    split_ampersand: bool = False,
+    split_comma: bool = False,
+) -> Dict[str, Any]:
+    """Compatibility alias matching the MCP tool name."""
+    return propose_split(artist_field, split_ampersand, split_comma)
+
+
+def flag_suspicious_artists(candidate_artists: List[str]) -> List[Dict[str, str]]:
+    """Compatibility alias matching the MCP tool name."""
+    return heuristic_flags(candidate_artists)
+
+
 def heuristic_flags(candidates: List[str]) -> List[Dict[str, str]]:
     """Cheap sanity flags the agent weighs with its own judgment."""
     flags = []

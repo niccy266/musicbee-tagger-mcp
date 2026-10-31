@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -89,6 +90,12 @@ def build_windows_mcpb_archive(output_path: Path, version: str) -> None:
     with tempfile.TemporaryDirectory(prefix="musicbee-mcpb-", dir=ROOT) as temp_dir:
         temp = Path(temp_dir)
         binary_dir = temp / "dist"
+        build_env = os.environ.copy()
+        if ".pytest_tmp" in build_env.get("APPDATA", "") or not Path(build_env.get("APPDATA", "")).exists():
+            real_appdata = Path.home() / "AppData" / "Roaming"
+            if real_appdata.exists():
+                build_env["APPDATA"] = str(real_appdata)
+
         subprocess.run(
             [
                 sys.executable,
@@ -110,6 +117,7 @@ def build_windows_mcpb_archive(output_path: Path, version: str) -> None:
                 str(ROOT / "release" / "mcpb" / "server.py"),
             ],
             cwd=ROOT,
+            env=build_env,
             check=True,
         )
         with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as archive:

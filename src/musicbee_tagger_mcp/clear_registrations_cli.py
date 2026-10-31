@@ -1,5 +1,6 @@
 """Human-run local cleanup for persisted playlist registrations."""
 
+import argparse
 import sys
 from typing import TextIO
 
@@ -34,6 +35,11 @@ def run(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) ->
 
 def main() -> None:
     """Run the confirmation-gated registration cleanup command."""
+    parser = argparse.ArgumentParser(
+        prog="musicbee-tagger-clear-registrations",
+        description="Remove local token-to-path registrations after confirmation.",
+    )
+    parser.parse_args()
     raise SystemExit(run())
 
 
