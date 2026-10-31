@@ -26,13 +26,13 @@ def redact_paths(text):
         return text
 
     patterns = [
-        re.compile(r"[A-Za-z]:\\.*"),
-        re.compile(r"\\\\[^\s]+"),
+        re.compile(r"[A-Za-z]:[\\/].*"),
+        re.compile(r"\\\\.*"),
         re.compile(r"(?<!\S)/\S+$"),
     ]
 
     current = text
-    for _ in range(5):
+    for _ in range(10):
         previous = current
         try:
             decoded = urllib.parse.unquote(current)
@@ -68,6 +68,8 @@ def _exception_code(exc):
 
 
 def make_error(code, message, *, function=None, path_free=True):
+    if path_free and not isinstance(message, str):
+        message = str(message)
     safe_message = redact_paths(message) if path_free else message
     result = {"error_code": code, "error": safe_message}
     if function is not None:

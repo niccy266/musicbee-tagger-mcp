@@ -97,13 +97,17 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
             briefs.append(error_from_exception(exc, function="get_batch_brief"))
             briefs[-1]["token"] = token
             continue
+        try:
+            _clues = extract_clues_from_filename(str(path))
+        except Exception:
+            _clues = {}
         briefs.append({
             "token": token,
             "display_name": path.name,
             "duration_seconds": metadata.get("duration_seconds"),
             "format": metadata.get("format"),
             "tags": metadata.get("tags", {}),
-            "filename_clues": extract_clues_from_filename(str(path)),
+            "filename_clues": _clues,
         })
 
 

@@ -549,3 +549,15 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Re-ran full suite locally against issue-10 source: 171 passed, 30 skipped.
 - Confirmed CI on PR #116 is green across Python 3.11/3.12/3.14 and Windows MCPB.
 - No further code changes required; acceptance criteria already satisfied by commits 415e630 and 2c6f531.
+
+## 2026-10-31 - Issue #10 follow-up hardening
+
+- Strengthened redact_paths to handle URL-decoded and serialized Windows paths.
+- Hardened remaining MCP error paths (ACRCloud provider errors, batch queue ValueError, batch brief filename clue extraction).
+- Coerced non-string error messages to strings before redaction.
+- Confirmed source files are UTF-8 without BOM; no encoding fixes needed.
+- MusicBrainz User-Agent continues to use the public email contact (repository is private).
+- Audio fixtures remain tracked with documented strategy and autouse protection.
+- Shell-access security boundary remains documented in docs/THREAT_MODEL.md.
+- Exact MCP tool-set check retained.
+- Validation: py_compile passed; CI pending.
