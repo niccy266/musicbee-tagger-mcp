@@ -552,3 +552,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Normalized internal whitespace in `clean_stem` and track-number extraction so invisible-character sanitization does not leave irregular spacing.
 - Preserved existing type-aware bracket matching, meaningful `_2020` suffix handling, hyphenated-title distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
 - Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #7: robust bracket extraction for unmatched openers
+- Reworked `_extract_bracket_contents` to scan each opener independently, so an unmatched outer opener no longer suppresses valid inner bracket clues.
+- Preserved type-aware matching, nested/mixed brackets, unmatched closer handling, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Validation: py_compile passed; CI pending.
