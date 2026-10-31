@@ -24,11 +24,6 @@ def apply_tags_to_file(
     if not path.is_file():
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    backup_path = None
-    if create_backup:
-        backup_path = path.with_suffix(path.suffix + ".bak")
-        shutil.copy2(path, backup_path)
-
     preview = preview_tag_changes(file_path, new_tags)
     if not preview["has_changes"]:
         return {
@@ -41,6 +36,12 @@ def apply_tags_to_file(
     audio = mutagen.File(file_path)
     if audio is None:
         raise ValueError(f"Unsupported format: {file_path}")
+
+    backup_path = None
+    if create_backup:
+        backup_path = path.with_suffix(path.suffix + ".bak")
+        shutil.copy2(path, backup_path)
+
     if hasattr(audio, "tags") and (isinstance(audio.tags, ID3) or path.suffix.lower() == ".mp3"):
         write_id3(audio, new_tags)
     elif isinstance(audio, (FLAC, OggVorbis)):
