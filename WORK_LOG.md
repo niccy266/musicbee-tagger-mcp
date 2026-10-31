@@ -581,3 +581,10 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Retained exact MCP tool-set check and documented fixture/security boundaries.
 - Validation: compileall passed; CI pending.
 
+
+## 2026-10-31 - Issue #10 final fix
+
+- Fixed Windows path regex in redact_paths to actually match backslash paths.
+- Merged master and resolved conflicts; removed undefined audit_staged_changes tool reference.
+- Verified import isolation and redact_paths behavior manually; CI blocked by billing.
+- Validation: compileall and import check passed.
