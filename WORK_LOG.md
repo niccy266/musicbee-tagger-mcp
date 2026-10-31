@@ -580,3 +580,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Verified CI (Repo Health) green on PR #117 for Python 3.11/3.12/3.14 and Windows bundle.
 - Preserved bracketed title text, nested/mixed bracket handling, meaningful `_2020` suffixes, hyphenated title distinction, invisible-char sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
 
+
+### 2026-11-01 — Issue #7: final robustness review and handoff
+- Re-reviewed filename_parser against acceptance criteria; no code changes required.
+- Manual smoke checks passed for brackets, suffixes, track numbers, invisible chars, hypotheses, subtitles, multilingual examples.
+- CI green on PR #117.
