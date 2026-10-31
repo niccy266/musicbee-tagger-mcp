@@ -531,3 +531,14 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - register_playlist now reads audio metadata during registration, stores it on job tracks, reorders the job, and the CLI reports album groupings.
 - Added matching module-level wrappers and MCP tool registration for the new ordering/grouping operations.
 - Validation: py_compile passed for changed modules; smoke-tested ordering, grouping, explicit reorder, and pending-only reorder. CI pending.
+
+### 2026-10-31 — Issue #45 album/track ordering follow-up
+- Removed duplicate `add_track`/`append_track`/`add_registered_entry` definitions that caused pylint E0102 failures.
+- Added module-level registry resolution and track enrichment from the file registry so reorder/group/create operations can resolve album/disc/track metadata from tokens.
+- Verified lint and test suites pass via GitHub Actions CI (run 41175729366) on PR #115.
+### 2026-10-31 — Issue #45 album/track ordering follow-up
+
+- Removed duplicate `add_track`/`append_track`/`add_registered_entry` definitions that caused pylint E0102 failures.
+- Added module-level registry resolution and track enrichment from the file registry so reorder/group/create operations can resolve album/disc/track metadata from tokens.
+- Verified lint and test suites pass via GitHub Actions CI (run 41175729366) on PR #115.
+
