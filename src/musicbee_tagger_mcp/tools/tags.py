@@ -50,6 +50,10 @@ def stage_tag_changes(
     match_source: Optional[str] = None,
     match_confidence: Optional[float] = None,
     notes: str = "",
+    job_id: Optional[str] = None,
+    batch: Optional[str] = None,
+    note: Optional[str] = None,
+    rationale: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
@@ -86,9 +90,8 @@ def stage_tag_changes(
         )
 
 
-def list_staged_changes() -> List[Dict[str, Any]]:
-    """List pending staged changes using path-free summaries."""
-    return get_staging_manager().list_pending()
+def list_staged_changes(status=None, token=None, file=None, file_identity=None, display_name=None, job_id=None, batch=None, query=None, search=None, text=None, limit=100, offset=0):
+    return get_staging_manager().list_staged_changes(status=status, token=token, file=file, file_identity=file_identity, display_name=display_name, job_id=job_id, batch=batch, query=query, search=search, text=text, limit=limit, offset=offset)
 
 
 def get_staged_change(stage_id: str) -> Dict[str, Any]:
