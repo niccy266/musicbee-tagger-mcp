@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 def cmd_apply_one(applier, stage_id: str, dry_run: bool, no_backup: bool) -> str:
     try:
         manifest = applier.load(stage_id)
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         logger.error("Staged manifest %s is missing; skipping it.", stage_id)
         print(f"\n[ERROR] Stage {stage_id} is missing; moving to the next item.")
         return "missing_stage"
