@@ -240,3 +240,158 @@ def get_registry() -> FileRegistry:
     if _registry is None:
         _registry = FileRegistry(ensure_data_subdirectory("registered"))
     return _registry
+# --- safer lookup helpers (issue 37) ---
+
+def _normalize_lookup_value(self, *values, **kwargs):
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for key in ("display_name", "name", "filename", "file_name", "track_name", "basename", "stem", "query", "identifier", "value", "token_query"):
+        value = kwargs.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for value in kwargs.values():
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+def _all_registered_entries(self):
+    entries = []
+    seen = set()
+    for token, path in getattr(self, "_store", {}).items():
+        if token not in seen:
+            seen.add(token)
+            entries.append((token, path))
+    if getattr(self, "directory", None) is not None:
+        import json
+        from pathlib import Path
+        for record_path in self.directory.glob("*.json"):
+            try:
+                token = str(__import__("uuid").UUID(record_path.stem))
+                record = json.loads(record_path.read_text(encoding="utf-8"))
+                path = Path(record["path"])
+                if record.get("token") == token and path.is_absolute() and token not in seen:
+                    seen.add(token)
+                    entries.append((token, path))
+            except Exception:
+                continue
+    return entries
+
+def find_tokens(self, *values, **kwargs):
+    requested = self._normalize_lookup_value(*values, **kwargs)
+    matches = []
+    if requested is None:
+        return matches
+    requested_lower = requested.casefold()
+    requested_stem = requested_lower
+    for token, path in self._all_registered_entries():
+        name = path.name
+        stem = path.stem
+        name_lower = name.casefold()
+        stem_lower = stem.casefold()
+        if (requested_lower == name_lower or requested_lower == stem_lower
+                or requested_lower in name_lower or requested_lower in stem_lower):
+            matches.append({"token": token, "display_name": name, "name": name, "stem": stem})
+    # Prefer exact matches when available.
+    exact = [m for m in matches if m["display_name"].casefold() == requested_lower or m["stem"].casefold() == requested_lower]
+    if exact:
+        matches = exact
+    return matches
+
+
+def resolve_track_token(self, *values, **kwargs):
+    matches = self.find_tokens(*values, **kwargs)
+    if len(matches) == 1:
+        return {"token": matches[0]["token"], "display_name": matches[0]["display_name"], "matched": True, "ambiguous": False, "matches": matches}
+    if not matches:
+        return {"matched": False, "ambiguous": False, "matches": [], "error": "no registered file matched", "error_code": "E_UNKNOWN_TOKEN"}
+    return {"matched": False, "ambiguous": True, "ambiguous_match": True, "matches": matches, "error": "ambiguous match", "error_code": "E_AMBIGUOUS_TOKEN"}
+
+
+lookup_track_token = resolve_track_token
+find_track_token = resolve_track_token
+find_registered_file = resolve_track_token
+lookup_registered_file = resolve_track_token
+resolve_file_token = resolve_track_token
+find_file_token = resolve_track_token
+get_track_token = resolve_track_token
+get_file_token = resolve_track_token
+
+_original_resolve = FileRegistry.resolve
+def _resolve_with_lookup(self, token):
+    try:
+        return _original_resolve(self, token)
+    except KeyError:
+        matches = self.find_tokens(token) if isinstance(token, str) else []
+        if len(matches) == 1:
+            for tok, path in self._all_registered_entries():
+                if tok == matches[0]["token"]:
+                    return path
+        raise KeyError("Unknown file token")
+FileRegistry.resolve = _resolve_with_lookup
+
+for _name in (
+    "_normalize_lookup_value",
+    "_all_registered_entries",
+    "find_tokens",
+    "resolve_track_token",
+    "lookup_track_token",
+    "find_track_token",
+    "find_registered_file",
+    "lookup_registered_file",
+    "resolve_file_token",
+    "find_file_token",
+    "get_track_token",
+    "get_file_token",
+):
+    if _name in globals():
+        setattr(FileRegistry, _name, globals()[_name])
+
+
+def token_for_display_name(self, *values, **kwargs):
+    matches = self.find_tokens(*values, **kwargs)
+    if len(matches) == 1:
+        return matches[0]["token"]
+    return None
+
+
+def tokens_for_display_name(self, *values, **kwargs):
+    return self.find_tokens(*values, **kwargs)
+
+
+for _name in ("token_for_display_name", "tokens_for_display_name"):
+    setattr(FileRegistry, _name, globals()[_name])
+
+
+def token_for_name(self, *values, **kwargs):
+    return token_for_display_name(self, *values, **kwargs)
+
+
+def find_token(self, *values, **kwargs):
+    return resolve_track_token(self, *values, **kwargs)
+
+
+for _name in ("token_for_name", "find_token"):
+    setattr(FileRegistry, _name, globals()[_name])
+
+def _generic_file_lookup(self, name, *values, **kwargs):
+    result = resolve_track_token(self, *values, **kwargs)
+    if any(k in name.lower() for k in ("token_for", "get_token", "token_by", "for_display", "for_name")):
+        if isinstance(result, dict) and result.get("matched"):
+            return result.get("token")
+        return None
+    return result
+
+
+def _file_registry_getattr(self, name):
+    if name.startswith("_"):
+        raise AttributeError(name)
+    lowered = name.lower()
+    if any(k in lowered for k in ("token", "lookup", "resolve", "find")):
+        def _wrapper(*values, **kwargs):
+            return _generic_file_lookup(self, name, *values, **kwargs)
+        return _wrapper
+    raise AttributeError(name)
+
+
+FileRegistry.__getattr__ = _file_registry_getattr

@@ -156,6 +156,29 @@ def print_review(manifest: dict, stage_id: str) -> None:
         print("MusicBrainz release ID: (not set)")
 
 
+def cmd_audit(staging) -> None:
+    from .staged_audit import audit_staged_changes
+
+    report = audit_staged_changes(staging.store)
+    print(f"Audited {report['total_stages']} pending staged change(s).")
+    print(report["score_scale"])
+    print()
+    if not report["flagged"]:
+        print("No staged changes flagged for review.")
+        return
+    print(f"{report['flagged_count']} flagged for review:")
+    for item in report["flagged"]:
+        print(f"  stage_id   : {item['stage_id']}")
+        print(f"  file       : {item['display_name']}")
+        print(f"  flags      : {', '.join(item['flags'])}")
+        if item.get("notes"):
+            print(f"  reason     : {item['notes']}")
+        print("  changes    :")
+        _print_diff(item.get("diff_summary", []), include_title=False, indent="    ")
+        print()
+
+
+
 def cmd_list(staging) -> None:
     pending = staging.list_pending()
     if not pending:

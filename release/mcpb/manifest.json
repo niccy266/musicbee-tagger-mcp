@@ -113,6 +113,10 @@
     {
       "name": "identify_acrcloud",
       "description": "Identify a registered track using ACRCloud (opt-in fallback)."
+    },
+    {
+      "name": "resolve_track_token",
+      "description": "Resolve a registered track token from identifying file information."
     }
   ],
   "keywords": [
