@@ -104,17 +104,7 @@ def block_network(request, monkeypatch):
             if request_urllib is not None and hasattr(request_urllib, "request"):
                 monkeypatch.setattr(request_urllib.request, "urlopen", _blocked, raising=False)
 
-    try:
-        yield
-    finally:
-        socket.socket = original_socket
-        urllib.request.urlopen = original_urlopen
-        for module_name in ("musicbee_tagger_mcp.acrcloud", "musicbee_tagger_mcp.tools.text", "musicbee_tagger_mcp.acoustid", "musicbee_tagger_mcp.tools.acoustid"):
-            module = sys.modules.get(module_name)
-            if module is not None and hasattr(module, "urllib"):
-                request_urllib = getattr(module, "urllib", None)
-                if request_urllib is not None and hasattr(request_urllib, "request"):
-                    request_urllib.request.urlopen = original_urlopen
+    yield
 
 
 def pytest_collection_modifyitems(config, items):
