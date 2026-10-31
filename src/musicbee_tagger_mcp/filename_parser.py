@@ -186,7 +186,7 @@ def extract_clues_from_filename(filename: str) -> Dict[str, Any]:
             context_clues.append(folder)
 
     return {
-        "raw_filename": _sanitize(Path(filename).name),
+        "raw_filename": _sanitize(str(filename).replace("\\", "/").rsplit("/", 1)[-1]),
         "cleaned_stem": cleaned_stem,
         "track_number_guess": track_num,
         "artist_guess": artist_guess,
