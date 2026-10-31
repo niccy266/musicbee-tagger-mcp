@@ -542,3 +542,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Ran full test suite with repository venv and `PYTHONPATH=src`: 183 passed, 30 skipped.
 - Ran pylint errors-only on `src`: clean.
 - No code changes required; branch and PR #114 already contain the implementation.
+
+### 2026-10-31 — Issue #7: whitespace normalization and track stem cleanup
+- Normalized internal whitespace in `clean_stem` and track-number-stripped stems.
+- Preserved existing bracket, suffix, hyphenated-title, and invisible-character behavior.
+- Validation: py_compile passed; push and CI pending.
