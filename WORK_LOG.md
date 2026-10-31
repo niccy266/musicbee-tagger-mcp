@@ -619,3 +619,14 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed pylint duplicate method/function definitions in job_store.py and tools/musicbrainz.py.
 - Hardened redact_paths for bytes, None, and dict keys.
 - Verified imports and pylint errors-only pass locally.
+
+
+## 2026-10-31 - Issue #10 final hardening (agent)
+
+- Re-added audit_staged_changes helper in tools/tags.py (path-safe wrapper).
+- Verified exact MCP tool set now matches test_secure_pipeline (33 tools).
+- Verified import isolation: server does not import physical write modules.
+- Source files are UTF-8 without BOM; no encoding fixes needed.
+- MusicBrainz UA uses public email contact (repo private).
+- Audio fixture protection and shell-access boundary already documented.
+- Validation: compileall passed; CI blocked by billing.

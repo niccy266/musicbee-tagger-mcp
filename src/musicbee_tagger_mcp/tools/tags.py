@@ -274,3 +274,9 @@ def register_tag_tools(app) -> None:
     app.tool()(get_staged_change)
     app.tool()(amend_staged_changes)
     app.tool()(withdraw_staged_change)
+def audit_staged_changes(**kwargs):
+    try:
+        r = get_staging_manager().audit_staged_changes(**kwargs)
+    except Exception:
+        return make_error(E_STAGING_FAILED, 'unable to audit staged changes', function='audit_staged_changes')
+    return dict(r._report) if hasattr(r, "_report") else (dict(r) if isinstance(r, dict) else {"flagged": list(r), "stages": list(r)})
