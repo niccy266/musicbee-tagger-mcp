@@ -214,6 +214,7 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "read_track_metadata",
         "extract_filename_clues",
         "get_batch_brief",
+        "resolve_track_token",
         "search_canonical_release",
         "verify_mbid",
         "preview_tags",
