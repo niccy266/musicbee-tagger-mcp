@@ -87,6 +87,16 @@ resolve to the newest model in a family.
   the model rather than raising.
 - Tool results are truncated to 6 KB per message to bound context growth.
 
+## Concurrency and recovery
+
+`JobStore` serializes reads and writes for one data directory with a cross-process file lock (`.jobs.lock` in the jobs directory). Multiple `openrouter_agent_loop.py` processes, MCP servers, or CLI commands sharing a data directory therefore cannot claim the same pending tokens, and `complete_batch`/`release_batch` updates are not lost.
+
+- `next_batch` claims tokens atomically under the lock; a second process sees the updated `in_progress` statuses and skips them.
+- Writes are persisted atomically (temporary file + replace) to avoid partial job files.
+- Interrupted or failed runs can be recovered by calling `release_batch` for the affected tokens (returns them to `pending`, moving them to the end of the queue) or by restarting the agent loop with `--resume`, which releases stuck in-progress tokens from the previous run before claiming new work.
+
+If a process is killed while holding the lock, the operating system releases the file lock automatically; the job file remains consistent because writes are atomic.
+
 ## Costs
 
 A batch of 10 files typically needs 15-40 tool-call turns; with a small model

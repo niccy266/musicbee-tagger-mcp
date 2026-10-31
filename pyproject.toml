@@ -51,3 +51,14 @@ markers = [
 
 [tool.uv]
 cache-dir = ".uv-cache"
+
+
+[tool.coverage.run]
+source = ["musicbee_tagger_mcp"]
+
+[tool.coverage.report]
+exclude_lines = [
+    'if __name__ == "__main__":',
+]
+show_missing = true
+fail_under = 73

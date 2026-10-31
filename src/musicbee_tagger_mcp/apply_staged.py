@@ -23,6 +23,30 @@ from .staged_review import cmd_list, print_review, _print_diff
 from .staged_apply import get_staged_applier
 from .staging import get_staging_manager
 
+from .staged_audit import audit_staged_changes as _audit_staged_changes
+
+
+def cmd_audit(staging) -> None:
+    report = _audit_staged_changes(staging.store)
+    print(f"Audited {report['total_stages']} pending staged change(s).")
+    print(report["score_scale"])
+    print()
+    if not report["flagged"]:
+        print("No staged changes flagged for review.")
+        return
+    print(f"{report['flagged_count']} flagged for review:")
+    for item in report["flagged"]:
+        print(f"  stage_id   : {item['stage_id']}")
+        print(f"  file       : {item['display_name']}")
+        print(f"  flags      : {', '.join(item['flags'])}")
+        if item.get("notes"):
+            print(f"  reason     : {item['notes']}")
+        print("  changes    :")
+        _print_diff(item.get("diff_summary", []), include_title=False, indent="    ")
+        print()
+
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -182,6 +206,7 @@ def main() -> None:
     group.add_argument("--stage-id", metavar="UUID", help="Apply or revert a specific staged change.")
     group.add_argument("--all", action="store_true", help="Apply all pending staged changes.")
     group.add_argument("--list", action="store_true", help="List all pending staged changes.")
+    group.add_argument("--audit", action="store_true", help="Audit pending staged changes for duplicates, conflicts, empty diffs, and low scores.")
     group.add_argument("--list-applied", action="store_true",
                        help="List all applied changes that can be reverted (have a .bak backup).")
     group.add_argument("--revert", action="store_true",
@@ -200,6 +225,10 @@ def main() -> None:
 
     if args.list:
         cmd_list(staging)
+        return
+
+    if args.audit:
+        cmd_audit(staging)
         return
 
     if args.list_applied:

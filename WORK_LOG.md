@@ -1,3 +1,9 @@
+### 2026-10-29 — Add staged-change audit for duplicate, conflicting, empty, or low-confidence stages (#49)
+
+- Added read-only staged-change audit (`StagingManager.audit_staged_changes()` plus aliases and MCP tool `audit_staged_changes`) that inspects pending manifests without applying or discarding them.
+- Detects multiple pending stages for the same file, overlapping/conflicting field changes, empty diffs, and unusually low forensic scores.
+- Report includes stage IDs, file identity, notes/reason, diffs, score scale/meaning, thresholds, and grouped findings.
+- Added CLI `--audit` and `cmd_audit` helpers in `staged_review`/`apply_staged`.
 ### 2026-10-30 — Issue #68: harden MCP tool wrappers for offline tests
 
 - Updated `tools/musicbrainz.py` `get_release_tracklist` to omit `duration_seconds` when unknown, harden zero-media/404/transport paths, and resolve MusicBrainz client in a patch-friendly way.
@@ -508,6 +514,22 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added genre_cleanup module with clean_genre_clutter and aliases, preserving separators and real genres; mood removal is explicit.
 - Added MCP tool clean_genre_clutter with per-track diffs and skip for no-change tracks.
 - Registered tool and updated security tool set.
+
+### 2026-10-30 — Add cross-process locking to JobStore (#55)
+
+- Wrapped all `JobStore` reads/writes in a cross-process file lock (`.jobs.lock` per jobs directory) with an in-process `RLock`, mirroring the established `StageManifestStore` pattern.
+- `next_batch`, `complete_batch`, `release_batch`, `add_track`, `set_skipped`, `load_job`, `list_jobs`, `job_status`, `preview_batch`, and `peek_pending` now load and persist under the lock, so concurrent agents cannot claim overlapping tokens or lose status updates.
+- Writes are now atomic (temp file + `os.replace`) to avoid partial job files; directories are created as needed.
+- Added `transact`/`mutate` helpers for atomic job updates and documented concurrent-agent support plus `release_batch`/`--resume` recovery in `docs/OPENROUTER_AGENT.md`.
+- Validation: `py_compile` and import smoke passed; manual thread-concurrency smoke confirmed 20/20 unique claims across 5 threads. Full suite to be verified by CI.
+
+### 2026-10-30 — Add coverage reporting and floors (issue #66)
+
+- Added `pytest-cov` to dev dependencies.
+- Configured pytest to emit `term-missing` and XML coverage reports with a 73% floor.
+- Added `[tool.coverage.run]`/`[tool.coverage.report]` config with `source = ["musicbee_tagger_mcp"]` and `if __name__ == "__main__":` exclusion.
+- Updated `health.yml` test leg with coverage command, write-path (>=80%) and uncovered-module guards, and artifact upload.
+- Pushed branch; opened PR.
 ### 2026-10-30 — Issue #70: tests/conftest.py isolation, network guard, timeouts, markers
 - Added tests/conftest.py with autouse app-data isolation (MUSICBEE_TAGGER_DATA_DIR/HOME/APPDATA -> tmp_path), autouse socket/urlopen network blocker with @pytest.mark.network opt-out, and pytest_collection_modifyitems skips for windows/requires_audio_fixtures markers.
 - Registered network, slow, windows, requires_audio_fixtures markers; enabled --strict-markers, --timeout=120, and -W error::DeprecationWarning:musicbee_tagger_mcp in pyproject.toml; added pytest-timeout dev dependency.
