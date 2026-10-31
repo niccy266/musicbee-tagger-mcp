@@ -14,6 +14,7 @@ from ..error_codes import (
     make_error,
 )
 from ..file_registry import get_registry
+from ..match_store import resolve_match, resolve_match_for_token
 from ..staging import get_staging_manager
 from ..tag_writer import preview_tag_changes
 
@@ -50,6 +51,14 @@ def stage_tag_changes(
     match_source: Optional[str] = None,
     match_confidence: Optional[float] = None,
     notes: str = "",
+    match_handle: Optional[str] = None,
+    match_ref: Optional[str] = None,
+    mbid_handle: Optional[str] = None,
+    verified_match: Optional[str] = None,
+    match_id: Optional[str] = None,
+    recording_id: Optional[str] = None,
+    release_id: Optional[str] = None,
+    mbid: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
@@ -57,6 +66,32 @@ def stage_tag_changes(
     allowed regardless of whether verification passed). NEXT STEP: After
     staging, call finish_batch when all files are resolved.
     """
+    if mb_recording_id is None:
+        for _handle in (match_handle, match_ref, mbid_handle, verified_match, match_id, mbid):
+            if _handle is not None:
+                _match = resolve_match(_handle)
+                if _match:
+                    mb_recording_id = _match.get("recording_id") or mb_recording_id
+                    if mb_release_id is None:
+                        mb_release_id = _match.get("release_id")
+                    if forensic_score is None:
+                        forensic_score = _match.get("confidence")
+                    break
+    if mb_recording_id is None:
+        _match = resolve_match_for_token(token)
+        if _match:
+            mb_recording_id = _match.get("recording_id")
+            if mb_release_id is None:
+                mb_release_id = _match.get("release_id")
+            if forensic_score is None:
+                forensic_score = _match.get("confidence")
+    if mb_recording_id is None and recording_id is not None:
+        mb_recording_id = recording_id
+    if mb_release_id is None and release_id is not None:
+        mb_release_id = release_id
+    if mbid is not None and mb_recording_id is None:
+        mb_recording_id = mbid
+
     try:
         entry = get_registry().resolve(token)
     except KeyError:
@@ -119,6 +154,14 @@ def amend_staged_changes(
     mb_release_id: Optional[str] = None,
     match_source: Optional[str] = None,
     match_confidence: Optional[float] = None,
+    match_handle: Optional[str] = None,
+    match_ref: Optional[str] = None,
+    mbid_handle: Optional[str] = None,
+    verified_match: Optional[str] = None,
+    match_id: Optional[str] = None,
+    recording_id: Optional[str] = None,
+    release_id: Optional[str] = None,
+    mbid: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Amend a pending proposal without writing audio.
 
@@ -128,6 +171,21 @@ def amend_staged_changes(
     change is re-previewed against current tags. Supply a path-free reason and
     the revision from list_staged_changes or get_staged_change; re-read a stale stage.
     """
+    if mb_recording_id is None:
+        for _handle in (match_handle, match_ref, mbid_handle, verified_match, match_id, mbid):
+            if _handle is not None:
+                _match = resolve_match(_handle)
+                if _match:
+                    mb_recording_id = _match.get("recording_id")
+                    if mb_release_id is None:
+                        mb_release_id = _match.get("release_id")
+                    break
+    if mb_recording_id is None and recording_id is not None:
+        mb_recording_id = recording_id
+    if mb_release_id is None and release_id is not None:
+        mb_release_id = release_id
+    if mbid is not None and mb_recording_id is None:
+        mb_recording_id = mbid
     try:
         return get_staging_manager().amend(
             stage_id,

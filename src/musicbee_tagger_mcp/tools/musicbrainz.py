@@ -137,3 +137,58 @@ def register_split_tools(app) -> None:
     app.tool()(search_musicbrainz_artist)
     app.tool()(verify_artists_on_recording)
     app.tool()(flag_suspicious_artists)
+
+_original_verify_mbid = verify_mbid
+def verify_mbid(
+    recording_id: str,
+    expected_artist: Optional[str] = None,
+    expected_title: Optional[str] = None,
+    duration_sec: Optional[float] = None,
+    forensic_score: Optional[float] = None,
+    release_id: Optional[str] = None,
+    token: Optional[str] = None,
+    file_token: Optional[str] = None,
+    track_token: Optional[str] = None,
+    display_name: Optional[str] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    _token = token or file_token or track_token
+    if _token is None and display_name is not None:
+        try:
+            from ..file_registry import get_registry
+            _matches = get_registry().find_tokens(display_name)
+            if len(_matches) == 1:
+                _token = list(_matches[0].values())[0]
+        except Exception:
+            _token = None
+    result = _original_verify_mbid(
+        recording_id,
+        expected_artist=expected_artist,
+        expected_title=expected_title,
+        duration_sec=duration_sec,
+        forensic_score=forensic_score,
+        release_id=release_id,
+        token=_token,
+        **kwargs,
+    )
+    try:
+        _handle = result.get("match_handle") or result.get("handle")
+        if _token is not None and result.get("recording_id"):
+            from ..match_store import record_match
+            _handle = record_match(
+                result.get("recording_id"),
+                release_id=result.get("top_release", {}).get("release_id") if isinstance(result.get("top_release"), dict) else release_id,
+                confidence=result.get("confidence"),
+                token=_token,
+                genre=result.get("genre"),
+            )
+        if _handle is not None:
+            result["match_handle"] = _handle
+            result["mbid_handle"] = _handle
+            result["handle"] = _handle
+            result["verified_match"] = _handle
+    except Exception:
+        pass
+    return result
+
+evaluate_match = verify_mbid

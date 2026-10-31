@@ -493,3 +493,10 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+### 2026-11-01 — Issue #37: safer file and MBID lookup
+
+- Added FileRegistry.find_tokens/resolve_track_token lookup by display name (and aliases), with ambiguous-match handling.
+- Enhanced FileRegistry.resolve to resolve by display name when a UUID is not supplied.
+- Added MCP tool resolve_track_token and module aliases for lookup helpers.
+- Added match handle store (match_store.py) and wired verify_mbid to return/carry handles; stage_tag_changes and amend_staged_changes accept handle aliases and auto-resolve MBIDs.
+- Updated tests/manifest for new tool surface.
