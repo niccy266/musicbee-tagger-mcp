@@ -599,3 +599,12 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Confirmed shell-access security boundary documented in docs/THREAT_MODEL.md.
 - Validation: compileall and import checks passed; CI verification pending due to billing block.
 """
+
+## 2026-10-31 - Issue #10 final hardening (agent)
+
+- Repaired duplicate `manual_override` parameter in `StagingManager.stage`, restoring a valid signature and docstring.
+- Re-added `manual_override` parameters to `stage_tag_changes` so staging calls resolve correctly.
+- Hardened `redact_paths` POSIX pattern to redact absolute paths while preserving inline API-style slash segments and serialized Windows paths.
+- Redacted queue operation error strings in `operations.py`.
+- Verified source compiles and exact MCP tool set remains unchanged.
+- Validation: compileall passed; CI pending due to billing.
