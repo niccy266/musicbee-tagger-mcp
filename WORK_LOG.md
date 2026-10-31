@@ -608,3 +608,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Redacted queue operation error strings in `operations.py`.
 - Verified source compiles and exact MCP tool set remains unchanged.
 - Validation: compileall passed; CI pending due to billing.
+
+## 2026-10-31 - Issue #10 verification refresh (agent)
+
+- Re-verified redact_paths behavior for decoded and serialized Windows paths; compileall passed.
+- Confirmed exact MCP tool set and import isolation remain intact.
+- CI verification remains blocked by repository billing limits; changes pushed for CI.
