@@ -96,6 +96,22 @@ def run(
         for entry in skipped:
             print(f"- Line {entry['line']}: {entry['error']}", file=output_stream)
 
+    try:
+        groups = get_job_store().album_groups(job_id)
+        group_count = groups.get("group_count", 0) if isinstance(groups, dict) else 0
+        if group_count:
+            print(f"Album groups: {group_count}", file=output_stream)
+            for group in groups.get("album_groups", []):
+                print(
+                    f"- {group.get('album')}: {group.get('track_count', 0)} track(s)",
+                    file=output_stream,
+                )
+        single_count = groups.get("single_count", 0) if isinstance(groups, dict) else 0
+        if single_count:
+            print(f"Single-track items: {single_count}", file=output_stream)
+    except Exception:
+        pass
+
     return 0
 
 
