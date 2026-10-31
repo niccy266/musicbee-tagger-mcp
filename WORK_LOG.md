@@ -519,6 +519,11 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+### 2026-10-30 — Issue #39: searchable, paginated, annotatable staged changes
+- Extended StageManifestStore with `_summary`, `_status`, and `list_staged_changes` (plus aliases) supporting status/token/file/job/batch/query filters and limit/offset pagination; included status/file/token/job/batch/notes/timestamps in summaries.
+- Updated StagingManager.stage to persist token/job/batch and note/rationale aliases; added annotate method and aliases; updated list_pending summaries.
+- Updated stage_tag_changes tool to accept job_id/batch/note/rationale and list_staged_changes tool to accept filters/pagination.
+- Verified import and basic functional flow via smoke script; pushed branch and opened PR #109.
 ### 2026-11-01 — Issue #37: safer file and MBID lookup
 
 - Added FileRegistry.find_tokens/resolve_track_token lookup by display name (and aliases), with ambiguous-match handling.
