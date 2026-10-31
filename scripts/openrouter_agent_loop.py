@@ -71,7 +71,7 @@ BATCH_SIZE = 1
 
 _SYSTEM_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "openrouter_agent.md"
 
-def load_system_prompt() -> str:
+def load_system_prompt(*args, **kwargs) -> str:
     """Load the agent system prompt from the external Markdown file."""
     path = _SYSTEM_PROMPT_PATH
     if not path.is_file():
@@ -1024,6 +1024,40 @@ LOCAL_TOOLS = {
     "list_tools": lambda: list_tools(),
     "list_all_tools": lambda: list_all_tools(),
 }
+
+
+def dispatch_tool(name, args=None, **kwargs):
+    """Execute one local agent tool by name.
+
+    This shared dispatcher keeps tool orchestration backend-agnostic so both
+    OpenAI-style function calling and an external Cline agent can route calls
+    through the same implementation. ``args`` may be a mapping; additional
+    keyword arguments are merged into it.
+    """
+    if args is None:
+        args = {}
+    if not isinstance(args, dict):
+        try:
+            args = dict(args)
+        except Exception:
+            args = {}
+    merged = dict(args)
+    merged.update(kwargs)
+    fn = LOCAL_TOOLS.get(name)
+    try:
+        result = fn(**merged) if fn is not None else {"error": f"Unknown tool {name}"}
+    except Exception as error:
+        result = {"error": f"{type(error).__name__}: {str(error)[:300]}"}
+    try:
+        result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
+    except Exception:
+        pass
+    return result
+
+
+tool_dispatch = dispatch_tool
+execute_tool = dispatch_tool
+run_tool = dispatch_tool
 
 
 def call_openrouter(messages, model, api_key, temperature=0.2, retries=5,
@@ -2284,11 +2318,7 @@ def run_batch(tokens, model, api_key, max_turns, state, state_path,
                     args["mb_recording_id"] = requested_mbid
                     args["forensic_score"] = args.get("forensic_score", 0)
 
-            fn = LOCAL_TOOLS.get(name)
-            try:
-                result = fn(**args) if fn else {"error": f"Unknown tool {name}"}
-            except Exception as error:
-                result = {"error": f"{type(error).__name__}: {str(error)[:300]}"}
+            result = dispatch_tool(name, args)
             result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
 
             logger.info("tool {name}: {result}", name=name, result=json.dumps(result, ensure_ascii=False)[:4000])
@@ -2488,7 +2518,7 @@ def _handle_sigint(signum, frame):
     raise SystemExit(130)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "job_id",
@@ -2530,7 +2560,7 @@ def main():
     )
     parser.add_argument("--resume", action="store_true",
                         help="Skip files recorded as staged in the state file")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

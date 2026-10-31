@@ -102,3 +102,29 @@ If a process is killed while holding the lock, the operating system releases the
 A batch of 10 files typically needs 15-40 tool-call turns; with a small model
 this is well under USD 0.05 per batch. Check current pricing at
 https://openrouter.ai/models.
+
+## Generic agent entry point and Cline backend
+
+The shared entry point ``scripts/agent_loop_script.py`` (also available as
+``scripts/agent_loop.py`` and ``scripts/agent.py``) selects a backend with
+``--agent`` / ``--agent-type`` / ``--backend``:
+
+```sh
+# Built-in OpenRouter / OpenAI-style function calling (default)
+python scripts/agent_loop_script.py --agent openrouter [job_id]
+
+# Local Cline installation (npm install -g cline)
+python scripts/agent_loop_script.py --agent cline [job_id]
+```
+
+The Cline backend delegates to a locally installed ``cline`` executable. Install
+and authenticate it first:
+
+```sh
+npm i -g cline
+cline auth
+```
+
+Cline is given the MusicBee Tagger MCP tools through its MCP configuration and
+uses the same opaque-token, path-free workflow as the OpenRouter backend. The
+OpenRouter backend remains the default and uses OpenAI-style function calling.

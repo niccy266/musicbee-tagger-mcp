@@ -510,6 +510,15 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
+
+### 2026-10-30 — Implement Cline backend for shared agent loop (#78)
+- Generalized `scripts/agent_loop_script.py` to accept `--agent`/`--agent-type`/`--backend` (`openrouter`, `openai`, `cline`) and delegate to the selected backend.
+- Implemented `scripts/cline_agent.py`: Cline executable discovery, MCP config generation, task prompt construction, command building, and subprocess execution with a missing-dependency fallback.
+- Added compatibility entry points `scripts/agent_loop.py` and `scripts/agent.py`.
+- Abstracted OpenRouter tool orchestration with `dispatch_tool` (plus aliases) and routed `run_batch` through it.
+- Documented both OpenRouter and Cline modes in `docs/OPENROUTER_AGENT.md`.
+- Validation: py_compile/import smoke tests passed; full CI verification pending.
+
 ### 2026-10-30 — Safe genre cleanup workflow for chart and language clutter (#48)
 - Added genre_cleanup module with clean_genre_clutter and aliases, preserving separators and real genres; mood removal is explicit.
 - Added MCP tool clean_genre_clutter with per-track diffs and skip for no-change tracks.
@@ -549,6 +558,12 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
 
+## 2026-10-31 - Issue #78 follow-up
+- Generalized agent loop module aliases (`scripts/agent_loop.py`, `scripts/agent.py`) to re-export the full OpenRouter loop API while retaining backend-aware entry points.
+- Made `openrouter_agent.run` forward job ids and tolerate loop `main(argv)` calling conventions.
+- Updated system prompt wording to include "tagger" for generalized agent usage.
+- Hardened Cline MCP config generation for string server commands.
+- Updated OpenRouter `load_system_prompt` to accept optional backend arguments.
 ### 2026-10-31 — Issue #98 agent tool usage helpers
 - Added scripts/commands.py with run_commands validation, execution, and gh_issue_comment wrapper.
 - Registered run_commands and gh_issue_comment in openrouter agent TOOLS and LOCAL_TOOLS.
