@@ -101,6 +101,7 @@ def clean_stem(filename: str) -> str:
             stem = stem[:-len(ext)]
             break
     # Remove trailing track-number suffixes like _1, _2 (but not _2020).
+    stem = stem.strip()
     stem = re.sub(r"_\d{1,3}$", "", stem)
     # Normalize internal whitespace (including any left by sanitization).
     stem = re.sub(r"\s+", " ", stem).strip()
