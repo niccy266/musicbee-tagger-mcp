@@ -614,3 +614,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Re-verified redact_paths behavior for decoded and serialized Windows paths; compileall passed.
 - Confirmed exact MCP tool set and import isolation remain intact.
 - CI verification remains blocked by repository billing limits; changes pushed for CI.
+
+### 2026-10-31 — Issue #10 finalization
+- Fixed pylint duplicate method/function definitions in job_store.py and tools/musicbrainz.py.
+- Hardened redact_paths for bytes, None, and dict keys.
+- Verified imports and pylint errors-only pass locally.
