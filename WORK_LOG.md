@@ -547,3 +547,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Normalized internal whitespace in `clean_stem` and track-number-stripped stems.
 - Preserved existing bracket, suffix, hyphenated-title, and invisible-character behavior.
 - Validation: py_compile passed; push and CI pending.
+
+### 2026-10-31 — Issue #7: normalize whitespace in filename stem parsing
+- Normalized internal whitespace in `clean_stem` and track-number extraction so invisible-character sanitization does not leave irregular spacing.
+- Preserved existing type-aware bracket matching, meaningful `_2020` suffix handling, hyphenated-title distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Validation: py_compile passed; CI pending.
