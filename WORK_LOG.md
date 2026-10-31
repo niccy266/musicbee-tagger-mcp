@@ -557,3 +557,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Reworked `_extract_bracket_contents` to scan each opener independently, so an unmatched outer opener no longer suppresses valid inner bracket clues.
 - Preserved type-aware matching, nested/mixed brackets, unmatched closer handling, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
 - Validation: py_compile passed; CI pending.
+
+### 2026-10-31 — Issue #7: raw filename basename handling
+- Updated `raw_filename` to use the final path component consistently (backslash/forward slash safe) and sanitize it.
+- Re-ran focused filename parser tests and full suite: 183 passed, 30 skipped.
+- Validation: local tests via CI-style venv passed; push and CI pending.
