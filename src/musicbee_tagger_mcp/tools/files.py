@@ -3,7 +3,7 @@
 from typing import Any, Callable, Dict, List, Optional
 
 from ..file_registry import FileRegistry, get_registry
-from ..playlist import parse_m3u_playlist
+from ..playlist import parse_m3u_playlist, translate_audio_path
 
 
 def register_playlist(
@@ -45,7 +45,8 @@ def register_playlist(
                 progress_callback(index, total)
             continue
         try:
-            result = registry.register(str(entry_path))
+            store_p = translate_audio_path(entry_path)
+            result = registry.register(str(entry_path), store_path=store_p)
             registered.append({"line": line_number, **result})
             if job_store is not None and job_id is not None:
                 job_store.add_track(job_id, result["token"], result["display_name"])

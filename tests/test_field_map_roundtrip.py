@@ -9,6 +9,8 @@ to FIELD_MAP without full read/write coverage.
 
 import pytest
 
+pytestmark = pytest.mark.requires_audio_fixtures
+
 from musicbee_tagger_mcp.field_map import FIELD_MAP
 from musicbee_tagger_mcp.metadata_reader import read_audio_metadata
 from musicbee_tagger_mcp.tag_format_writers import (
