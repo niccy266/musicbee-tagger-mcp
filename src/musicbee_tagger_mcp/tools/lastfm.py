@@ -16,15 +16,20 @@ from ..lastfm import (
 def resolve_lastfm_title(
     title: Optional[str] = None,
     artist: Optional[str] = None,
-    filename: Optional[str] = None,
+    display_name: Optional[str] = None,
     folder_context: Optional[List[str]] = None,
     confidence: Optional[float] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Resolve the most popular Last.fm title/artist form for a track."""
+    filename = kwargs.pop("filename", display_name)
     return resolve_lastfm(
-        title=title, artist=artist, filename=filename,
-        folder_context=folder_context, confidence=confidence, **kwargs,
+        title=title,
+        artist=artist,
+        filename=filename,
+        folder_context=folder_context,
+        confidence=confidence,
+        **kwargs,
     )
 
 
