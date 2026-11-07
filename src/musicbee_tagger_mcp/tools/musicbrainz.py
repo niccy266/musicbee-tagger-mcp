@@ -186,12 +186,11 @@ def verify_mbid(
     forensic_score: Optional[float] = None,
     release_id: Optional[str] = None,
     token: Optional[str] = None,
-    file_token: Optional[str] = None,
-    track_token: Optional[str] = None,
     display_name: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    _token = token or file_token or track_token
+    # Accept legacy callers who pass file_token or track_token positionally.
+    _token = token or kwargs.pop("file_token", None) or kwargs.pop("track_token", None)
     if _token is None and display_name is not None:
         try:
             from ..file_registry import get_registry

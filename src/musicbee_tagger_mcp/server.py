@@ -15,7 +15,9 @@ from .tools.inspection import (
     get_batch_brief,
     read_track_metadata,
 )
+from .tools.lastfm import lastfm_track_search_tool, resolve_lastfm_title
 from .tools.musicbrainz import search_canonical_release, verify_mbid
+from .tools.review import flag_for_review
 from .tools.tags import (
     amend_staged_changes,
     get_staged_change,
