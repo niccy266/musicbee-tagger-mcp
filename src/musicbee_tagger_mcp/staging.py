@@ -137,6 +137,12 @@ class StagingManager:
         batch: Optional[str] = None,
         note: Optional[str] = None,
         rationale: Optional[str] = None,
+        manual_override: bool = False,
+        manual_override_justification: Optional[str] = None,
+        override_justification: Optional[str] = None,
+        override_reason: Optional[str] = None,
+        justification: Optional[str] = None,
+        **kwargs: Any,
     ) -> dict:
         """Write a pending change manifest and return a stage_id + summary.
 
@@ -153,11 +159,17 @@ class StagingManager:
         except Exception:
             baseline_tags = None
 
+        if not manual_override:
+            manual_override = kwargs.get("manual_override", False)
         override_text = (
             manual_override_justification
             or override_justification
             or override_reason
             or justification
+            or kwargs.get("manual_override_justification")
+            or kwargs.get("override_justification")
+            or kwargs.get("override_reason")
+            or kwargs.get("justification")
         )
         is_manual_override = bool(manual_override or override_text)
         if is_manual_override:
@@ -193,6 +205,9 @@ class StagingManager:
             "notes": notes,
             "note": notes,
             "rationale": notes,
+            "manual_override": is_manual_override,
+            "manual_override_justification": override_text,
+            "override_justification": override_text,
             "applied": False,
             "withdrawn": False,
             "revision": 1,
