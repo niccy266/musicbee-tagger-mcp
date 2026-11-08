@@ -4,7 +4,10 @@ from typing import Any, Dict, List
 
 from ..error_codes import E_UNKNOWN_TOKEN, make_error
 from ..file_registry import get_registry
-from ..genre_cleanup import clean_genre_clutter, removed_genre_clutter_tokens
+from ..genre_cleanup import (
+    clean_genre_clutter as _clean_genre_text,
+    removed_genre_clutter_tokens,
+)
 from ..metadata_reader import read_audio_metadata
 
 
@@ -44,7 +47,7 @@ def clean_genre_clutter(  # type: ignore[override]
             })
             continue
         before = metadata.get("tags", {}).get("genre")
-        after = clean_genre_clutter(
+        after = _clean_genre_text(
             before,
             remove_mood_descriptors=bool(
                 remove_mood_descriptors or remove_moods or drop_moods

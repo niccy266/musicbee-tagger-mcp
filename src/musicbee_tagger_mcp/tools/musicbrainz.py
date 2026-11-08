@@ -67,7 +67,7 @@ def search_canonical_release(
     return search_recordings_forensic(artist, title, duration_sec, clue, limit)
 
 
-def verify_mbid(
+def _verify_mbid_core(
     recording_id: str,
     expected_artist: Optional[str] = None,
     expected_title: Optional[str] = None,
@@ -87,11 +87,6 @@ def verify_mbid(
         recording_id, expected_artist, expected_title, duration_sec,
         forensic_score=forensic_score, release_id=release_id, **kwargs,
     )
-
-
-# `evaluate_match` is the internal name used by the agent loop; `verify_mbid`
-# is the published MCP tool name used by the manifest, skill and prompt.
-evaluate_match = verify_mbid
 
 
 def register_musicbrainz_tools(app) -> None:
@@ -177,7 +172,7 @@ def register_split_tools(app) -> None:
     app.tool()(verify_artists_on_recording)
     app.tool()(flag_suspicious_artists)
 
-_original_verify_mbid = verify_mbid
+_original_verify_mbid = _verify_mbid_core
 def verify_mbid(
     recording_id: str,
     expected_artist: Optional[str] = None,
@@ -229,4 +224,6 @@ def verify_mbid(
         pass
     return result
 
+# `evaluate_match` is the internal name used by the agent loop; `verify_mbid`
+# is the published MCP tool name used by the manifest, skill and prompt.
 evaluate_match = verify_mbid

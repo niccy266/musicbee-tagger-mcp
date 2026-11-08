@@ -51,6 +51,35 @@ def get_registry():
         return None
 
 
+def _duplicate_allowed(options: Dict[str, Any]) -> bool:
+    """Interpret the various duplicate-policy flags callers pass in."""
+    proceed = bool(options.get("allow_duplicate"))
+    for key in (
+        "allow_duplicates", "allow_duplicate_files", "allow_duplicate_job",
+        "allow_duplicates_in_jobs", "proceed", "proceed_duplicate",
+        "force", "include_duplicate",
+    ):
+        if options.get(key) is True:
+            proceed = True
+    for key in (
+        "skip_duplicates", "skip_duplicate", "skip_duplicate_files",
+        "avoid_duplicates",
+    ):
+        value = options.get(key)
+        if value is True:
+            proceed = False
+        elif value is False:
+            proceed = True
+    policy = options.get("duplicate_policy") or options.get("duplicate_handling") or options.get("policy")
+    if isinstance(policy, str):
+        policy_l = policy.strip().lower()
+        if policy_l in {"allow", "proceed", "include", "add", "force"}:
+            proceed = True
+        elif policy_l in {"skip", "reject", "error", "detect"}:
+            proceed = False
+    return proceed
+
+
 def _resolve_registry(*args, **kwargs):
     for key in ("registry", "reg", "file_registry", "registry_instance"):
         value = kwargs.get(key)
@@ -226,100 +255,6 @@ class JobStore:
             "registered": len(job["tracks"]),
             "skipped": skipped,
         }
-
-    def set_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
-        job = self.load_job(job_id)
-        job["skipped"] = skipped
-        
-    def add_track(
-        self, job_id: str, token: str, display_name: str,
-        allow_duplicate: bool = False, **kwargs: Any,
-    ) -> Dict[str, Any]:
-        proceed = bool(allow_duplicate)
-        for key in (
-            "allow_duplicates", "allow_duplicate_files", "allow_duplicate_job",
-            "allow_duplicates_in_jobs", "proceed", "proceed_duplicate",
-            "force", "include_duplicate",
-        ):
-            if kwargs.get(key) is True:
-                proceed = True
-        for key in (
-            "skip_duplicates", "skip_duplicate", "skip_duplicate_files",
-            "avoid_duplicates",
-        ):
-            value = kwargs.get(key, None)
-            if value is True:
-                proceed = False
-            elif value is False:
-                proceed = True
-        policy = kwargs.get("duplicate_policy") or kwargs.get("duplicate_handling") or kwargs.get("policy")
-        if isinstance(policy, str):
-            policy_l = policy.strip().lower()
-            if policy_l in {"allow", "proceed", "include", "add", "force"}:
-                proceed = True
-            elif policy_l in {"skip", "reject", "error", "detect"}:
-                proceed = False
-
-        job = self.load_job(job_id)
-        existing = {
-            track["token"] for track in job["tracks"]
-            if isinstance(track, dict) and isinstance(track.get("token"), str)
-        }
-        already_in_this_job = token in existing
-
-        other_jobs = self.jobs_containing_token(
-            token, exclude_job_id=job_id, active_only=True
-        )
-
-        result: Dict[str, Any] = {
-            "job_id": job_id,
-            "registered": len(job["tracks"]),
-        }
-        if already_in_this_job:
-            result["already_in_job"] = True
-            result["duplicate"] = False
-            return result
-
-        if other_jobs and not proceed:
-            result["duplicate"] = True
-            result["skipped"] = True
-            result["existing_job_id"] = other_jobs[0]
-            result["existing_job_ids"] = list(other_jobs)
-            result["already_registered_in_job"] = other_jobs[0]
-            return result
-
-        job["tracks"].append(
-            {
-                "token": token,
-                "display_name": display_name,
-                "status": "pending",
-                "error": None,
-            }
-        )
-        if other_jobs:
-            job["tracks"][-1]["duplicate_of"] = list(other_jobs)
-        try:
-            self._save(job)
-        except RuntimeError:
-            raise
-        result["registered"] = len(job["tracks"])
-        result["added"] = True
-        if other_jobs:
-            result["duplicate"] = True
-            result["existing_job_id"] = other_jobs[0]
-            result["existing_job_ids"] = list(other_jobs)
-            result["proceeded"] = True
-        else:
-            result["duplicate"] = False
-        return result
-
-    def append_track(self, job_id: str, token: str, display_name: str, **kwargs: Any) -> Dict[str, Any]:
-        return self.add_track(job_id, token, display_name, **kwargs)
-
-    def add_registered_entry(
-        self, job_id: str, entry: Dict[str, Any], **kwargs: Any,
-    ) -> Dict[str, Any]:
-        return self.add_track(job_id, entry["token"], entry["display_name"], **kwargs)
 
     def set_skipped(self, job_id: str, skipped: int) -> Dict[str, Any]:
         with self._mutation_lock():
@@ -1538,6 +1473,30 @@ class JobStore:
             track["token"] for track in job["tracks"]
             if isinstance(track, dict) and isinstance(track.get("token"), str)
         }
+        if token in existing:
+            return {
+                "job_id": job_id,
+                "registered": len(job["tracks"]),
+                "already_in_job": True,
+                "duplicate": False,
+            }
+
+        # Cross-job duplicate policy (#47): refuse by default, allow on request.
+        proceed = _duplicate_allowed(kwargs)
+        other_jobs = self.jobs_containing_token(
+            token, exclude_job_id=job_id, active_only=True
+        )
+        if other_jobs and not proceed:
+            return {
+                "job_id": job_id,
+                "registered": len(job["tracks"]),
+                "duplicate": True,
+                "skipped": True,
+                "existing_job_id": other_jobs[0],
+                "existing_job_ids": list(other_jobs),
+                "already_registered_in_job": other_jobs[0],
+            }
+
         metadata = self._collect_metadata(kwargs)
         for value in args:
             if isinstance(value, dict):
@@ -1562,7 +1521,16 @@ class JobStore:
                 self._save(job)
             except RuntimeError:
                 raise
-        return {"job_id": job_id, "registered": len(job["tracks"])}
+        result = {"job_id": job_id, "registered": len(job["tracks"]), "duplicate": False}
+        if other_jobs:
+            job["tracks"][-1]["duplicate_of"] = list(other_jobs)
+            result.update(
+                duplicate=True,
+                existing_job_id=other_jobs[0],
+                existing_job_ids=list(other_jobs),
+                proceeded=True,
+            )
+        return result
 
     def append_track(self, job_id: str, token: str, display_name: str, *args, **kwargs):
         return self.add_track(job_id, token, display_name, *args, **kwargs)
