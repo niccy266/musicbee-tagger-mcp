@@ -366,43 +366,28 @@ class JobStore:
             counts = {status: 0 for status in STATUSES}
             for track in job["tracks"]:
                 if (
-                    not isinstance(job, dict)
-                    or not isinstance(job.get("tracks"), list)
-                    or not isinstance(job.get("job_id"), str)
+                    not isinstance(track, dict)
+                    or not isinstance(track.get("status"), str)
+                    or track["status"] not in STATUSES
                 ):
                     raise RuntimeError("Invalid playlist job record")
-                try:
-                    job_id = str(uuid.UUID(job["job_id"]))
-                except ValueError:
-                    raise RuntimeError("Invalid playlist job record") from None
-                if job_id != path.stem:
-                    raise RuntimeError("Invalid playlist job record")
+                counts[track["status"]] += 1
+            if not counts["pending"]:
+                continue
 
-                counts = {status: 0 for status in STATUSES}
-                for track in job["tracks"]:
-                    if (
-                        not isinstance(track, dict)
-                        or not isinstance(track.get("status"), str)
-                        or track["status"] not in STATUSES
-                    ):
-                        raise RuntimeError("Invalid playlist job record")
-                    counts[track["status"]] += 1
-                if not counts["pending"]:
-                    continue
-
-                playlist_name = job.get("playlist_name")
-                if not isinstance(playlist_name, str):
-                    raise RuntimeError("Invalid playlist job record")
-                playlist_name = playlist_name.replace("\\", "/").rsplit("/", 1)[-1]
-                available.append(
-                    {
-                        "job_id": job_id,
-                        "playlist_name": playlist_name,
-                        "counts": counts,
-                        "skipped": job.get("skipped", 0),
-                    }
-                )
-            return available
+            playlist_name = job.get("playlist_name")
+            if not isinstance(playlist_name, str):
+                raise RuntimeError("Invalid playlist job record")
+            playlist_name = playlist_name.replace("\\", "/").rsplit("/", 1)[-1]
+            available.append(
+                {
+                    "job_id": job_id,
+                    "playlist_name": playlist_name,
+                    "counts": counts,
+                    "skipped": job.get("skipped", 0),
+                }
+            )
+        return available
 
     def next_batch(self, job_id: str, size: int = 10) -> Dict[str, Any]:
         """Claim up to `size` pending tokens, marking them in_progress."""

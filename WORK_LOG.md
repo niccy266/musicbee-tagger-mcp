@@ -743,3 +743,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added scripts/commands.py with run_commands validation, execution, and gh_issue_comment wrapper.
 - Registered run_commands and gh_issue_comment in openrouter agent TOOLS and LOCAL_TOOLS.
 - Added gh helper skills (.agents and release copies).
+
+### 2026-11-01 — Issue #9 follow-up: restore registration and harden review workflow
+- Registered flag_for_review MCP tool (was dropped by later merges) and added audit_staged_changes wrapper.
+- Hardened ReviewFlagStore singleton for data-root changes; added aliases and carry-over on reopen.
+- Improved path privacy for Path-like values; reset review store in conftest.
+- Updated docs tool table.

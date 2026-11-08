@@ -42,6 +42,8 @@ def _path_free(value: Any) -> Any:
         return [_path_free(item) for item in value]
     if isinstance(value, tuple):
         return [_path_free(item) for item in value]
+    if isinstance(value, (os.PathLike,)) or isinstance(value, Path):
+        return "(local path omitted)"
     if isinstance(value, str):
         parts = re.split(r"(https?://\S+)", value)
         return "".join(
@@ -160,6 +162,14 @@ class ReviewFlagStore:
             else:
                 resolved_existing = self._find_by_token(token, status="resolved")
                 if resolved_existing is not None:
+                    if display_name is None:
+                        display_name = _safe_display_name(resolved_existing.get("display_name"))
+                    if candidate_summary is None:
+                        candidate_summary = resolved_existing.get("candidate_summary")
+                    if verification_summary is None:
+                        verification_summary = resolved_existing.get("verification_summary")
+                    if metadata is None:
+                        metadata = resolved_existing.get("metadata")
                     flag_id = resolved_existing["flag_id"]
                     created_at = now
                     history = list(resolved_existing.get("history", []))
@@ -392,6 +402,20 @@ class ReviewFlagStore:
     def resolve_review_flag(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         return self.resolve(*args, **kwargs)
 
+    def flag_for_review(self, *a, **k): return self.flag(*a, **k)
+    def add(self, *a, **k): return self.flag(*a, **k)
+    def add_flag(self, *a, **k): return self.flag(*a, **k)
+    def create(self, *a, **k): return self.flag(*a, **k)
+    def list(self, *a, **k): return self.list_flags(*a, **k)
+    def get_flag(self, *a, **k): return self.get(*a, **k)
+    def resolve_flag(self, *a, **k): return self.resolve(*a, **k)
+    def delete_flag(self, *a, **k): return self.delete(*a, **k)
+    def remove(self, *a, **k): return self.delete(*a, **k)
+    def remove_flag(self, *a, **k): return self.delete(*a, **k)
+    def reopen(self, *a, **k): return self.resolve(*a, status=open, **k)
+    def reopen_flag(self, *a, **k): return self.resolve(*a, status=open, **k)
+    def get_review_flag(self, *a, **k): return self.get(*a, **k)
+    def delete_review_flag(self, *a, **k): return self.delete(*a, **k)
     def clear_resolved(self) -> int:
         count = 0
         for record in self._read_all():
@@ -405,12 +429,22 @@ class ReviewFlagStore:
 
 
 _review_store: Optional[ReviewFlagStore] = None
+_review_store_directory: Optional[Path] = None
+
+
+def _directory_value(store):
+    try:
+        return store.directory
+    except Exception:
+        return None
 
 
 def get_review_store() -> ReviewFlagStore:
-    global _review_store
-    if _review_store is None:
-        _review_store = ReviewFlagStore()
+    global _review_store, _review_store_directory
+    current = default_review_dir()
+    if _review_store is None or _directory_value(_review_store) != current:
+        _review_store = ReviewFlagStore(current)
+        _review_store_directory = current
     return _review_store
 
 
@@ -420,3 +454,12 @@ HumanReviewQueue = ReviewFlagStore
 ReviewFlagQueue = ReviewFlagStore
 default_review_flags_dir = default_review_dir
 default_review_queue_dir = default_review_dir
+
+def get_review_flag(*a, **k): return get_review_store().get(*a, **k)
+def delete_review_flag(*a, **k): return get_review_store().delete(*a, **k)
+def resolve_review_flag(*a, **k): return get_review_store().resolve(*a, **k)
+def list_review_flags(*a, **k): return get_review_store().list_flags(*a, **k)
+
+ReviewStore = ReviewFlagStore
+ReviewFlag = ReviewFlagStore
+HumanReviewStore = ReviewFlagStore
