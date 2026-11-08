@@ -79,3 +79,19 @@ musicbee-mcpb-*/
 .pytest-tmp/
 
 token_ACRcloud_key
+
+# ----------------------------------------------------
+# Local scratch work (debug scripts, diff dumps, run logs)
+# ----------------------------------------------------
+debug_*.py
+check_*.py
+view_lines*.py
+list_top*.py
+fix_server.py
+run_import.py
+remove_empty_jobs.py
+*_diff.txt
+temp_diff.txt
+agent_run.err
+out.txt
+output.txt
