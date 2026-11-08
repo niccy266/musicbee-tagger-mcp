@@ -299,8 +299,18 @@ def stage_manual_override(
         justification=justification,
         **kwargs,
     )
-def audit_staged_changes(*args, **kwargs):
-    return get_staging_manager().audit_staged_changes(*args, **kwargs)
+def audit_staged_changes(
+    low_score_threshold: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Audit pending staged changes for conflicts, weak matches and duplicates.
+
+    Read-only. Groups pending manifests per track and reports fields staged
+    more than once with different values, plus entries below the confidence
+    threshold. Never exposes filesystem paths.
+    """
+    return get_staging_manager().audit_staged_changes(
+        low_score_threshold=low_score_threshold
+    )
 
 def register_tag_tools(app) -> None:
     app.tool()(preview_tags)
@@ -309,3 +319,4 @@ def register_tag_tools(app) -> None:
     app.tool()(get_staged_change)
     app.tool()(amend_staged_changes)
     app.tool()(withdraw_staged_change)
+    app.tool()(audit_staged_changes)
