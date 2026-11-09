@@ -79,15 +79,15 @@ def stage_tag_changes(
     match_source: Optional[str] = None,
     match_confidence: Optional[float] = None,
     notes: str = "",
-    job_id: Optional[str] = None,
-    batch: Optional[str] = None,
-    note: Optional[str] = None,
-    rationale: Optional[str] = None,
     manual_override: bool = False,
     manual_override_justification: Optional[str] = None,
     override_justification: Optional[str] = None,
     override_reason: Optional[str] = None,
     justification: Optional[str] = None,
+    job_id: Optional[str] = None,
+    batch: Optional[str] = None,
+    note: Optional[str] = None,
+    rationale: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
@@ -154,21 +154,27 @@ def list_staged_changes(
 ) -> Any:
     file = kwargs.get("file")
     file_identity = kwargs.get("file_identity")
-    return get_staging_manager().list_staged_changes(
-        status=status,
-        token=token,
-        file=file,
-        file_identity=file_identity,
-        display_name=display_name,
-        job_id=job_id,
-        batch=batch,
-        query=query,
-        search=search,
-        text=text,
-        limit=limit,
-        offset=offset,
-    )
-
+    try:
+        return get_staging_manager().list_staged_changes(
+            status=status,
+            token=token,
+            file=file,
+            file_identity=file_identity,
+            display_name=display_name,
+            job_id=job_id,
+            batch=batch,
+            query=query,
+            search=search,
+            text=text,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception:
+        return [make_error(
+            E_STAGING_FAILED,
+            "unable to list staged changes",
+            function="list_staged_changes",
+        )]
 
 def get_staged_change(stage_id: str) -> Dict[str, Any]:
     """Inspect a stage's notes, proposed values, current tags, and revision.
@@ -301,16 +307,25 @@ def stage_manual_override(
     )
 def audit_staged_changes(
     low_score_threshold: Optional[float] = None,
-) -> Dict[str, Any]:
+    **kwargs: Any,
+) -> Any:
     """Audit pending staged changes for conflicts, weak matches and duplicates.
 
     Read-only. Groups pending manifests per track and reports fields staged
     more than once with different values, plus entries below the confidence
     threshold. Never exposes filesystem paths.
     """
-    return get_staging_manager().audit_staged_changes(
-        low_score_threshold=low_score_threshold
-    )
+    if low_score_threshold is not None:
+        kwargs.setdefault("low_score_threshold", low_score_threshold)
+    try:
+        return get_staging_manager().audit_staged_changes(**kwargs)
+    except Exception:
+        return make_error(
+            E_STAGING_FAILED,
+            "unable to audit staged changes",
+            function="audit_staged_changes",
+        )
+
 
 def register_tag_tools(app) -> None:
     app.tool()(preview_tags)

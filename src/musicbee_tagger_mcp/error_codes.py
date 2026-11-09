@@ -1,63 +1,71 @@
-"""Standardized MCP error codes and path-safe error reporting.
+"""Standardized MCP error codes and path-safe error reporting."""
 
-All MCP tool errors must be reported with:
-
-* an ``error_code`` that is stable across processes and deployments
-* an optional ``function`` naming the tool that failed
-* an ``error`` message that is human-readable but never contains a filesystem path
-
-Error codes are grouped by failure domain:
-
-* ``E_UNKNOWN_TOKEN`` -- the registry token is not registered
-* ``E_FILE_NOT_FOUND`` -- the underlying audio file is missing
-* ``E_PERMISSION_DENIED`` -- filesystem access denied for the audio file
-* ``E_UNSUPPORTED_FORMAT`` -- the audio format cannot be parsed
-* ``E_PARSE_ERROR`` -- the audio file could not be parsed for another reason
-* ``E_STAGING_FAILED`` -- tag staging (preview/write manifest) failed
-* ``E_STAGE_NOT_FOUND`` -- the requested stage_id does not exist
-* ``E_STAGE_CONFLICT`` -- revision mismatch or stale stage
-* ``E_AUDIO_READ_FAILED`` -- reading audio bytes/tags failed
-* ``E_PROVIDER_NOT_CONFIGURED`` -- external provider (ACRCloud) not configured
-* ``E_PROVIDER_FAILED`` -- external provider request failed
-* ``E_INVALID_INPUT`` -- caller supplied invalid arguments
-* ``E_INTERNAL`` -- unexpected internal failure
-"""
-
-from typing import Optional
-
-# --- Token / registry errors -------------------------------------------------
+from typing import Any, Optional
 
 E_UNKNOWN_TOKEN = "E_UNKNOWN_TOKEN"
-
-# --- Filesystem errors -------------------------------------------------------
-
 E_FILE_NOT_FOUND = "E_FILE_NOT_FOUND"
 E_PERMISSION_DENIED = "E_PERMISSION_DENIED"
 E_UNSUPPORTED_FORMAT = "E_UNSUPPORTED_FORMAT"
 E_PARSE_ERROR = "E_PARSE_ERROR"
-
-# --- Staging errors ----------------------------------------------------------
-
 E_STAGING_FAILED = "E_STAGING_FAILED"
 E_STAGE_NOT_FOUND = "E_STAGE_NOT_FOUND"
 E_STAGE_CONFLICT = "E_STAGE_CONFLICT"
-
-# --- Audio read errors -------------------------------------------------------
-
 E_AUDIO_READ_FAILED = "E_AUDIO_READ_FAILED"
-
-# --- Provider errors ---------------------------------------------------------
-
 E_PROVIDER_NOT_CONFIGURED = "E_PROVIDER_NOT_CONFIGURED"
 E_PROVIDER_FAILED = "E_PROVIDER_FAILED"
-
-# --- Input / internal errors -------------------------------------------------
-
 E_INVALID_INPUT = "E_INVALID_INPUT"
 E_INTERNAL = "E_INTERNAL"
 
-# Map Python exception types to stable error codes.
-_EXCEPTION_TO_CODE: dict[type[BaseException], str] = {
+import re
+import urllib.parse
+
+
+def redact_paths(text):
+    """Remove anything that looks like a filesystem path from *text*.
+
+    Handles plain text, URL-encoded payloads, and serialized/escaped Windows
+    paths. Non-string containers are sanitized recursively.
+    """
+    if isinstance(text, (bytes, bytearray)):
+        try:
+            text = text.decode("utf-8", errors="replace")
+        except Exception:
+            text = str(text)
+    if isinstance(text, dict):
+        return {redact_paths(key): redact_paths(value) for key, value in text.items()}
+    if isinstance(text, (list, tuple, set, frozenset)):
+        return [redact_paths(value) for value in text]
+    if text is None:
+        return text
+    if not isinstance(text, str):
+        text = str(text)
+
+    patterns = [
+        re.compile(r"[A-Za-z]:[\\/].*", re.DOTALL),
+        re.compile(r"\\.*", re.DOTALL),
+        re.compile(r"(?<![\w])/\S+(?=\s*[\"'}\]]|$)"),
+    ]
+
+    current = text
+    for _ in range(10):
+        previous = current
+        try:
+            decoded = urllib.parse.unquote(current, errors="replace")
+        except Exception:
+            decoded = current
+        current = decoded
+        for pattern in patterns:
+            current = pattern.sub("[path]", current)
+        if current == previous:
+            break
+    return current
+
+
+def sanitize_path_text(text):
+    return redact_paths(text)
+
+
+_EXCEPTION_TO_CODE = {
     FileNotFoundError: E_FILE_NOT_FOUND,
     PermissionError: E_PERMISSION_DENIED,
     UnicodeError: E_PARSE_ERROR,
@@ -67,8 +75,7 @@ _EXCEPTION_TO_CODE: dict[type[BaseException], str] = {
 }
 
 
-def _exception_code(exc: BaseException) -> str:
-    """Return the stable error code for a Python exception."""
+def _exception_code(exc):
     for exc_type, code in _EXCEPTION_TO_CODE.items():
         if isinstance(exc, exc_type):
             return code
@@ -77,59 +84,22 @@ def _exception_code(exc: BaseException) -> str:
 
 def make_error(
     code: str,
-    message: str,
+    message: Any,
     *,
     function: Optional[str] = None,
     path_free: bool = True,
 ) -> dict:
-    """Build a path-safe MCP error dict.
-
-    Parameters
-    ----------
-    code:
-        Stable error code (one of the ``E_*`` constants above).
-    message:
-        Human-readable description. Must not contain filesystem paths when
-        ``path_free`` is true.
-    function:
-        Name of the MCP tool that produced the error, e.g. ``extract_filename_clues``.
-    path_free:
-        When true, strip anything that looks like a filesystem path from
-        ``message`` before returning.
-
-    Returns
-    -------
-    dict with ``error_code``, ``error``, and optionally ``function`` keys.
-    """
-    safe_message = message
-    if path_free:
-        # Remove anything that looks like an absolute filesystem path so call
-        # sites never accidentally leak locations.  Cover POSIX paths, Windows
-        # drive paths (any case, either separator), and UNC paths (backslash or
-        # slash form) including names that contain spaces, ``#`` and ``&``.
-        import re
-
-        # Windows drive paths: C:\... or C:/...
-        safe_message = re.sub(r"[A-Za-z]:[\\/].*", "[path]", safe_message)
-        # UNC paths: \\server\share\... or //server/share/...
-        safe_message = re.sub(r"\\\\[^\s]*", "[path]", safe_message)
-        safe_message = re.sub(r"(?<!:)//[^\s/]+(?:/[^\s]*)?", "[path]", safe_message)
-        # POSIX absolute path at the end of the message (or whole token).
-        safe_message = re.sub(r"(?<!\S)/\S+$", "[path]", safe_message)
-
-    result: dict = {"error_code": code, "error": safe_message}
+    """Build a path-safe MCP error dict."""
+    if path_free and not isinstance(message, str):
+        message = str(message)
+    safe_message = redact_paths(message) if path_free else message
+    result = {"error_code": code, "error": safe_message}
     if function is not None:
         result["function"] = function
     return result
 
 
-def error_from_exception(
-    exc: BaseException,
-    *,
-    function: Optional[str] = None,
-    default_message: Optional[str] = None,
-) -> dict:
-    """Convert a caught exception into a path-safe MCP error dict."""
+def error_from_exception(exc, *, function=None, default_message=None):
     code = _exception_code(exc)
     if default_message is None:
         default_message = {

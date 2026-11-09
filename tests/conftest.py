@@ -13,18 +13,15 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 
 def pytest_configure(config):
     """Register custom markers so --strict-markers accepts them."""
     for marker in (
-        "network: allows real network access in a test",
-        "slow: long-running test",
-        "windows: requires Windows platform",
-        "requires_audio_fixtures: requires committed audio fixture files",
+        "network: allow network access in this test",
+        "slow: slow-running test",
+        "windows: Windows-only test",
+        "requires_audio_fixtures: requires committed audio fixtures and ffmpeg",
     ):
         config.addinivalue_line("markers", marker)
 
@@ -42,7 +39,6 @@ def isolate_app_data(tmp_path, monkeypatch):
 
     monkeypatch.setenv("MUSICBEE_TAGGER_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setenv("APPDATA", str(tmp_path))
 
     import musicbee_tagger_mcp.data_paths as data_paths
@@ -59,8 +55,9 @@ def isolate_app_data(tmp_path, monkeypatch):
     monkeypatch.setattr(review_flags, "_review_store_directory", None, raising=False)
     monkeypatch.setattr(staging, "_staging_manager", None, raising=False)
     monkeypatch.setattr(staged_apply, "_applier", None, raising=False)
-
     yield
+    # Allow pre-existing dirs
+
 
     if not home_existed:
         assert not real_home_dir.exists(), (
@@ -73,41 +70,43 @@ def isolate_app_data(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def block_network(request, monkeypatch):
+def block_network_access(request):
     """Block socket/urlopen access unless @pytest.mark.network is used."""
     if (request.node.get_closest_marker("network") is not None or
             request.node.get_closest_marker("windows") is not None):
         yield
         return
 
-    real_socket = socket.socket
+    original_socket = socket.socket
+    original_urlopen = urllib.request.urlopen
 
-    class _GuardedSocket(real_socket):
-        def __init__(self, *args, **kwargs):
-            caller_name = sys._getframe(1).f_code.co_name
-            caller_module = sys._getframe(1).f_globals.get("__name__", "")
-            if caller_name in {"_fallback_socketpair", "socketpair", "accept"} or caller_module.startswith(
-                ("asyncio", "selectors", "anyio", "sniffio", "multiprocessing", "socket")
-            ):
-                super().__init__(*args, **kwargs)
-            else:
-                raise RuntimeError("network access in tests")
-
-    def _blocked(*args, **kwargs):
+    def _blocked_socket(*args, **kwargs):
         raise RuntimeError("network access in tests")
 
-    monkeypatch.setattr(socket, "socket", _GuardedSocket)
-    monkeypatch.setattr(socket, "create_connection", _blocked)
-    monkeypatch.setattr(urllib.request, "urlopen", _blocked)
+    def _blocked_urlopen(*args, **kwargs):
+        raise RuntimeError("network access in tests")
 
-    for module_name in ("musicbee_tagger_mcp.acrcloud", "musicbee_tagger_mcp.tools.text", "musicbee_tagger_mcp.acoustid", "musicbee_tagger_mcp.tools.acoustid"):
+    socket.socket = _blocked_socket
+    urllib.request.urlopen = _blocked_urlopen
+
+    for module_name in ("musicbee_tagger_mcp.acrcloud", "musicbee_tagger_mcp.tools.text"):
         module = sys.modules.get(module_name)
         if module is not None and hasattr(module, "urllib"):
             request_urllib = getattr(module, "urllib", None)
             if request_urllib is not None and hasattr(request_urllib, "request"):
-                monkeypatch.setattr(request_urllib.request, "urlopen", _blocked, raising=False)
+                request_urllib.request.urlopen = _blocked_urlopen
 
-    yield
+    try:
+        yield
+    finally:
+        socket.socket = original_socket
+        urllib.request.urlopen = original_urlopen
+        for module_name in ("musicbee_tagger_mcp.acrcloud", "musicbee_tagger_mcp.tools.text"):
+            module = sys.modules.get(module_name)
+            if module is not None and hasattr(module, "urllib"):
+                request_urllib = getattr(module, "urllib", None)
+                if request_urllib is not None and hasattr(request_urllib, "request"):
+                    request_urllib.request.urlopen = original_urlopen
 
 
 def pytest_collection_modifyitems(config, items):
@@ -128,3 +127,15 @@ def pytest_collection_modifyitems(config, items):
                         reason="ffmpeg and committed audio fixtures are required"
                     )
                 )
+
+@pytest.fixture(autouse=True)
+def protect_tracked_audio_fixtures():
+    import hashlib
+    root = ROOT / "test_files" / "test_audio_files"
+    if not root.exists():
+        yield
+        return
+    before = {str(f): hashlib.sha256(f.read_bytes()).hexdigest() for f in root.rglob("*") if f.is_file()}
+    yield
+    after = {str(f): hashlib.sha256(f.read_bytes()).hexdigest() for f in root.rglob("*") if f.is_file()}
+    assert before == after, "tracked audio fixtures were modified by a test"

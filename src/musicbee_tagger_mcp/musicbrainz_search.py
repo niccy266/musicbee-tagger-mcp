@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
+from .error_codes import redact_paths
 from .musicbrainz_api import musicbrainzngs
 from .musicbrainz_scoring import calculate_duration_score, classify_release
 
@@ -46,7 +47,7 @@ def search_recordings_forensic(
     try:
         results = musicbrainzngs.search_recordings(query=query, limit=limit)
     except Exception as error:
-        return [{"error": f"MusicBrainz query error: {error}"}]
+        return [{"error": redact_paths(f"MusicBrainz query error: {error}")}]
 
     candidates = []
     _variant_keywords = ("isolated", "sped up", "slowed", "reverb", "nightcore", "8d audio", "bass boosted")

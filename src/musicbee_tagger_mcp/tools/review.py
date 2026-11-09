@@ -6,6 +6,7 @@ from .. import file_registry
 from ..error_codes import (
     E_UNKNOWN_TOKEN,
     make_error,
+    redact_paths,
 )
 from ..review_flags import ReviewFlagStore, get_review_store
 
@@ -106,7 +107,7 @@ def flag_for_review(
             metadata=metadata,
         )
     except ValueError as error:
-        return {"error": str(error)}
+        return {"error": redact_paths(str(error))}
     except Exception:
         return make_error(
             E_UNKNOWN_TOKEN,

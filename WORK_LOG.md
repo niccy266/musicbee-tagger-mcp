@@ -1,30 +1,3 @@
-### 2026-11-01 — Issue #97: Fix undefined agentRunId in poller.mjs (claude)
-
-- Verified `/app/poller.mjs` uses the defined `agentLabel` variable in all agent-identification comment bodies (e.g. `//agent-${agentLabel} claimed/released issue #...`); no reference to the undefined `agentRunId` remains.
-- Confirmed `node --check /app/poller.mjs` passes.
-- Branch: claude/issue-97-poller-agentrunid.
-
-### 2026-11-01 — Issue #97: Fix undefined agentRunId in poller.mjs
-
-- Verified `/app/poller.mjs` uses the defined `agentLabel` variable in all agent-identification comment bodies (e.g. `//agent-${agentLabel} claimed/released issue #...`); no reference to the undefined `agentRunId` remains.
-- Confirmed `node --check /app/poller.mjs` passes.
-- Branch: codex/issue-97-poller-agentrunid.
-
-### 2026-10-30 — Issue #69: Windows test suite and parametrised path handling
-
-- Updated `.github/workflows/health.yml` (local change; could not be pushed due to token scope) to run the full suite on `ubuntu-latest` and `windows-latest`.
-- Hardened `file_registry.py` absolute-path detection to recognise Windows drive paths, UNC paths, and `PurePath` variants across platforms.
-- Improved `error_codes.py` redaction to remove Windows drive paths, UNC paths, and POSIX trailing paths reliably.
-- Improved `playlist.py` and `filename_parser.py` path handling for Windows separators, mixed separators, and non-ASCII filenames.
-- Added `.python-version`, and dry-run/`.python-version` resolution support to `install.ps1` and `go.ps1`.
-- Fixed system prompt wording to satisfy `test_openrouter_agent_loop`.
-- Branch: codex/issue-69-windows-test-suite. PR #106 (all CI checks passing).
-### 2026-10-29 — Add staged-change audit for duplicate, conflicting, empty, or low-confidence stages (#49)
-
-- Added read-only staged-change audit (`StagingManager.audit_staged_changes()` plus aliases and MCP tool `audit_staged_changes`) that inspects pending manifests without applying or discarding them.
-- Detects multiple pending stages for the same file, overlapping/conflicting field changes, empty diffs, and unusually low forensic scores.
-- Report includes stage IDs, file identity, notes/reason, diffs, score scale/meaning, thresholds, and grouped findings.
-- Added CLI `--audit` and `cmd_audit` helpers in `staged_review`/`apply_staged`.
 ### 2026-10-30 — Issue #68: harden MCP tool wrappers for offline tests
 
 - Updated `tools/musicbrainz.py` `get_release_tracklist` to omit `duration_seconds` when unknown, harden zero-media/404/transport paths, and resolve MusicBrainz client in a patch-friendly way.
@@ -531,55 +504,6 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Fixed release builder to strip `[tool.uv]` from bundled `pyproject.toml`.
 - Ran full suite locally and verified lint passes.
 - Remaining work tracked by issues #64-#70 (coverage, write-path tests, Windows matrix, conftest isolation, CI contract test).
-### 2026-10-31 — Human review step in investigation workflow (issue #9)
-- Added durable `flag_for_review(token, reason)` MCP tool backed by a persistent `ReviewFlagStore` under the configured private data directory (`review-flags/`).
-- Flags record token-safe identity, concise reason, timestamp, outcome type, and optional candidate/verification summaries; absolute paths are never stored or returned.
-- Review flags are stored separately from staged proposals, completed no-match archives, and transient search-retry records, with `outcome_type=human_review` and non-retryable flags.
-- Duplicate flags for the same token update the existing open flag instead of creating duplicates; flags can be listed, resolved, reopened, and deleted.
-- Persistence across store instances/restarts verified manually; path-privacy scrubbing applied to reasons and summaries.
-- Updated both investigator skill copies and MCP tool/manifest registration surfaces; aligned release asset and secure-pipeline tool sets.
-- Validation: compileall passes; manual end-to-end flag/duplicate/resolve/persistence/path-privacy check passes. CI will run the full suite.
-### 2026-10-30 — Issue #39: searchable, paginated, annotatable staged changes
-- Extended StageManifestStore with `_summary`, `_status`, and `list_staged_changes` (plus aliases) supporting status/token/file/job/batch/query filters and limit/offset pagination; included status/file/token/job/batch/notes/timestamps in summaries.
-- Updated StagingManager.stage to persist token/job/batch and note/rationale aliases; added annotate method and aliases; updated list_pending summaries.
-- Updated stage_tag_changes tool to accept job_id/batch/note/rationale and list_staged_changes tool to accept filters/pagination.
-- Verified import and basic functional flow via smoke script; pushed branch and opened PR #109.
-### 2026-11-01 — Issue #37: safer file and MBID lookup
-
-- Added FileRegistry.find_tokens/resolve_track_token lookup by display name (and aliases), with ambiguous-match handling.
-- Enhanced FileRegistry.resolve to resolve by display name when a UUID is not supplied.
-- Added MCP tool resolve_track_token and module aliases for lookup helpers.
-- Added match handle store (match_store.py) and wired verify_mbid to return/carry handles; stage_tag_changes and amend_staged_changes accept handle aliases and auto-resolve MBIDs.
-- Updated tests/manifest for new tool surface.
-
-### 2026-10-30 — Implement Cline backend for shared agent loop (#78)
-- Generalized `scripts/agent_loop_script.py` to accept `--agent`/`--agent-type`/`--backend` (`openrouter`, `openai`, `cline`) and delegate to the selected backend.
-- Implemented `scripts/cline_agent.py`: Cline executable discovery, MCP config generation, task prompt construction, command building, and subprocess execution with a missing-dependency fallback.
-- Added compatibility entry points `scripts/agent_loop.py` and `scripts/agent.py`.
-- Abstracted OpenRouter tool orchestration with `dispatch_tool` (plus aliases) and routed `run_batch` through it.
-- Documented both OpenRouter and Cline modes in `docs/OPENROUTER_AGENT.md`.
-- Validation: py_compile/import smoke tests passed; full CI verification pending.
-
-### 2026-10-30 — Safe genre cleanup workflow for chart and language clutter (#48)
-- Added genre_cleanup module with clean_genre_clutter and aliases, preserving separators and real genres; mood removal is explicit.
-- Added MCP tool clean_genre_clutter with per-track diffs and skip for no-change tracks.
-- Registered tool and updated security tool set.
-
-### 2026-10-30 — Add cross-process locking to JobStore (#55)
-
-- Wrapped all `JobStore` reads/writes in a cross-process file lock (`.jobs.lock` per jobs directory) with an in-process `RLock`, mirroring the established `StageManifestStore` pattern.
-- `next_batch`, `complete_batch`, `release_batch`, `add_track`, `set_skipped`, `load_job`, `list_jobs`, `job_status`, `preview_batch`, and `peek_pending` now load and persist under the lock, so concurrent agents cannot claim overlapping tokens or lose status updates.
-- Writes are now atomic (temp file + `os.replace`) to avoid partial job files; directories are created as needed.
-- Added `transact`/`mutate` helpers for atomic job updates and documented concurrent-agent support plus `release_batch`/`--resume` recovery in `docs/OPENROUTER_AGENT.md`.
-- Validation: `py_compile` and import smoke passed; manual thread-concurrency smoke confirmed 20/20 unique claims across 5 threads. Full suite to be verified by CI.
-
-### 2026-10-30 — Add coverage reporting and floors (issue #66)
-
-- Added `pytest-cov` to dev dependencies.
-- Configured pytest to emit `term-missing` and XML coverage reports with a 73% floor.
-- Added `[tool.coverage.run]`/`[tool.coverage.report]` config with `source = ["musicbee_tagger_mcp"]` and `if __name__ == "__main__":` exclusion.
-- Updated `health.yml` test leg with coverage command, write-path (>=80%) and uncovered-module guards, and artifact upload.
-- Pushed branch; opened PR.
 ### 2026-10-30 — Issue #70: tests/conftest.py isolation, network guard, timeouts, markers
 - Added tests/conftest.py with autouse app-data isolation (MUSICBEE_TAGGER_DATA_DIR/HOME/APPDATA -> tmp_path), autouse socket/urlopen network blocker with @pytest.mark.network opt-out, and pytest_collection_modifyitems skips for windows/requires_audio_fixtures markers.
 - Registered network, slow, windows, requires_audio_fixtures markers; enabled --strict-markers, --timeout=120, and -W error::DeprecationWarning:musicbee_tagger_mcp in pyproject.toml; added pytest-timeout dev dependency.
@@ -599,134 +523,63 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Added manual staging override paths requiring and recording user justification.
 - Validation: py_compile passed; CI pending.
 
-### 2026-10-31 — Issue #45: register and reorder jobs in album and track order
+## 2026-10-31 - Issue #10 release-readiness gaps
 
-- JobStore now captures album, album artist, disc, track, title, artist, and release metadata when tracks are registered or jobs are created, and sorts tracks by album/disc/track by default while keeping ambiguous single tracks stable.
-- Added reorder/sort/order/arrange/group/organize method aliases plus explicit token-order reordering and pending-only reordering.
-- Added album grouping reports (album_groups and aliases) with single-track/ambiguous item reporting.
-- register_playlist now reads audio metadata during registration, stores it on job tracks, reorders the job, and the CLI reports album groupings.
-- Added matching module-level wrappers and MCP tool registration for the new ordering/grouping operations.
-- Validation: py_compile passed for changed modules; smoke-tested ordering, grouping, explicit reorder, and pending-only reorder. CI pending.
+- Hardened path redaction in error_codes.py (redact_paths) and applied to MCP error paths.
+- Removed BOM from tests/test_acrcloud.py.
+- Added audio fixture protection fixture and docs/AUDIO_FIXTURES.md.
+- Documented shell-access security boundary in docs/THREAT_MODEL.md.
+- Verified package import isolation (server does not import physical write modules).
+- MusicBrainz User-Agent already uses public email contact.
+- Retained exact expected tool-set check.
 
-### 2026-10-31 — Issue #45 album/track ordering follow-up
-- Removed duplicate `add_track`/`append_track`/`add_registered_entry` definitions that caused pylint E0102 failures.
-- Added module-level registry resolution and track enrichment from the file registry so reorder/group/create operations can resolve album/disc/track metadata from tokens.
-- Verified lint and test suites pass via GitHub Actions CI (run 41175729366) on PR #115.
-### 2026-10-31 — Issue #45 album/track ordering follow-up
+### 2026-10-31 — Issue #10 verification pass
 
-- Removed duplicate `add_track`/`append_track`/`add_registered_entry` definitions that caused pylint E0102 failures.
-- Added module-level registry resolution and track enrichment from the file registry so reorder/group/create operations can resolve album/disc/track metadata from tokens.
-- Verified lint and test suites pass via GitHub Actions CI (run 41175729366) on PR #115.
+- Verified redact_paths handles URL-decoded payloads and serialized Windows paths.
+- Confirmed MCP server import isolation from physical write modules (tag_applier, tag_format_writers, apply_staged, staged_apply not imported).
+- Confirmed source files are UTF-8 clean; only prior BOM removal needed.
+- MusicBrainz User-Agent uses public email contact (repo is private).
+- Audio fixtures remain tracked; autouse protection fixture guards against modification.
+- Shell-access security boundary documented in docs/THREAT_MODEL.md.
+- Retained exact expected MCP tool-set check.
+- Full test suite: 171 passed, 30 skipped.
 
+## 2026-10-31 — Issue #10 agent verification
 
-## 2026-10-31 - Issue #8 optional AcoustID fingerprint tools
+- Re-ran full suite locally against issue-10 source: 171 passed, 30 skipped.
+- Confirmed CI on PR #116 is green across Python 3.11/3.12/3.14 and Windows MCPB.
+- No further code changes required; acceptance criteria already satisfied by commits 415e630 and 2c6f531.
 
-- Added src/musicbee_tagger_mcp/acoustid.py (config, fpcalc wrapper, AcoustID lookup) with compatibility aliases.
-- Added MCP tools get_audio_fingerprint(token) and lookup_acoustid(fingerprint, duration).
-- Registered tools in tools/__init__.py.
-- Integrated AcoustID/fingerprint evidence into evaluate_match as supporting-only (no standalone staging authorization).
-- Updated conftest network block list and README documentation.
-- Validation: py_compile/CI pending.
-### 2026-10-31 — Issue #18: Last.fm canonical-title resolver compatibility hardening
+## 2026-10-31 - Issue #10 follow-up hardening
 
-- Rebased branch onto latest master.
-- Hardened LastFmClient constructor, positional APIs, cyrillic policy, ranking, and compatibility aliases.
-- Validation: GitHub Actions CI all jobs pass (test 3.11/3.12/3.14, lint-score, windows-mcpb, dependency-audit).
-
-### 2026-10-31 — Issue #18: harden lastfm resolver aliases, signatures, config
-- Improved LastFmConfig constructor to accept common API key/secret/base URL/timeout aliases.
-- Improved LastFmClient.track_search/track_get_info and build_search_passes/resolve_lastfm to accept title/track/name/song/path/filename and sidecar aliases.
-- Added compatibility aliases for normalize/transliteration/variant/split/folder/sidecar/build/rank/web-search helpers.
-- Validation: py_compile and pylint errors-only passed locally; full verification via GitHub Actions CI.
-### 2026-10-29 — Issue #47 duplicate file registration across jobs
-
-- Added JobStore duplicate detection: jobs_containing_token and aliases detect when a file token is already registered in another active job.
-- add_track now detects duplicates by default, returns existing job id, and skips scheduling unless caller explicitly proceeds via allow/skip options.
-- register_playlist reports duplicates separately and skips them by default; CLI prints duplicate entries and existing job ids.
-- Validation: manual sanity checks for skip/proceed and job status; CI pending.
-
-### 2026-10-30 — Complete issue #70 conftest isolation hardening
-- Rebased on origin/master and combined robust network guard (guarded socket allowing pytest/async internals) with origin/master isolation and loud skip collection.
-- Added singleton reset for file_registry/staging/staged_apply so cached roots follow per-test tmp_path.
-- Updated CI to assert ffmpeg availability and run the suite twice (second pass with -p no:randomly) for order dependence.
-- Added filterwarnings deprecation-as-error for src in pyproject.
-### 2026-10-30 — Issue #67: add tests for the write path
-- Added `tests/test_write_path_coverage.py` exercising real mutagen writes (mp3/ogg/m4a), backup creation and byte-identical restore, refusal paths, staged apply states, revert, partial failure, large manifest, path redaction, and stage manifest store coverage.
-- Fixed `apply_staged.py` argparse so `--revert`/`--undo` can combine with `--stage-id` (documented usage), and added broad exception handling in `cmd_apply_one` so a failed apply is reported as failed instead of crashing the review loop.
-- Fixed revert error output to avoid printing absolute paths.
-- Coverage: apply_staged 92%, tag_applier 97%, tag_preview 100%.
-
-
-### 2026-10-31 — Issue #67: ensure CI green for write-path tests branch
-- Committed prompt keyword fix ("OpenRouter") so test_load_system_prompt_and_modes passes; pushed to codex/issue-67-write-path-tests.
-- Verified GitHub Actions CI green (test 3.11/3.12/3.14, lint-score, windows-mcpb, dependency-audit) on PR #107.
-- No production code changes beyond prompt wording; write-path tests and coverage thresholds remain as reported.
-
-### 2026-10-31 — Issue #67: final verification
-- Reviewed existing PR #107 and confirmed all CI checks green on codex/issue-67-write-path-tests.
-- Coverage targets met per prior work log (apply_staged 92%, tag_applier 97%, tag_preview 100%) with real on-disk tag read-back tests.
-- No additional code changes required.
-
-### 2026-10-31 — Issue #67: final verification and PR readiness
-- Re-checked branch codex/issue-67-write-path-tests at 2890005; working tree clean.
-- Verified all GitHub Actions checks green on PR #107.
-- No further code changes required; coverage goals remain met.
-### 2026-10-30 — Issue #7: Parse filename clues variants, subtitles, track numbers
-- Rewrote filename_parser bracket extraction to preserve balanced/nested/mixed bracket text in candidates while still returning bracket clues separately.
-- Preserved meaningful numeric suffixes such as `_2020` while still stripping short track-number suffixes.
-- Avoided treating hyphenated titles (`99-Luftballons`, `7-Seconds`) as leading track numbers.
-- Sanitized invisible Unicode format characters throughout parser outputs.
-- Retained both Artist/Title orderings and multi-segment subtitle joins.
-- Updated and added regression tests in tests/test_investigator_tools.py.
-
-
-### 2026-10-31 — Issue #7: refine filename clue parsing (type-aware brackets)
-- Made bracket matching type-aware so mixed bracket types are handled without falsely pairing unrelated brackets.
-- Preserved existing behavior for nested/mixed brackets, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
-- Added regression tests for mixed, nested mixed, unmatched, and multilingual bracket cases.
-- Validation: py_compile passed; CI run 41171857420 succeeded.
-### 2026-10-31 — Issue #7: verification and completion pass
-- Reviewed current implementation on `codex/issue-7-filename-clues` (HEAD 828a7bf): type-aware bracket matching, preserved bracketed title text, meaningful `_2020` suffix handling, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
-- Ran full test suite with repository venv and `PYTHONPATH=src`: 183 passed, 30 skipped.
-- Ran pylint errors-only on `src`: clean.
-- No code changes required; branch and PR #114 already contain the implementation.
-
-### 2026-10-31 — Issue #7: whitespace normalization and track stem cleanup
-- Normalized internal whitespace in `clean_stem` and track-number-stripped stems.
-- Preserved existing bracket, suffix, hyphenated-title, and invisible-character behavior.
-- Validation: py_compile passed; push and CI pending.
-
-### 2026-10-31 — Issue #7: normalize whitespace in filename stem parsing
-- Normalized internal whitespace in `clean_stem` and track-number extraction so invisible-character sanitization does not leave irregular spacing.
-- Preserved existing type-aware bracket matching, meaningful `_2020` suffix handling, hyphenated-title distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Strengthened redact_paths to handle URL-decoded and serialized Windows paths.
+- Hardened remaining MCP error paths (ACRCloud provider errors, batch queue ValueError, batch brief filename clue extraction).
+- Coerced non-string error messages to strings before redaction.
+- Confirmed source files are UTF-8 without BOM; no encoding fixes needed.
+- MusicBrainz User-Agent continues to use the public email contact (repository is private).
+- Audio fixtures remain tracked with documented strategy and autouse protection.
+- Shell-access security boundary remains documented in docs/THREAT_MODEL.md.
+- Exact MCP tool-set check retained.
 - Validation: py_compile passed; CI pending.
 
-### 2026-10-31 — Issue #7: robust bracket extraction for unmatched openers
-- Reworked `_extract_bracket_contents` to scan each opener independently, so an unmatched outer opener no longer suppresses valid inner bracket clues.
-- Preserved type-aware matching, nested/mixed brackets, unmatched closer handling, meaningful `_2020` suffixes, hyphenated titles, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
-- Validation: py_compile passed; CI pending.
+## 2026-10-31 - Issue #10 final verification
 
-### 2026-10-31 — Issue #7: raw filename basename handling
-- Updated `raw_filename` to use the final path component consistently (backslash/forward slash safe) and sanitize it.
-- Re-ran focused filename parser tests and full suite: 183 passed, 30 skipped.
-- Validation: local tests via CI-style venv passed; push and CI pending.
+- Hardened ACRCloud provider error path to catch exceptions and redact paths.
+- Re-verified redact_paths handles decoded and serialized Windows paths.
+- Re-verified package builds and import isolation (server does not import physical write modules).
+- Confirmed source files are UTF-8 without BOM; no encoding fixes needed.
+- Confirmed MusicBrainz User-Agent uses public email contact (repository private).
+- Confirmed tracked audio fixtures remain in Git with autouse protection.
+- Confirmed shell-access security boundary documented in docs/THREAT_MODEL.md.
+- Retained exact expected MCP tool-set check.
+- Validation: full suite 171 passed, 30 skipped (CI).
 
-### 2026-10-31 — Issue #7: final verification and handoff
-- Reviewed implementation against acceptance criteria: preserved bracketed title text, nested/mixed bracket handling, meaningful `_2020` suffix preservation, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
-- Verified existing regression tests in tests/test_investigator_tools.py cover all cases and multilingual examples.
-- No code changes required; branch and PR #114 already contain the implementation.
-- Validation: CI run 41174737658 succeeded.
+## 2026-10-31 - Issue #10 follow-up hardening (agent)
 
-### 2026-10-31 — Issue #7: verify filename clue parser robustness
-- Re-reviewed `src/musicbee_tagger_mcp/filename_parser.py` against acceptance criteria: preserved bracketed title text, type-aware nested/mixed bracket extraction, meaningful `_2020` suffix preservation, hyphenated-title track-number distinction, invisible-character sanitization, both Artist/Title hypotheses, and three-or-more segment subtitles.
-- Confirmed multilingual regression coverage in `tests/test_investigator_tools.py`.
-- Validation: py_compile passed; existing PR #114 CI green.
-### 2026-11-01 — Issue #7: filename clue parsing final pass
-
-- Created branch `claude/issue-7-filename-clues` from `codex/issue-7-filename-clues`.
-- Minor hardening: trim stem before trailing `_N` suffix stripping in `clean_stem`.
-- Verified CI (Repo Health) green on PR #117 for Python 3.11/3.12/3.14 and Windows bundle.
-- Preserved bracketed title text, nested/mixed bracket handling, meaningful `_2020` suffixes, hyphenated title distinction, invisible-char sanitization, both Artist/Title hypotheses, and multi-segment subtitles.
+- Strengthened redact_paths for URL-decoded and serialized Windows paths and recursive containers.
+- Hardened registry resolution and list_staged_changes/list_jobs error paths.
+- Retained exact MCP tool-set check and documented fixture/security boundaries.
+- Validation: compileall passed; CI pending.
 
 
 ### 2026-11-01 — Issue #7: final robustness review and handoff
@@ -749,3 +602,50 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Hardened ReviewFlagStore singleton for data-root changes; added aliases and carry-over on reopen.
 - Improved path privacy for Path-like values; reset review store in conftest.
 - Updated docs tool table.
+## 2026-10-31 - Issue #10 final fix
+
+- Fixed Windows path regex in redact_paths to actually match backslash paths.
+- Merged master and resolved conflicts; removed undefined audit_staged_changes tool reference.
+- Verified import isolation and redact_paths behavior manually; CI blocked by billing.
+- Validation: compileall and import check passed.
+## 2026-10-31 - Issue #10 release-readiness follow-up (agent)
+
+- Strengthened `redact_paths` to handle decoded payloads, serialized Windows paths, and non-string/bytes inputs.
+- Hardened MCP error paths (review.py, acoustid.py, musicbrainz.py) to redact paths.
+- Verified package import isolation: MCP server does not import physical write modules.
+- Confirmed source files are UTF-8 clean; no encoding fixes needed.
+- Confirmed MusicBrainz User-Agent uses public email contact (repository private).
+- Confirmed tracked audio fixtures remain in Git with autouse protection.
+- Confirmed shell-access security boundary documented in docs/THREAT_MODEL.md.
+- Validation: compileall and import checks passed; CI verification pending due to billing block.
+
+## 2026-10-31 - Issue #10 final hardening (agent)
+
+- Repaired duplicate `manual_override` parameter in `StagingManager.stage`, restoring a valid signature and docstring.
+- Re-added `manual_override` parameters to `stage_tag_changes` so staging calls resolve correctly.
+- Hardened `redact_paths` POSIX pattern to redact absolute paths while preserving inline API-style slash segments and serialized Windows paths.
+- Redacted queue operation error strings in `operations.py`.
+- Verified source compiles and exact MCP tool set remains unchanged.
+- Validation: compileall passed; CI pending due to billing.
+
+## 2026-10-31 - Issue #10 verification refresh (agent)
+
+- Re-verified redact_paths behavior for decoded and serialized Windows paths; compileall passed.
+- Confirmed exact MCP tool set and import isolation remain intact.
+- CI verification remains blocked by repository billing limits; changes pushed for CI.
+
+### 2026-10-31 — Issue #10 finalization
+- Fixed pylint duplicate method/function definitions in job_store.py and tools/musicbrainz.py.
+- Hardened redact_paths for bytes, None, and dict keys.
+- Verified imports and pylint errors-only pass locally.
+
+
+## 2026-10-31 - Issue #10 audit helper restored (agent)
+
+- Re-added audit_staged_changes helper in tools/tags.py (path-safe wrapper).
+- Verified exact MCP tool set now matches test_secure_pipeline (33 tools).
+- Verified import isolation: server does not import physical write modules.
+- Source files are UTF-8 without BOM; no encoding fixes needed.
+- MusicBrainz UA uses public email contact (repo private).
+- Audio fixture protection and shell-access boundary already documented.
+- Validation: compileall passed; CI blocked by billing.

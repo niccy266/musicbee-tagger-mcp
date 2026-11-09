@@ -3,6 +3,7 @@
 from typing import Any, Dict, Optional
 
 from ..error_codes import (
+    redact_paths,
     E_AUDIO_READ_FAILED,
     E_PROVIDER_FAILED,
     E_PROVIDER_NOT_CONFIGURED,
@@ -56,15 +57,22 @@ def identify_acrcloud(token: str) -> Dict[str, Any]:
             function="identify_acrcloud",
         )
 
-    result = provider.identify(
-        audio_bytes,
-        filename=path.name,
-        duration_sec=duration,
-    )
+    try:
+        result = provider.identify(
+            audio_bytes,
+            filename=path.name,
+            duration_sec=duration,
+        )
+    except Exception as error:
+        return make_error(
+            E_PROVIDER_FAILED,
+            redact_paths(f"ACRCloud request failed: {type(error).__name__}: {error}"),
+            function="identify_acrcloud",
+        )
     if isinstance(result, dict) and result.get("status") == "error":
         return make_error(
             E_PROVIDER_FAILED,
-            result.get("error", "ACRCloud request failed"),
+            redact_paths(str(result.get("error", "ACRCloud request failed"))),
             function="identify_acrcloud",
         )
     return result

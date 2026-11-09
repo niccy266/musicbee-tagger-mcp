@@ -1,4 +1,4 @@
-﻿"""Unit tests for ACRCloud configuration, requests, and normalization."""
+"""Unit tests for ACRCloud configuration, requests, and normalization."""
 
 import base64
 import hashlib

@@ -9,6 +9,7 @@ from ..error_codes import (
     E_PROVIDER_NOT_CONFIGURED,
     E_UNKNOWN_TOKEN,
     make_error,
+    redact_paths,
 )
 from ..file_registry import get_registry
 from ..metadata_reader import read_audio_metadata
@@ -52,7 +53,7 @@ def get_audio_fingerprint(token: str) -> Dict[str, Any]:
     if isinstance(result, dict) and result.get("status") == "error":
         return make_error(
             E_PROVIDER_FAILED,
-            result.get("error", "fpcalc failed"),
+            redact_paths(str(result.get("error", "fpcalc failed"))),
             function="get_audio_fingerprint",
         )
     if isinstance(result, dict):
@@ -108,7 +109,7 @@ def lookup_acoustid(fingerprint: str, duration: Any) -> Dict[str, Any]:
     if isinstance(result, dict) and result.get("status") == "error":
         return make_error(
             E_PROVIDER_FAILED,
-            result.get("error", "AcoustID request failed"),
+            redact_paths(str(result.get("error", "AcoustID request failed"))),
             function="lookup_acoustid",
         )
     if isinstance(result, dict) and result.get("status") == "rate_limited":

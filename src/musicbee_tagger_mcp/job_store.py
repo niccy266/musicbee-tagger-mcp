@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .data_paths import ensure_data_subdirectory
+from .error_codes import redact_paths
 
 
 def _first_present(mapping, keys):
@@ -345,9 +346,9 @@ class JobStore:
                 remaining = sum(1 for t in job["tracks"] if t.get("status") == "pending")
                 return {"batch": claimed, "remaining": remaining, "job_id": job_id}
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         except RuntimeError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
 
     def preview_batch(self, job_id: str, size: int = 10) -> Dict[str, Any]:
         """Preview the next batch without claiming it (non-mutating)."""
@@ -366,7 +367,7 @@ class JobStore:
                     counts[t.get("status", "pending")] = counts.get(t.get("status", "pending"), 0) + 1
                 return {"preview": preview, "remaining": counts.get("pending", 0), "job_id": job_id}
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
 
     def peek_pending(self, job_id: str, size: int = 10) -> List[str]:
         """Return display names of the next pending tracks without claiming them."""
@@ -416,7 +417,7 @@ class JobStore:
                 remaining = sum(1 for t in job["tracks"] if t.get("status") == "pending")
                 return {"updated": updated, "remaining": remaining, "unknown": unknown}
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         by_token = {t["token"]: t for t in job["tracks"]}
         updated, unknown = 0, []
         for result in results:
@@ -466,7 +467,7 @@ class JobStore:
         try:
             self._save(job)
         except RuntimeError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
 
     def release_batch(self, job_id: str, tokens: List[str]) -> Dict[str, Any]:
         """Return selected in-progress claims to pending after an interrupted run."""
@@ -503,9 +504,9 @@ class JobStore:
                 )
                 return {"released": released, "unchanged": unchanged, "remaining": remaining}
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         except RuntimeError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
 
     def job_status(self, job_id: str) -> Dict[str, Any]:
         """Return counts per status and failed display names (no tokens)."""
@@ -537,7 +538,7 @@ class JobStore:
                     "unresolved": unresolved,
                 }
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         counts = {status: 0 for status in STATUSES}
         failed = []
         unresolved = []
@@ -613,7 +614,7 @@ class JobStore:
         try:
             job = self.load_job(job_id)
         except ValueError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         by_token = {track["token"]: track for track in job["tracks"]}
         track = by_token.get(token) if isinstance(token, str) else None
         if track is None:
@@ -649,7 +650,7 @@ class JobStore:
         try:
             self._save(job)
         except RuntimeError as error:
-            return {"error": str(error)}
+            return {"error": redact_paths(str(error))}
         return {
             "job_id": job_id,
             "status": status,

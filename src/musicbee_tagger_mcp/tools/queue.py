@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Optional
 
-from ..error_codes import E_INVALID_INPUT, error_from_exception, make_error
+from ..error_codes import E_INVALID_INPUT, error_from_exception, make_error, redact_paths
 from ..queue_store import OperationQueue
 
 _queue: Optional[OperationQueue] = None
@@ -45,7 +45,7 @@ def update_batch_operation(
     except ValueError as error:
         return make_error(
             E_INVALID_INPUT,
-            str(error),
+            redact_paths(str(error)),
             function="update_batch_operation",
         )
     except Exception as error:

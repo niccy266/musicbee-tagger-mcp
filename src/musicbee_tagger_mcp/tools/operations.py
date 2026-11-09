@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Optional
 
-from ..error_codes import E_INVALID_INPUT, make_error
+from ..error_codes import E_INVALID_INPUT, make_error, redact_paths
 from ..operation_queue import get_operation_queue
 
 
@@ -13,7 +13,7 @@ def _enqueue_operation(
     if isinstance(response, dict) and "error" in response and "error_code" not in response:
         return make_error(
             E_INVALID_INPUT,
-            response["error"],
+            redact_paths(response["error"]),
             function="enqueue_operation",
         )
     return response
@@ -24,7 +24,7 @@ def _list_operations(status: Optional[str] = None, limit: int = 50) -> Dict[str,
     if isinstance(response, dict) and "error" in response and "error_code" not in response:
         return make_error(
             E_INVALID_INPUT,
-            response["error"],
+            redact_paths(response["error"]),
             function="list_operations",
         )
     return response
@@ -44,7 +44,7 @@ def _complete_operation(
     if isinstance(response, dict) and "error" in response and "error_code" not in response:
         return make_error(
             E_INVALID_INPUT,
-            response["error"],
+            redact_paths(response["error"]),
             function="complete_operation",
         )
     return response

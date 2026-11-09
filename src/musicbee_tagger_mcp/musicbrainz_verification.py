@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from .musicbrainz_api import musicbrainzngs
 from .match_store import record_match
+from .error_codes import redact_paths
 from .musicbrainz_scoring import classify_release, string_similarity
 
 _FORENSIC_SCORE_ALIASES = (
@@ -125,7 +126,7 @@ def evaluate_match(
         return {
             "verified": False,
             "confidence": 0.0,
-            "error": f"Failed to fetch MBID {recording_id}: {error}",
+            "error": redact_paths(f"Failed to fetch MBID {recording_id}: {error}"),
             "match_handle": _h,
             "mbid_handle": _h,
             "handle": _h,

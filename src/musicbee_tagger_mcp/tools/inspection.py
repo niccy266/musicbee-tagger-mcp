@@ -24,7 +24,7 @@ def read_track_metadata(token: str) -> Dict[str, Any]:
     """
     try:
         path = get_registry().resolve(token)
-    except KeyError:
+    except Exception:
         # Tokens may be unknown to this server process's registry/data dir.
         # Keep the response path-free and avoid an unhandled MCP tool error.
         return make_error(
@@ -52,7 +52,7 @@ def extract_filename_clues(token: str) -> Dict[str, Any]:
     """
     try:
         entry = get_registry().resolve(token)
-    except KeyError:
+    except Exception:
         return make_error(
             E_UNKNOWN_TOKEN,
             "unknown or unregistered token",
@@ -73,7 +73,7 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
     for token in tokens:
         try:
             path = registry.resolve(token)
-        except KeyError:
+        except Exception:
             # Token is not registered in this server's file registry.
             # Return a consistent structure (matching successful entries)
             # so the agent can handle it uniformly — mark it unresolved
@@ -97,13 +97,17 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
             briefs.append(error_from_exception(exc, function="get_batch_brief"))
             briefs[-1]["token"] = token
             continue
+        try:
+            _clues = extract_clues_from_filename(str(path))
+        except Exception:
+            _clues = {}
         briefs.append({
             "token": token,
             "display_name": path.name,
             "duration_seconds": metadata.get("duration_seconds"),
             "format": metadata.get("format"),
             "tags": metadata.get("tags", {}),
-            "filename_clues": extract_clues_from_filename(str(path)),
+            "filename_clues": _clues,
         })
 
 
