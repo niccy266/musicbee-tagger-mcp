@@ -21,7 +21,13 @@ OGG_MARSEILLES = FIXTURES / "The Sunshine Of Marseilles - Alfredo And His Band \
 
 REAL_FILES = [MP3, OGG_KNACK, OGG_MARSEILLES]
 
-pytestmark = pytest.mark.requires_audio_fixtures
+pytestmark = [
+    pytest.mark.requires_audio_fixtures,
+    pytest.mark.skipif(
+        not all(path.exists() for path in REAL_FILES),
+        reason="audio fixtures not available",
+    ),
+]
 
 # Expected ground truth (verified with exiftool)
 EXPECTED = {
@@ -81,13 +87,24 @@ def test_error_never_contains_path(path):
         assert "definitely not here" not in str(e)
 
 
-@pytest.mark.parametrize("path", REAL_FILES, ids=lambda p: p.name[:40])
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(
+            path,
+            marks=pytest.mark.skipif(
+                _ground_truth(path).get("duration_s") is None,
+                reason="no duration recorded for this file",
+            ),
+        )
+        for path in REAL_FILES
+    ],
+    ids=lambda p: p.name[:40],
+)
 def test_technical_properties(path, tmp_path):
     """Duration/bitrate sanity vs ffprobe ground truth."""
     result = read_audio_metadata(str(path))
     exp = _ground_truth(path)
-    if exp.get("duration_s") is None:
-        pytest.skip("no duration recorded for this file")
     assert abs(result["duration_seconds"] - exp["duration_s"]) < 1.0
     assert result["duration_seconds"] > 0
 
@@ -226,6 +243,10 @@ SORT_AND_LASTFM = {
 }
 
 
+@pytest.mark.skipif(
+    shutil.which("ffmpeg") is None,
+    reason="ffmpeg not available on PATH",
+)
 @pytest.mark.parametrize("ext", ["mp3", "ogg", "m4a"])
 def test_sort_and_lastfm_fields_roundtrip_on_real_files(tmp_path, ext):
     """Write Cyrillic sort names + Last.fm passthrough into a real audio
@@ -248,3 +269,12 @@ def test_sort_and_lastfm_fields_roundtrip_on_real_files(tmp_path, ext):
     for field, expected in SORT_AND_LASTFM.items():
         assert tags.get(field) == expected, \
             f"{ext} {field}: wrote {expected!r}, read back {tags.get(field)!r}"
+
+import shutil
+
+
+@pytest.mark.requires_audio_fixtures
+def test_ffmpeg_is_available():
+    """Surface a missing ffmpeg as a single, visible skip."""
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg not available on PATH")

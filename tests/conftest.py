@@ -79,14 +79,32 @@ def block_network_access(request):
 
     original_socket = socket.socket
     original_urlopen = urllib.request.urlopen
+    original_create_connection = socket.create_connection
 
-    def _blocked_socket(*args, **kwargs):
+    class _GuardedSocket(original_socket):
+        def __init__(self, *args, **kwargs):
+            frame = sys._getframe(1)
+            caller_name = frame.f_code.co_name
+            caller_module = frame.f_globals.get("__name__", "")
+            if caller_name in {"_fallback_socketpair", "socketpair", "accept"} or (
+                caller_module.startswith(
+                    ("asyncio", "selectors", "anyio", "sniffio", "multiprocessing", "socket")
+                )
+            ):
+                super().__init__(*args, **kwargs)
+            else:
+                raise RuntimeError("network access in tests")
+
+    _blocked_socket = _GuardedSocket
+
+    def _blocked_connect(*args, **kwargs):
         raise RuntimeError("network access in tests")
 
     def _blocked_urlopen(*args, **kwargs):
         raise RuntimeError("network access in tests")
 
     socket.socket = _blocked_socket
+    socket.create_connection = _blocked_connect
     urllib.request.urlopen = _blocked_urlopen
 
     for module_name in ("musicbee_tagger_mcp.acrcloud", "musicbee_tagger_mcp.tools.text"):
@@ -100,6 +118,7 @@ def block_network_access(request):
         yield
     finally:
         socket.socket = original_socket
+        socket.create_connection = original_create_connection
         urllib.request.urlopen = original_urlopen
         for module_name in ("musicbee_tagger_mcp.acrcloud", "musicbee_tagger_mcp.tools.text"):
             module = sys.modules.get(module_name)
