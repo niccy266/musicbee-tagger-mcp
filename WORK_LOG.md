@@ -700,3 +700,30 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Replaced bare skips in `test_real_files.py` and `test_windows_mcpb.py` with registered markers; added ffmpeg availability skip and skipif guards.
 - Updated CI to assert ffmpeg and run the suite twice for determinism.
 - Validation: pending CI.
+## 2026-11-14 — Merge queue completed; CI repaired
+
+Merged the remaining branches one at a time, verifying the tool surface after
+each: #66 coverage, #8 acoustid, #82 filename hints, #18 lastfm, #45 album
+order, #39 staged search, #70 conftest isolation.
+
+Bad-merge defects found and fixed along the way:
+- `flag_for_review` registered twice (duplicate import + call) — warned at import.
+- `list_jobs()` nested inside a stray loop, appending a 3-track job three times
+  and returning only the first job. That is the "says done, ships nothing" class
+  of bug from the batch tools.
+- `job_store.py` carried two full copies of the class methods; the later copies
+  silently won, so the cross-job duplicate policy was dead code.
+- `genre_cleanup.py` wrapper shadowed the imported pure helper and then called it
+  on a genre string, re-entering itself and iterating the characters of the
+  string as track tokens.
+- `musicbrainz.verify_mbid` defined twice with a stray alias between them.
+
+CI status: `Publish Release` green. `Repo Health` needed two more fixes:
+- the MCPB manifest pins its own tool list, so adding `annotate_staged_change`
+  broke release validation while tests passed. Added a test that asserts every
+  manifest tool is actually registered.
+- AcoustID rate-limit results dropped the `Retry-After` header on the path where
+  a 429 carries a JSON error body, returning `retry_after: null`.
+
+Coverage gate (#66) set to a temporary floor of 56. It was introduced after the
+last green run and several merged modules have no tests. Ratchet up, never down.
