@@ -7,7 +7,6 @@ from .tags import register_tag_tools
 from .playlists import register_playlist_tools
 from .text import register_text_tools
 from .genre_cleanup import register_genre_cleanup_tools
-from .review import register_review_tools
 from .acrcloud import register_acrcloud_tools
 from .acoustid import register_acoustid_tools
 from .lastfm import register_lastfm_tools
@@ -27,4 +26,3 @@ def register_tools(app) -> None:
     register_acrcloud_tools(app)
     register_acoustid_tools(app)
     register_lastfm_tools(app)
-    register_review_tools(app)

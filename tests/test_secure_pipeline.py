@@ -288,7 +288,7 @@ def test_apply_staged_not_in_mcp_server():
         "flag_for_review",
         "resolve_lastfm_title",
         "lastfm_track_search_tool",
-        "clean_genre_clutter",
+        "audit_staged_changes",
     }
     # Registration is CLI-only (musicbee-tagger-register-playlist creates the
     # job locally). No MCP tool accepts a path or location of any kind.
