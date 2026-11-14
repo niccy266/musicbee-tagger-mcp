@@ -13,6 +13,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path or sys.path[0] != str(SRC):
+    sys.path.insert(0, str(SRC))
 
 
 def pytest_configure(config):
