@@ -12,6 +12,10 @@ logs/
 .pytest_cache/
 .pytest-*/
 pytest-of-*/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 tests/sample_audio/
 *.bak
 dist/

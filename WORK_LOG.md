@@ -1,3 +1,12 @@
+### 2026-11-14 — Issue #66: alias modules regression test and genre cleanup coverage (G6/G5)
+
+- Added `tests/test_alias_modules.py` with parametrized regression tests for all 18 backward-compatibility alias modules, raising alias module coverage to 100%.
+- Added `tests/test_genre_cleanup.py` covering chart/language clutter filtering, separator preservation, mood descriptor removal, and tool error/skipped handling. Raised `genre_cleanup.py` coverage from 24% to 88% and `tools/genre_cleanup.py` from 28% to 100%.
+- Increased overall statement coverage to 58.65% (+126 statements covered; 320 passed).
+- Ratcheted `fail_under` coverage floor from 56 to 58 in `pyproject.toml`.
+- Verified `pylint --recursive=y --errors-only src` clean (0 errors).
+- Branch: `codex/issue-66-alias-coverage`.
+
 ### 2026-11-14 — Issue #125: port JobStore track fallback for inspection tools
 
 - Added `JobStore.get_track_by_token(token)` to resolve tracks from playlist jobs when missing from `FileRegistry`.
