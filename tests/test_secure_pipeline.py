@@ -280,6 +280,8 @@ def test_apply_staged_not_in_mcp_server():
         "get_staged_change",
         "amend_staged_changes",
         "withdraw_staged_change",
+        "annotate_staged_change",
+        "audit_staged_changes",
         "propose_artist_split",
         "search_musicbrainz_artist",
         "verify_artists_on_recording",

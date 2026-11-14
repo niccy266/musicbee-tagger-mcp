@@ -252,7 +252,7 @@ class StageManifestStore:
 
         # Accept aliases from kwargs.
         if token is None:
-            token = kwargs.get("token") or kwargs.get("file_token")
+            token = kwargs.get("token") or kwargs.get("file_token") or kwargs.get("fileToken") or kwargs.get("file_token")
         if file is None:
             file = kwargs.get("file")
         if file_identity is None:
@@ -262,11 +262,11 @@ class StageManifestStore:
         if filename is None:
             filename = kwargs.get("filename")
         if job_id is None:
-            job_id = kwargs.get("job_id") or kwargs.get("job")
+            job_id = kwargs.get("job_id") or kwargs.get("job") or kwargs.get("job_name")
         if batch is None:
             batch = kwargs.get("batch")
         if query is None:
-            query = kwargs.get("query")
+            query = kwargs.get("query") or kwargs.get("q") or kwargs.get("keyword")
         if search is None:
             search = kwargs.get("search")
         if text is None:

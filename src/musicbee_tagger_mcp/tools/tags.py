@@ -334,4 +334,32 @@ def register_tag_tools(app) -> None:
     app.tool()(get_staged_change)
     app.tool()(amend_staged_changes)
     app.tool()(withdraw_staged_change)
+    app.tool()(annotate_staged_change)
     app.tool()(audit_staged_changes)
+
+
+def annotate_staged_change(
+    stage_id: str,
+    notes: Optional[str] = None,
+    note: Optional[str] = None,
+    rationale: Optional[str] = None,
+    expected_revision: Optional[int] = None,
+    reason: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
+    """Attach a note/rationale to a pending stage without writing audio."""
+    try:
+        return get_staging_manager().annotate(
+            stage_id,
+            notes=notes,
+            note=note,
+            rationale=rationale,
+            expected_revision=expected_revision,
+            reason=reason,
+            **kwargs,
+        )
+    except (FileNotFoundError, ValueError) as error:
+        return error_from_exception(error, function='annotate_staged_change')
+    except Exception:
+        return make_error(E_STAGE_CONFLICT, 'unable to annotate staged change', function='annotate_staged_change')
+
