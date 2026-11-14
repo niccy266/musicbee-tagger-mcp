@@ -2,6 +2,7 @@
 
 import json
 import re
+import sys
 import zipfile
 from pathlib import Path
 
@@ -234,7 +235,24 @@ def test_mcpb_manifest_matches_project_and_uses_supported_uv_runtime():
         "repair_mojibake",
         "identify_acrcloud",
         "flag_for_review",
+        "annotate_staged_change",
     }
+
+
+def test_mcpb_manifest_tools_all_exist_in_server_registry():
+    """Every tool the extension advertises must be a real registered MCP tool."""
+    manifest = json.loads(
+        (ROOT / "release" / "mcpb" / "manifest.json").read_text(encoding="utf-8")
+    )
+    sys.path.insert(0, str(ROOT / "src"))
+    from musicbee_tagger_mcp.server import app
+
+    manifest_tools = {tool["name"] for tool in manifest["tools"]}
+    registered = set(app._tool_manager._tools)
+    assert manifest_tools <= registered, (
+        f"manifest advertises tools that are not registered: "
+        f"{sorted(manifest_tools - registered)}"
+    )
 
 
 def test_mcpb_archive_contains_only_runtime_project_files(tmp_path):
