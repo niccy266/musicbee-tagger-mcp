@@ -19,6 +19,9 @@ class _FakeResponse:
     def read(self):
         return json.dumps(self._payload).encode("utf-8")
 
+    def close(self):
+        """HTTPError hands its body to a _TemporaryFileCloser on 3.14."""
+
     def __enter__(self):
         return self
 

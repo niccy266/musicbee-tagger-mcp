@@ -486,6 +486,15 @@ def lookup_acoustid_with_config(
         if isinstance(payload, dict) and payload.get("status") != "ok":
             normalized = _normalize_acoustid_payload(payload)
             normalized["http_status"] = error.code
+            if error.code == 429:
+                # The Retry-After header is authoritative for rate limits; the
+                # JSON body rarely carries it, and a caller that cannot see the
+                # backoff cannot recover.
+                retry_after = (
+                    error.headers.get("Retry-After") if error.headers else None
+                )
+                if retry_after is not None:
+                    normalized["retry_after"] = retry_after
             return normalized
         message = f"AcoustID request failed: HTTP {error.code}"
         rate_limited = error.code == 429
