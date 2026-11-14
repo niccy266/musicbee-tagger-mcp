@@ -1,3 +1,28 @@
+### 2026-11-14 — Modernize Python runtime baseline to >=3.12
+
+- Updated `requires-python = ">=3.12, <4.0"` in `pyproject.toml`.
+- Updated CI test matrix in `.github/workflows/health.yml` to `["3.12", "3.14"]`, eliminating legacy Python 3.11 build overhead and backwards-compatibility baggage.
+- Verified CI contract assertion `tests/test_ci_contract.py` passes cleanly.
+- Branch: `codex/bump-python-312-baseline`.
+
+### 2026-11-14 — Issue #66: alias modules regression test and genre cleanup coverage (G6/G5)
+
+- Added `tests/test_alias_modules.py` with parametrized regression tests for all 18 backward-compatibility alias modules, raising alias module coverage to 100%.
+- Added `tests/test_genre_cleanup.py` covering chart/language clutter filtering, separator preservation, mood descriptor removal, and tool error/skipped handling. Raised `genre_cleanup.py` coverage from 24% to 88% and `tools/genre_cleanup.py` from 28% to 100%.
+- Increased overall statement coverage to 58.65% (+126 statements covered; 320 passed).
+- Ratcheted `fail_under` coverage floor from 56 to 58 in `pyproject.toml`.
+- Verified `pylint --recursive=y --errors-only src` clean (0 errors).
+- Branch: `codex/issue-66-alias-coverage`.
+
+### 2026-11-14 — Issue #125: port JobStore track fallback for inspection tools
+
+- Added `JobStore.get_track_by_token(token)` to resolve tracks from playlist jobs when missing from `FileRegistry`.
+- Updated `tools/inspection.py` (`read_track_metadata`, `extract_filename_clues`, `get_batch_brief`) to fallback to JobStore metadata safely with path-free error/note messages.
+- Added `pythonpath = ["src"]` to `pyproject.toml` and ensured `src` precedence in `tests/conftest.py`.
+- Added dedicated test suite `tests/test_inspection_fallback.py` verifying all fallback paths and path concealment.
+- Verified clean pylint check (`pylint --recursive=y --errors-only src` -> 0 errors) and 57 related tests passing.
+- Branch: `codex/issue-125-inspection-jobstore-fallback`.
+
 ### 2026-10-30 — Issue #68: harden MCP tool wrappers for offline tests
 
 - Updated `tools/musicbrainz.py` `get_release_tracklist` to omit `duration_seconds` when unknown, harden zero-media/404/transport paths, and resolve MusicBrainz client in a patch-friendly way.
