@@ -4,6 +4,6 @@ import musicbrainzngs
 
 musicbrainzngs.set_useragent(
     "musicbee-tagger-mcp",
-    "0.4.5",
+    "0.4.6",
     "niccy266@gmail.com",
 )

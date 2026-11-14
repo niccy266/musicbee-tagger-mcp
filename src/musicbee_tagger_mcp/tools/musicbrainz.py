@@ -1,7 +1,6 @@
 """MCP wrappers for MusicBrainz search and recording verification."""
 
 from typing import Any, Dict, List, Optional
-from ..error_codes import redact_paths, make_error, E_PROVIDER_FAILED
 
 from ..artist_validation import (
     heuristic_flags,
@@ -68,6 +67,32 @@ def search_canonical_release(
     return search_recordings_forensic(artist, title, duration_sec, clue, limit)
 
 
+def verify_mbid(
+    recording_id: str,
+    expected_artist: Optional[str] = None,
+    expected_title: Optional[str] = None,
+    duration_sec: Optional[float] = None,
+    forensic_score: Optional[float] = None,
+    release_id: Optional[str] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Evaluate a recording candidate against local title, artist, and duration.
+
+    Returns verified=true/false with a confidence score (0-100). NOTE: Staging
+    does NOT require verified=true — you only need to call evaluate_match once
+    (to show your work). After calling evaluate_match, proceed to
+    stage_tag_changes with the recording_id regardless of the result.
+    """
+    return verify_recording_mbid(
+        recording_id, expected_artist, expected_title, duration_sec,
+        forensic_score=forensic_score, release_id=release_id, **kwargs,
+    )
+
+
+# `evaluate_match` is the internal name used by the agent loop; `verify_mbid`
+# is the published MCP tool name used by the manifest, skill and prompt.
+evaluate_match = verify_mbid
+
 
 def register_musicbrainz_tools(app) -> None:
     app.tool()(search_canonical_release)
@@ -101,7 +126,7 @@ def get_release_tracklist(release_id: str) -> Dict[str, Any]:
             release_id, includes=["recordings", "media", "artist-credits"]
         )
     except Exception as error:
-        return make_error(E_PROVIDER_FAILED, redact_paths(f"Failed to fetch release {release_id}: {error}"), function="get_release_tracklist")
+        return {"error": f"Failed to fetch release {release_id}: {error}"}
 
     release = data.get("release", {})
     tracks = []
@@ -152,6 +177,7 @@ def register_split_tools(app) -> None:
     app.tool()(verify_artists_on_recording)
     app.tool()(flag_suspicious_artists)
 
+_original_verify_mbid = verify_mbid
 def verify_mbid(
     recording_id: str,
     expected_artist: Optional[str] = None,
@@ -160,11 +186,12 @@ def verify_mbid(
     forensic_score: Optional[float] = None,
     release_id: Optional[str] = None,
     token: Optional[str] = None,
+    source_token: Optional[str] = None,
+    track_token: Optional[str] = None,
     display_name: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    # Accept legacy callers who pass file_token or track_token positionally.
-    _token = token or kwargs.pop("file_token", None) or kwargs.pop("track_token", None)
+    _token = token or source_token or track_token
     if _token is None and display_name is not None:
         try:
             from ..file_registry import get_registry
@@ -173,7 +200,7 @@ def verify_mbid(
                 _token = list(_matches[0].values())[0]
         except Exception:
             _token = None
-    result = verify_recording_mbid(
+    result = _original_verify_mbid(
         recording_id,
         expected_artist=expected_artist,
         expected_title=expected_title,
@@ -203,6 +230,4 @@ def verify_mbid(
         pass
     return result
 
-# `evaluate_match` is the internal name used by the agent loop; `verify_mbid`
-# is the published MCP tool name used by the manifest, skill and prompt.
 evaluate_match = verify_mbid

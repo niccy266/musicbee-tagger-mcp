@@ -79,16 +79,10 @@ def stage_tag_changes(
     match_source: Optional[str] = None,
     match_confidence: Optional[float] = None,
     notes: str = "",
-    manual_override: bool = False,
-    manual_override_justification: Optional[str] = None,
-    override_justification: Optional[str] = None,
-    override_reason: Optional[str] = None,
-    justification: Optional[str] = None,
     job_id: Optional[str] = None,
     batch: Optional[str] = None,
     note: Optional[str] = None,
     rationale: Optional[str] = None,
-    **kwargs: Any,
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
@@ -118,17 +112,11 @@ def stage_tag_changes(
             match_source=match_source,
             match_confidence=match_confidence,
             notes=notes,
-            token=token,
-            job_id=job_id,
-            batch=batch,
-            note=note,
-            rationale=rationale,
             manual_override=manual_override,
             manual_override_justification=manual_override_justification,
             override_justification=override_justification,
             override_reason=override_reason,
             justification=justification,
-            **kwargs,
         )
     except Exception:
         # Staging errors can include the absolute path held by the manager.
@@ -142,6 +130,8 @@ def stage_tag_changes(
 def list_staged_changes(
     status=None,
     token=None,
+    source=None,
+    source_identity=None,
     display_name=None,
     job_id=None,
     batch=None,
@@ -150,31 +140,22 @@ def list_staged_changes(
     text=None,
     limit=100,
     offset=0,
-    **kwargs: Any,
-) -> Any:
-    file = kwargs.get("file")
-    file_identity = kwargs.get("file_identity")
-    try:
-        return get_staging_manager().list_staged_changes(
-            status=status,
-            token=token,
-            file=file,
-            file_identity=file_identity,
-            display_name=display_name,
-            job_id=job_id,
-            batch=batch,
-            query=query,
-            search=search,
-            text=text,
-            limit=limit,
-            offset=offset,
-        )
-    except Exception:
-        return [make_error(
-            E_STAGING_FAILED,
-            "unable to list staged changes",
-            function="list_staged_changes",
-        )]
+):
+    return get_staging_manager().list_staged_changes(
+        status=status,
+        token=token,
+        source=source,
+        source_identity=source_identity,
+        display_name=display_name,
+        job_id=job_id,
+        batch=batch,
+        query=query,
+        search=search,
+        text=text,
+        limit=limit,
+        offset=offset,
+    )
+
 
 def get_staged_change(stage_id: str) -> Dict[str, Any]:
     """Inspect a stage's notes, proposed values, current tags, and revision.
@@ -305,28 +286,6 @@ def stage_manual_override(
         justification=justification,
         **kwargs,
     )
-def audit_staged_changes(
-    low_score_threshold: Optional[float] = None,
-    **kwargs: Any,
-) -> Any:
-    """Audit pending staged changes for conflicts, weak matches and duplicates.
-
-    Read-only. Groups pending manifests per track and reports fields staged
-    more than once with different values, plus entries below the confidence
-    threshold. Never exposes filesystem paths.
-    """
-    if low_score_threshold is not None:
-        kwargs.setdefault("low_score_threshold", low_score_threshold)
-    try:
-        return get_staging_manager().audit_staged_changes(**kwargs)
-    except Exception:
-        return make_error(
-            E_STAGING_FAILED,
-            "unable to audit staged changes",
-            function="audit_staged_changes",
-        )
-
-
 def register_tag_tools(app) -> None:
     app.tool()(preview_tags)
     app.tool()(stage_tag_changes)
@@ -334,32 +293,3 @@ def register_tag_tools(app) -> None:
     app.tool()(get_staged_change)
     app.tool()(amend_staged_changes)
     app.tool()(withdraw_staged_change)
-    app.tool()(annotate_staged_change)
-    app.tool()(audit_staged_changes)
-
-
-def annotate_staged_change(
-    stage_id: str,
-    notes: Optional[str] = None,
-    note: Optional[str] = None,
-    rationale: Optional[str] = None,
-    expected_revision: Optional[int] = None,
-    reason: Optional[str] = None,
-    **kwargs: Any,
-) -> Any:
-    """Attach a note/rationale to a pending stage without writing audio."""
-    try:
-        return get_staging_manager().annotate(
-            stage_id,
-            notes=notes,
-            note=note,
-            rationale=rationale,
-            expected_revision=expected_revision,
-            reason=reason,
-            **kwargs,
-        )
-    except (FileNotFoundError, ValueError) as error:
-        return error_from_exception(error, function='annotate_staged_change')
-    except Exception:
-        return make_error(E_STAGE_CONFLICT, 'unable to annotate staged change', function='annotate_staged_change')
-
