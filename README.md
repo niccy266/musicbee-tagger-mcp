@@ -62,7 +62,7 @@ Alternatively, download and extract a Windows release bundle, then run its
 installer while supplying the included wheel:
 
    ```powershell
-   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.5-py3-none-any.whl
+   .\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.6-py3-none-any.whl
    ```
 
    Before upgrading an existing installation, close MCP clients using the
@@ -233,9 +233,9 @@ no local audio or playlist paths in titles or details.
 
 ## Claude Desktop MCP Bundle
 
-The release builder creates `dist\musicbee-tagger-mcp-0.4.5.mcpb` for Claude
+The release builder creates `dist\musicbee-tagger-mcp-0.4.6.mcpb` for Claude
 Desktop on macOS and Linux, and builds
-`dist\musicbee-tagger-mcp-0.4.5-windows.mcpb` on Windows. Install the
+`dist\musicbee-tagger-mcp-0.4.6-windows.mcpb` on Windows. Install the
 Windows-specific bundle in Claude Desktop through **Settings > Extensions >
 Advanced settings > Install Extension…**. It contains a self-contained server
 executable, so Claude does not need to set up `uv`, find Python on `PATH`, or

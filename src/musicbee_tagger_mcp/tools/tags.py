@@ -152,8 +152,8 @@ def list_staged_changes(
     offset=0,
     **kwargs: Any,
 ) -> Any:
-    file = kwargs.get("file")
-    file_identity = kwargs.get("file_identity")
+    file = kwargs.get("file") or kwargs.get("source")
+    file_identity = kwargs.get("file_identity") or kwargs.get("source_identity")
     try:
         return get_staging_manager().list_staged_changes(
             status=status,
@@ -175,6 +175,7 @@ def list_staged_changes(
             "unable to list staged changes",
             function="list_staged_changes",
         )]
+
 
 def get_staged_change(stage_id: str) -> Dict[str, Any]:
     """Inspect a stage's notes, proposed values, current tags, and revision.
@@ -327,17 +328,6 @@ def audit_staged_changes(
         )
 
 
-def register_tag_tools(app) -> None:
-    app.tool()(preview_tags)
-    app.tool()(stage_tag_changes)
-    app.tool()(list_staged_changes)
-    app.tool()(get_staged_change)
-    app.tool()(amend_staged_changes)
-    app.tool()(withdraw_staged_change)
-    app.tool()(annotate_staged_change)
-    app.tool()(audit_staged_changes)
-
-
 def annotate_staged_change(
     stage_id: str,
     notes: Optional[str] = None,
@@ -359,7 +349,21 @@ def annotate_staged_change(
             **kwargs,
         )
     except (FileNotFoundError, ValueError) as error:
-        return error_from_exception(error, function='annotate_staged_change')
+        return error_from_exception(error, function="annotate_staged_change")
     except Exception:
-        return make_error(E_STAGE_CONFLICT, 'unable to annotate staged change', function='annotate_staged_change')
+        return make_error(
+            E_STAGE_CONFLICT,
+            "unable to annotate staged change",
+            function="annotate_staged_change",
+        )
 
+
+def register_tag_tools(app) -> None:
+    app.tool()(preview_tags)
+    app.tool()(stage_tag_changes)
+    app.tool()(list_staged_changes)
+    app.tool()(get_staged_change)
+    app.tool()(amend_staged_changes)
+    app.tool()(withdraw_staged_change)
+    app.tool()(annotate_staged_change)
+    app.tool()(audit_staged_changes)
