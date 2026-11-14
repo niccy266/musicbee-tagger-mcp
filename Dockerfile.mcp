@@ -32,11 +32,14 @@ COPY pyproject.toml ./
 COPY scripts/ ./scripts/
 
 # Install the package in editable mode so the data dir env var is respected.
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN pip install --no-cache-dir "loguru>=0.7.0" && \
+    pip install --no-cache-dir --no-deps -e .
 
 # Staging directory (shared with the apply container via docker-compose volume).
 # The MCP container can WRITE here (staged manifests) but cannot write audio files.
-RUN mkdir -p /staging /data /certs && \
+RUN sed -i 's/\r$//' /app/scripts/*.sh && \
+    chmod +x /app/scripts/*.sh && \
+    mkdir -p /staging /data /certs && \
     chown -R mcpuser:mcpuser /staging /data /certs /app
 
 # Drop all capabilities; root filesystem is read-only except /staging and /data.

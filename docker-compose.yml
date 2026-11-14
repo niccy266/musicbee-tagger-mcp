@@ -38,9 +38,9 @@ services:
       # Shared staging directory — MCP writes, apply reads.
       - musicbee-staging:/staging:rw
       # Private data dir (registrations, queue, state).
-      - musicbee-data:/data:rw
+      - ${MUSICBEE_DATA_DIR:-musicbee-data}:/data:rw
       # Certificates for HTTPS.
-      - musicbee-certs:/certs:ro
+      - musicbee-certs:/certs:rw
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=50m
@@ -71,7 +71,7 @@ services:
       # Shared staging directory — read-only; apply agent only reads manifests here.
       - musicbee-staging:/staging:ro
       # Private data dir.
-      - musicbee-data:/data:rw
+      - ${MUSICBEE_DATA_DIR:-musicbee-data}:/data:rw
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=50m

@@ -197,3 +197,20 @@ def test_get_batch_brief_with_fallback(tmp_path, monkeypatch):
 
     # Path leak safety assertion
     assert str(tmp_path) not in json.dumps(briefs)
+
+
+def test_resolve_missing_uuid_skips_full_directory_scan(tmp_path, monkeypatch):
+    reg = FileRegistry(directory=tmp_path / "reg")
+    reg.directory.mkdir()
+
+    def _fail_scan():
+        raise AssertionError("find_tokens/_all_registered_entries should not run on a full UUID miss")
+
+    monkeypatch.setattr(reg, "find_tokens", _fail_scan)
+    try:
+        reg.resolve("e6119598-7d7e-4f54-9ba5-cfd96e5bfce6")
+    except KeyError:
+        pass
+    else:
+        raise AssertionError("Expected KeyError for unregistered UUID")
+

@@ -1,3 +1,13 @@
+### 2026-11-15 — Fix Docker Compose startup, volume mounts, and FileRegistry UUID lookup performance
+
+- Fixed `Dockerfile.apply` missing `COPY scripts/ ./scripts/`, which caused `/app/scripts/entrypoint_apply.sh: no such file or directory` on container start.
+- Normalized line endings (`sed -i 's/\r$//'`) and ensured executable permissions (`chmod +x`) on `/app/scripts/*.sh` in both `Dockerfile.apply` and `Dockerfile.mcp`, plus added `*.sh text eol=lf` in `.gitattributes`.
+- Added `.dockerignore` and updated `Dockerfile.mcp` / `Dockerfile.apply` editable install steps to install runtime dependencies only (`loguru>=0.7.0` and `--no-deps -e .`) instead of downloading dev dependencies on every rebuild.
+- Updated `docker-compose.yml` so `/certs` is mounted `:rw` (allowing `https_mcp_server.py` to generate self-signed TLS certificates on first start) and `/data` uses `${MUSICBEE_DATA_DIR:-musicbee-data}:/data:rw`.
+- Fixed `FileRegistry._resolve_with_lookup` in `src/musicbee_tagger_mcp/file_registry.py` so missing full UUID tokens immediately raise `KeyError` instead of scanning all 18,430 `.json` files in `registered/` (reducing 10-token `get_batch_brief` over Docker bind mounts from >60s timeout to 0.18s) and added Windows-to-`/audio` container path translation (`_translate_registered_path`).
+- Added `scripts/update_docker.ps1` to stop containers, pull `origin/master`, rebuild/start containers, and sync `C:/dev/cert.pem`.
+- Branch: `claude/fix-docker-compose-entrypoint`.
+
 ### 2026-11-14 — Modernize Python runtime baseline to >=3.12
 
 - Updated `requires-python = ">=3.12, <4.0"` in `pyproject.toml`.

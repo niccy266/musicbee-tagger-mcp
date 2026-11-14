@@ -39,6 +39,23 @@ def _is_absolute_path(value: object) -> bool:
         pass
     return False
 
+def _translate_registered_path(raw_path: str) -> Path:
+    """Resolve a persisted registration path, translating Windows MusicBee paths to /audio on POSIX."""
+    path = Path(raw_path)
+    if os.name == "posix" and ("\\" in raw_path or re.match(r"^[A-Za-z]:", raw_path)):
+        win_parts = PureWindowsPath(raw_path).parts
+        lower_parts = [part.lower() for part in win_parts]
+        if "musicbee" in lower_parts:
+            idx = lower_parts.index("musicbee") + 1
+            if idx < len(lower_parts) and lower_parts[idx] == "main":
+                idx += 1
+            if idx < len(win_parts):
+                candidate = Path("/audio").joinpath(*win_parts[idx:])
+                if candidate.exists() or not path.exists():
+                    return candidate
+    return path
+
+
 from .data_paths import ensure_data_subdirectory
 
 
@@ -110,9 +127,10 @@ class FileRegistry:
         record_path = self.directory / f"{normalized_token}.json"
         try:
             record = json.loads(record_path.read_text(encoding="utf-8"))
-            path = Path(record["path"])
-            if record["token"] != normalized_token or not _is_absolute_path(path):
+            raw_path = record["path"]
+            if record["token"] != normalized_token or not _is_absolute_path(raw_path):
                 raise ValueError
+            path = _translate_registered_path(str(raw_path))
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
             raise KeyError("Unknown file token") from None
 
@@ -269,10 +287,10 @@ def _all_registered_entries(self):
             try:
                 token = str(__import__("uuid").UUID(record_path.stem))
                 record = json.loads(record_path.read_text(encoding="utf-8"))
-                path = Path(record["path"])
-                if record.get("token") == token and path.is_absolute() and token not in seen:
+                raw_path = record["path"]
+                if record.get("token") == token and _is_absolute_path(raw_path) and token not in seen:
                     seen.add(token)
-                    entries.append((token, path))
+                    entries.append((token, _translate_registered_path(str(raw_path))))
             except Exception:
                 continue
     return entries
@@ -322,11 +340,15 @@ def _resolve_with_lookup(self, token):
     try:
         return _original_resolve(self, token)
     except KeyError:
-        matches = self.find_tokens(token) if isinstance(token, str) else []
-        if len(matches) == 1:
-            for tok, path in self._all_registered_entries():
-                if tok == matches[0]["token"]:
-                    return path
+        if isinstance(token, str):
+            try:
+                uuid.UUID(token)
+            except ValueError:
+                matches = self.find_tokens(token)
+                if len(matches) == 1:
+                    for tok, path in self._all_registered_entries():
+                        if tok == matches[0]["token"]:
+                            return path
         raise KeyError("Unknown file token")
 FileRegistry.resolve = _resolve_with_lookup
 
