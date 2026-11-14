@@ -13,6 +13,7 @@ from ..error_codes import (
 )
 from ..file_registry import get_registry
 from ..filename_parser import extract_clues_from_filename
+from ..job_store import get_job_store
 from ..metadata_reader import read_audio_metadata
 
 
@@ -22,16 +23,43 @@ def read_track_metadata(token: str) -> Dict[str, Any]:
     NEXT STEP: Call extract_filename_clues and search_canonical_release to
     find a matching MusicBrainz recording for verification.
     """
-    try:
-        path = get_registry().resolve(token)
-    except Exception:
-        # Tokens may be unknown to this server process's registry/data dir.
-        # Keep the response path-free and avoid an unhandled MCP tool error.
-        return make_error(
-            E_UNKNOWN_TOKEN,
-            "unknown or unregistered token",
-            function="read_track_metadata",
-        )
+    path = None
+    registry = get_registry()
+    if registry:
+        try:
+            path = registry.resolve(token)
+        except Exception:
+            pass
+
+    if path is None:
+        try:
+            job_store = get_job_store()
+            track = job_store.get_track_by_token(token) if job_store else None
+        except Exception:
+            track = None
+        if track is None:
+            # Tokens may be unknown to this server process's registry/data dir.
+            # Keep the response path-free and avoid an unhandled MCP tool error.
+            return make_error(
+                E_UNKNOWN_TOKEN,
+                "unknown or unregistered token",
+                function="read_track_metadata",
+            )
+        # We have track metadata from JobStore, but not a local file path.
+        # Return what we know about the track safely without exposing file paths.
+        return {
+            "token": token,
+            "display_name": track.get("display_name"),
+            "status": track.get("status"),
+            "duration_seconds": track.get("duration_seconds"),
+            "format": track.get("format"),
+            "tags": track.get("tags", {}),
+            "error": (
+                "Token is in job queue but no audio file path is available. "
+                "This may occur if the file was moved or deleted after registration."
+            ),
+        }
+
     try:
         metadata = read_audio_metadata(str(path))
     except Exception as exc:
@@ -50,14 +78,35 @@ def extract_filename_clues(token: str) -> Dict[str, Any]:
     separator may split an artist, title, or unrelated text. Corroborate them
     with metadata, duration, or a release track listing before staging tags.
     """
-    try:
-        entry = get_registry().resolve(token)
-    except Exception:
-        return make_error(
-            E_UNKNOWN_TOKEN,
-            "unknown or unregistered token",
-            function="extract_filename_clues",
-        )
+    entry = None
+    registry = get_registry()
+    if registry:
+        try:
+            entry = registry.resolve(token)
+        except Exception:
+            pass
+
+    if entry is None:
+        try:
+            job_store = get_job_store()
+            track = job_store.get_track_by_token(token) if job_store else None
+        except Exception:
+            track = None
+        if track is None:
+            return make_error(
+                E_UNKNOWN_TOKEN,
+                "unknown or unregistered token",
+                function="extract_filename_clues",
+            )
+        display_name = track.get("display_name")
+        if not display_name:
+            return make_error(
+                E_UNKNOWN_TOKEN,
+                "Token found in job queue but display_name unavailable",
+                function="extract_filename_clues",
+            )
+        entry = display_name
+
     try:
         return extract_clues_from_filename(str(entry))
     except Exception as exc:
@@ -69,12 +118,28 @@ def extract_filename_clues(token: str) -> Dict[str, Any]:
 def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
     """Return metadata and unverified filename research clues for each token."""
     registry = get_registry()
+    try:
+        job_store = get_job_store()
+    except Exception:
+        job_store = None
     briefs = []
     for token in tokens:
-        try:
-            path = registry.resolve(token)
-        except Exception:
-            # Token is not registered in this server's file registry.
+        path = None
+        if registry:
+            try:
+                path = registry.resolve(token)
+            except Exception:
+                pass
+
+        track_from_job = None
+        if path is None and job_store:
+            try:
+                track_from_job = job_store.get_track_by_token(token)
+            except Exception:
+                track_from_job = None
+
+        if path is None and track_from_job is None:
+            # Token is not registered in either FileRegistry or JobStore.
             # Return a consistent structure (matching successful entries)
             # so the agent can handle it uniformly — mark it unresolved
             # rather than leaving the model with an incomplete entry.
@@ -90,26 +155,47 @@ def get_batch_brief(tokens: List[str]) -> List[Dict[str, Any]]:
                 "function": "get_batch_brief",
             })
             continue
-        try:
-            metadata = read_audio_metadata(str(path))
-        except Exception as exc:
-            # File-reader exceptions may include the absolute path.
-            briefs.append(error_from_exception(exc, function="get_batch_brief"))
-            briefs[-1]["token"] = token
-            continue
-        try:
-            _clues = extract_clues_from_filename(str(path))
-        except Exception:
-            _clues = {}
-        briefs.append({
-            "token": token,
-            "display_name": path.name,
-            "duration_seconds": metadata.get("duration_seconds"),
-            "format": metadata.get("format"),
-            "tags": metadata.get("tags", {}),
-            "filename_clues": _clues,
-        })
 
+        if path is not None:
+            try:
+                metadata = read_audio_metadata(str(path))
+            except Exception as exc:
+                # File-reader exceptions may include the absolute path.
+                briefs.append(error_from_exception(exc, function="get_batch_brief"))
+                briefs[-1]["token"] = token
+                continue
+            try:
+                _clues = extract_clues_from_filename(str(path))
+            except Exception:
+                _clues = {}
+            briefs.append({
+                "token": token,
+                "display_name": path.name,
+                "duration_seconds": metadata.get("duration_seconds"),
+                "format": metadata.get("format"),
+                "tags": metadata.get("tags", {}),
+                "filename_clues": _clues,
+            })
+        else:
+            display_name = track_from_job.get("display_name")
+            clues = {}
+            if display_name:
+                try:
+                    clues = extract_clues_from_filename(str(display_name))
+                except Exception:
+                    clues = {}
+            briefs.append({
+                "token": token,
+                "display_name": display_name,
+                "duration_seconds": track_from_job.get("duration_seconds"),
+                "format": track_from_job.get("format"),
+                "tags": track_from_job.get("tags", {}),
+                "filename_clues": clues,
+                "note": (
+                    "Token is in job queue but audio file path is unavailable. "
+                    "File may have been moved or deleted after registration."
+                ),
+            })
 
     return briefs
 

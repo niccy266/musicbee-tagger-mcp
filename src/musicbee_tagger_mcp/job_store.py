@@ -827,6 +827,26 @@ class JobStore:
     def has_duplicate_job(self, *args, **kwargs):
         return bool(self.jobs_containing_token(*args, **kwargs))
 
+    def get_track_by_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """Resolve a token to its track metadata from the job store.
+
+        This is a fallback for when FileRegistry doesn't have the token.
+        Returns the track dict (with token, display_name, status, etc.) or None.
+        """
+        if not isinstance(token, str):
+            return None
+        token_str = token.strip()
+        try:
+            normalized_token = str(uuid.UUID(token_str))
+        except (TypeError, ValueError):
+            normalized_token = token_str
+
+        for _job_id, job in self._iter_job_records():
+            for track in job.get("tracks", []):
+                if isinstance(track, dict) and track.get("token") in (normalized_token, token_str):
+                    return track
+        return None
+
 
     _ALBUM_KEYS = ("album", "album_name", "album_title", "albumname", "albumtitle", "record", "release_title")
     _ALBUM_ARTIST_KEYS = ("album_artist", "albumartist", "album_artist_name", "albumartistname")

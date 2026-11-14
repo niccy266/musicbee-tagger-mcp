@@ -1,3 +1,12 @@
+### 2026-11-14 — Issue #125: port JobStore track fallback for inspection tools
+
+- Added `JobStore.get_track_by_token(token)` to resolve tracks from playlist jobs when missing from `FileRegistry`.
+- Updated `tools/inspection.py` (`read_track_metadata`, `extract_filename_clues`, `get_batch_brief`) to fallback to JobStore metadata safely with path-free error/note messages.
+- Added `pythonpath = ["src"]` to `pyproject.toml` and ensured `src` precedence in `tests/conftest.py`.
+- Added dedicated test suite `tests/test_inspection_fallback.py` verifying all fallback paths and path concealment.
+- Verified clean pylint check (`pylint --recursive=y --errors-only src` -> 0 errors) and 57 related tests passing.
+- Branch: `codex/issue-125-inspection-jobstore-fallback`.
+
 ### 2026-10-30 — Issue #68: harden MCP tool wrappers for offline tests
 
 - Updated `tools/musicbrainz.py` `get_release_tracklist` to omit `duration_seconds` when unknown, harden zero-media/404/transport paths, and resolve MusicBrainz client in a patch-friendly way.
