@@ -765,3 +765,13 @@ buried in a permanently red build.
 module queue worth +1061 statements, and the traps that have caused real defects
 here. Two functions in `lastfm.py` (`cyrillic_policy`, `exclude_variant`) are
 dead code with no call sites; testing them would be wasted effort.
+
+## 2026-11-15 — Port version 0.4.6 alignment, fix merge regressions in tags/musicbrainz, and cover operations tools
+
+- Merged latest `origin/master` (`8b0eeb4`, including `#128` JobStore inspection fallback, `#129` alias/genre cleanup tests, and `#130` Python `>=3.12` baseline) into `claude/port-version-security-fixes`.
+- Synchronized package version `0.4.6` across `pyproject.toml`, `src/musicbee_tagger_mcp/__init__.py`, `src/musicbee_tagger_mcp/musicbrainz_api.py`, `release/claude-marketplace/plugins/musicbee-tagger/.claude-plugin/plugin.json`, `release/mcpb/manifest.json`, `README.md`, and `docs/index.html`.
+- Repaired `src/musicbee_tagger_mcp/tools/tags.py`: restored `manual_override`, `manual_override_justification`, `override_justification`, `override_reason`, and `justification` parameters plus `token`/`job_id`/`batch`/`note`/`rationale` forwarding on `stage_tag_changes`; restored `annotate_staged_change` and `audit_staged_changes` tool registrations; restored `list_staged_changes` error handling without exposing path-like parameter names.
+- Repaired `src/musicbee_tagger_mcp/tools/musicbrainz.py`: replaced duplicate `verify_mbid` definition with `_verify_mbid_core` and a single `verify_mbid` wrapper; restored `make_error(E_PROVIDER_FAILED, redact_paths(...))` in `get_release_tracklist`.
+- Fixed `test_amend_rechecks_diff_records_reason_and_rejects_stale_revision` in `tests/test_staged_change_controls.py` to check `manifest["history"][0]["reason"]`.
+- Added unit tests for `src/musicbee_tagger_mcp/tools/operations.py` in `tests/test_operations_tools.py` covering `enqueue_operation`, `list_operations`, `claim_operations`, `complete_operation`, path-redacted error wrapping, and `register_operation_tools` (100% coverage of `tools/operations.py`).
+- Validation: `pylint --recursive=y --errors-only src` passed with 0 errors; 325 unit tests passed, 1 skipped, 0 failures.

@@ -1,6 +1,7 @@
 """MCP wrappers for MusicBrainz search and recording verification."""
 
 from typing import Any, Dict, List, Optional
+from ..error_codes import redact_paths, make_error, E_PROVIDER_FAILED
 
 from ..artist_validation import (
     heuristic_flags,
@@ -67,7 +68,7 @@ def search_canonical_release(
     return search_recordings_forensic(artist, title, duration_sec, clue, limit)
 
 
-def verify_mbid(
+def _verify_mbid_core(
     recording_id: str,
     expected_artist: Optional[str] = None,
     expected_title: Optional[str] = None,
@@ -91,7 +92,7 @@ def verify_mbid(
 
 # `evaluate_match` is the internal name used by the agent loop; `verify_mbid`
 # is the published MCP tool name used by the manifest, skill and prompt.
-evaluate_match = verify_mbid
+evaluate_match = _verify_mbid_core
 
 
 def register_musicbrainz_tools(app) -> None:
@@ -126,7 +127,11 @@ def get_release_tracklist(release_id: str) -> Dict[str, Any]:
             release_id, includes=["recordings", "media", "artist-credits"]
         )
     except Exception as error:
-        return {"error": f"Failed to fetch release {release_id}: {error}"}
+        return make_error(
+            E_PROVIDER_FAILED,
+            redact_paths(f"Failed to fetch release {release_id}: {error}"),
+            function="get_release_tracklist",
+        )
 
     release = data.get("release", {})
     tracks = []
@@ -177,7 +182,7 @@ def register_split_tools(app) -> None:
     app.tool()(verify_artists_on_recording)
     app.tool()(flag_suspicious_artists)
 
-_original_verify_mbid = verify_mbid
+
 def verify_mbid(
     recording_id: str,
     expected_artist: Optional[str] = None,
@@ -191,7 +196,7 @@ def verify_mbid(
     display_name: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    _token = token or source_token or track_token
+    _token = token or source_token or track_token or kwargs.pop("file_token", None)
     if _token is None and display_name is not None:
         try:
             from ..file_registry import get_registry
@@ -200,7 +205,7 @@ def verify_mbid(
                 _token = list(_matches[0].values())[0]
         except Exception:
             _token = None
-    result = _original_verify_mbid(
+    result = _verify_mbid_core(
         recording_id,
         expected_artist=expected_artist,
         expected_title=expected_title,

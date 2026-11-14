@@ -85,7 +85,7 @@ def test_amend_rechecks_diff_records_reason_and_rejects_stale_revision(
     manifest = manager.store.load(staged["stage_id"])
     assert manifest["proposed_tags"]["title"] == "Verified Title"
     assert manifest["mb_recording_id"] == "8f488e3a-ef97-4c17-a495-bc1f7ca5bc73"
-    assert manifest["history"][1]["reason"].startswith("Matched")
+    assert manifest["history"][0]["reason"].startswith("Matched")
     assert str(audio_file) not in json.dumps(result)
     with pytest.raises(ValueError, match="revision changed"):
         manager.withdraw(
