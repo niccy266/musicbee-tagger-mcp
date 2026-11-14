@@ -1,3 +1,10 @@
+### 2026-11-14 — Modernize Python runtime baseline to >=3.12
+
+- Updated `requires-python = ">=3.12, <4.0"` in `pyproject.toml`.
+- Updated CI test matrix in `.github/workflows/health.yml` to `["3.12", "3.14"]`, eliminating legacy Python 3.11 build overhead and backwards-compatibility baggage.
+- Verified CI contract assertion `tests/test_ci_contract.py` passes cleanly.
+- Branch: `codex/bump-python-312-baseline`.
+
 ### 2026-11-14 — Issue #66: alias modules regression test and genre cleanup coverage (G6/G5)
 
 - Added `tests/test_alias_modules.py` with parametrized regression tests for all 18 backward-compatibility alias modules, raising alias module coverage to 100%.
