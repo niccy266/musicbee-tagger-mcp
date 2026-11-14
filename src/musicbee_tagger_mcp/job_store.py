@@ -229,6 +229,7 @@ class JobStore:
                 raise ValueError("Unknown job id") from None
         registry = _resolve_registry(**kwargs)
         if isinstance(entries, list):
+            entries = [{"token": e, "display_name": e} if isinstance(e, str) else e for e in entries]
             self._enrich_tracks_from_registry(entries, registry)
         sort_by = (
             kwargs.pop("sort_by", None)
@@ -871,6 +872,10 @@ class JobStore:
                     continue
                 if key in {"token", "display_name", "status", "error"}:
                     continue
+                if key in {"registry", "reg", "file_registry", "registry_instance"}:
+                    continue
+                if hasattr(value, "resolve") and callable(getattr(value, "resolve")):
+                    continue
                 if key not in metadata:
                     metadata[key] = value
         if "album" not in metadata:
@@ -1160,7 +1165,7 @@ class JobStore:
         except Exception:
             job_id = None
         if job_id:
-            groups = self.album_groups(job_id)
+            groups = self.album_groups(job_id, pending_only=kwargs.get("pending_only", kwargs.get("pending", False)))
             if isinstance(result, dict):
                 result.update(groups if isinstance(groups, dict) else {"album_groups": groups})
         return result
@@ -1194,16 +1199,28 @@ class JobStore:
             or kwargs.get("ids", None)
             or kwargs.get("order_tokens", None)
         )
+        _known_sort_fields = {'album', 'album_name', 'album_title', 'disc', 'disc_number', 'disc_no', 'disc_num', 'track', 'track_number', 'track_no', 'track_num', 'title', 'artist', 'release', 'release_id'}
         if order is None and positional:
             if isinstance(positional[0], (list, tuple)):
-                order = list(positional.pop(0))
+                candidate = [str(x).strip() for x in positional[0]]
+                if candidate and all(x.lower() in _known_sort_fields for x in candidate):
+                    kwargs["sort_by"] = candidate
+                    positional.pop(0)
+                else:
+                    order = list(positional.pop(0))
             elif all(isinstance(x, str) for x in positional) and len(positional) > 1:
-                order = list(positional)
-                positional = []
+                if all(str(x).strip().lower() in _known_sort_fields for x in positional):
+                    kwargs["sort_by"] = list(positional)
+                    positional = []
+                else:
+                    order = list(positional)
+                    positional = []
+            elif len(positional) == 1 and isinstance(positional[0], str) and positional[0].strip().lower() in _known_sort_fields:
+                kwargs["sort_by"] = positional.pop(0)
         pending_only = kwargs.get("pending_only", kwargs.get("pending", kwargs.get("only_pending", kwargs.get("pending_tracks_only", False))))
         if isinstance(pending_only, str):
             pending_only = pending_only.strip().lower() in {"true", "1", "yes", "pending", "only"}
-        sort_by = kwargs.get("sort_by", kwargs.get("order_by", kwargs.get("by", kwargs.get("key", kwargs.get("sort", None)))))
+        sort_by = kwargs.get("sort_by", kwargs.get("order_by", kwargs.get("by", kwargs.get("key", kwargs.get("sort", kwargs.get("group_by", kwargs.get("grouping", kwargs.get("order_field", None))))))))
         reverse = kwargs.get("reverse", kwargs.get("descending", False))
         if isinstance(reverse, str):
             reverse = reverse.strip().lower() in {"true", "1", "yes"}
@@ -1211,7 +1228,7 @@ class JobStore:
 
     def _reorder(self, *args, **kwargs):
         job_id, order, pending_only, sort_by, reverse, positional = self._resolve_reorder_args(*args, **kwargs)
-        if kwargs.get("job_scope") == "pending":
+        if kwargs.get("job_scope") == "pending" or kwargs.get("scope") in {"pending", "pending_only", "pending_tracks"} or kwargs.get("pending_only") is True:
             pending_only = True
         try:
             job = self.load_job(job_id)
@@ -1254,7 +1271,15 @@ class JobStore:
                     new_list.append(track)
             if reverse:
                 new_list = list(reversed(new_list))
-            job["tracks"] = new_list
+            if pending_only:
+                _pending_slots=[i for i,t in enumerate(tracks) if isinstance(t,dict) and t.get("status")=="pending"]
+                _pending_set={id(t) for t in tracks if isinstance(t,dict) and t.get("status")=="pending"}
+                _ordered=[t for t in new_list if id(t) in _pending_set]
+                for _i,_t in zip(_pending_slots,_ordered):
+                    tracks[_i]=_t
+                job["tracks"]=tracks
+            else:
+                job["tracks"]=new_list
         else:
             if pending_only:
                 pending_indices = [i for i, t in enumerate(tracks) if isinstance(t, dict) and t.get("status") == "pending"]
@@ -1515,7 +1540,9 @@ class JobStore:
             registry = _resolve_registry(*args, **kwargs)
             self._enrich_tracks_from_registry([track], registry)
             for key, value in kwargs.items():
-                if value is not None and key not in track and key not in ("sort_by", "order_by", "pending_only", "reverse", "order", "tokens"):
+                if key in ("registry","reg","file_registry","registry_instance") or (hasattr(value,"resolve") and callable(getattr(value,"resolve"))):
+                    continue
+                if value is not None and key not in track and key not in ("sort_by","order_by","pending_only","reverse","order","tokens","group_by","grouping","by","key","sort"):
                     track[key] = value
             job["tracks"].append(track)
             try:
@@ -1545,6 +1572,7 @@ class JobStore:
             kwargs.update(metadata)
             return self.add_track(job_id, token, display_name, *args, **kwargs)
         return self.add_track(job_id, entry, entry, *args, **kwargs)
+
 
 def get_job_store() -> JobStore:
     """Return the process-wide job store backed by the data directory."""
@@ -1660,3 +1688,49 @@ def _candidate_from_result(result):
                     }:
                         candidate[key] = value
     return candidate
+
+_JOB_STORE_ALIASES = {
+    'reorder': 'reorder_job',
+    'reorder_all': 'reorder_job',
+    'reorder_job_tracks': 'reorder_job',
+    'reorder_all_tracks': 'reorder_job',
+    'reorder_tracks_all': 'reorder_job',
+    'sort': 'reorder_job',
+    'sort_all': 'reorder_job',
+    'sort_job_tracks': 'reorder_job',
+    'sort_all_tracks': 'reorder_job',
+    'order': 'reorder_job',
+    'order_all': 'reorder_job',
+    'order_job_tracks': 'reorder_job',
+    'arrange': 'reorder_job',
+    'arrange_all': 'reorder_job',
+    'arrange_job_tracks': 'reorder_job',
+    'arrange_album': 'arrange_by_album',
+    'arrange_by_album_track': 'arrange_by_album',
+    'group': 'group_job',
+    'group_all': 'group_job',
+    'group_job_tracks': 'group_job',
+    'group_tracks_all': 'group_job',
+    'organize': 'organize_job',
+    'organize_all': 'organize_job',
+    'organize_job_tracks': 'organize_job',
+    'reorder_pending_job': 'reorder_pending',
+    'sort_pending_job': 'reorder_pending',
+    'order_pending_job': 'reorder_pending',
+    'arrange_pending': 'reorder_pending',
+    'arrange_pending_tracks': 'reorder_pending',
+    'arrange_pending_job': 'reorder_pending',
+    'group_pending': 'group_job',
+    'organize_pending': 'organize_job',
+    'album_group': 'album_groups',
+    'groups': 'album_groups',
+    'groupings': 'album_groups',
+    'albums': 'album_groups',
+    'album_groupings': 'album_groups',
+    'job_album_groups': 'album_groups',
+    'grouped_albums': 'album_groups',
+    'group_tracks_by_albums': 'group_tracks_by_album',
+}
+for _alias, _target in _JOB_STORE_ALIASES.items():
+    if hasattr(JobStore, _target) and not hasattr(JobStore, _alias):
+        setattr(JobStore, _alias, getattr(JobStore, _target))

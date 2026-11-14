@@ -681,3 +681,8 @@ python -m musicbee_tagger_mcp.apply_staged --all
 ### 2026-10-31 — Issue #18: threshold kwarg support
 - Added confidence threshold override support in resolve_lastfm.
 - Validation: 171 passed, 30 skipped.
+
+### 2026-10-31 — Issue #45 follow-up: alias and pending-order hardening
+- Added compatibility aliases and pending-only explicit ordering support.
+- Hardened metadata collection against registry leakage.
+- Verified imports and pylint.
