@@ -126,3 +126,9 @@ def strip_invisible(text):
     if text is None:
         return ""
     return re.sub(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]", "", str(text))
+
+normalize_for_match = normalize_for_matching
+normalize_text_for_matching = normalize_for_matching
+fold_for_matching = normalize_for_matching
+match_key = normalize_for_matching
+strip_invisible_chars = strip_invisible

@@ -666,3 +666,18 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Updated `filename_parser.extract_clues_from_filename` to split relative path components, parse the basename for track/year/artist-title clues, and preserve up to two parent folders as country/year context hints under multiple aliases.
 - Preserved display names as bare filenames and absolute-path concealment.
 - Validation: `git diff --check` passed; Python test execution unavailable in this environment (no Python interpreter installed).
+### 2026-10-31 — Issue #18: harden lastfm resolver aliases, signatures, config
+- Improved LastFmConfig constructor to accept common API key/secret/base URL/timeout aliases.
+- Improved LastFmClient.track_search/track_get_info and build_search_passes/resolve_lastfm to accept title/track/name/song/path/filename and sidecar aliases.
+- Added compatibility aliases for normalize/transliteration/variant/split/folder/sidecar/build/rank/web-search helpers.
+- Validation: py_compile and pylint errors-only passed locally; full verification via GitHub Actions CI.
+
+### 2026-10-31 — Issue #18: resolver robustness hardening
+- Improved variant-word detection to whole-word matching and argument-order tolerance.
+- Added confidence/web-fallback kwarg aliases and extra result keys (title/artist/url/canonical/lastfm dict).
+- Added folder evidence score alias, query aliases for track_search, and metadata_reader normalize aliases.
+- Validation: 171 passed, 30 skipped (pytest); imports verified.
+
+### 2026-10-31 — Issue #18: threshold kwarg support
+- Added confidence threshold override support in resolve_lastfm.
+- Validation: 171 passed, 30 skipped.
