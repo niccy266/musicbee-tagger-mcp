@@ -70,4 +70,4 @@ show_missing = true
 # merges without unit tests (lastfm.py 572 stmts, job_store.py 1212,
 # genre_cleanup.py 129), which took the real number from ~73 to 56. Ratchet this
 # back up as tests land; do not lower it further.
-fail_under = 56
+fail_under = 58
