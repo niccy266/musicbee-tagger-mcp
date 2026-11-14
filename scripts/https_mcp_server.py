@@ -183,7 +183,7 @@ class MCPHTTPHandler(http.server.BaseHTTPRequestHandler):
         if path == "/":
             self._send_json(200, {
                 "name": "musicbee-tagger-mcp",
-                "version": "0.4.5",
+                "version": "0.4.6",
                 "transport": "https",
                 "endpoint": "/mcp",
             })
