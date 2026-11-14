@@ -62,7 +62,7 @@ Alternatively, download and extract a Windows release bundle, then run its
 installer while supplying the included wheel:
 
 ```powershell
-.\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.5-py3-none-any.whl
+.\install.ps1 -WheelPath .\musicbee_tagger_mcp-0.4.6-py3-none-any.whl
 ```
 
 Before upgrading an existing installation, close MCP clients using the

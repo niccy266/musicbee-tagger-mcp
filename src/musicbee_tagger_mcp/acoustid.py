@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 DEFAULT_ENDPOINT = "https://api.acoustid.org/v2/lookup"
 DEFAULT_TIMEOUT = 20.0
-DEFAULT_USER_AGENT = "musicbee-tagger-mcp/0.4.5"
+DEFAULT_USER_AGENT = "musicbee-tagger-mcp/0.4.6"
 
 
 def _env_first(*names: str) -> str:
