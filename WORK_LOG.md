@@ -660,3 +660,9 @@ python -m musicbee_tagger_mcp.apply_staged --all
 - Hardened AcoustID implementation with compatibility aliases and mocked-subprocess/API test coverage.
 - Added tests/test_acoustid.py for config, fingerprint, lookup, tools, rate limiting, and path-free errors.
 - Verified syntax via py_compile; full verification pending GitHub Actions CI.
+### 2026-10-29 — Filename hints include two levels of relative path
+
+- Updated `extract_filename_clues` and `get_batch_brief` to derive a two-level relative path hint (up to grandparent/parent/basename) instead of using only the bare filename.
+- Updated `filename_parser.extract_clues_from_filename` to split relative path components, parse the basename for track/year/artist-title clues, and preserve up to two parent folders as country/year context hints under multiple aliases.
+- Preserved display names as bare filenames and absolute-path concealment.
+- Validation: `git diff --check` passed; Python test execution unavailable in this environment (no Python interpreter installed).
