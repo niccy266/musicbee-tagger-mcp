@@ -1,3 +1,14 @@
+### 2026-11-15 — Semicolon-separated multi-artist staging normalization
+
+- Added `src/musicbee_tagger_mcp/artist_credit.py` with `credit_names()`, `artist_tag_value()`, and `normalize_artist_value()` for MusicBrainz credit-aware artist tag handling.
+- Surfaced `artist_names` and `artist_tag_value` (or `mb_artist_tag_value`) from `musicbrainz_search.py`, `musicbrainz_verification.py`, and `tools/musicbrainz.py::get_release_tracklist`.
+- Extended `artist_validation.py::propose_split` with `recording_id` so MusicBrainz credit names are used to split multi-artist collaborations without breaking single-act names (e.g. `Earth, Wind & Fire`).
+- Added `match_store.resolve_match_for_recording()` for lookup by recording_id.
+- `staging.py` now normalizes the `artist` tag at the stage/amend boundary using stored credit names (no network calls), appends a normalization note, and emits `warnings` for ambiguous joiners.
+- Updated agent prompts (`prompts/openrouter_agent.md`, `.agents/skills/musicbee-investigator/SKILL.md`, `README.md`, `docs/index.md`, `docs/index.html`) to instruct agents to use `artist_tag_value` / `mb_artist_tag_value` with `"; "` separator.
+- Added `tests/test_artist_credit.py` (9 passed). Full test suite green: 28 passed in artist_credit/split/validation, 101 passed across staging, operations, tagger, and investigator suites. `pylint --recursive=y --errors-only src` clean.
+- Branch: `claude/artist-semicolons` merged to `master` (0ccf69d).
+
 ### 2026-11-14 — Modernize Python runtime baseline to >=3.12
 
 - Updated `requires-python = ">=3.12, <4.0"` in `pyproject.toml`.
