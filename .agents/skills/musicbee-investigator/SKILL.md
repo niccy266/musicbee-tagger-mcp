@@ -96,9 +96,9 @@ stage_tag_changes(
     token=token,
     new_tags={
         "title": "Clean Canonical Title",
-        "artist": "Canonical Artist",
+        "artist": "Artist One; Artist Two",  # use artist_tag_value / mb_artist_tag_value
         "album": "Original Studio Album or Canonical EP",
-        "album_artist": "...",
+        "album_artist": "Primary Album Artist",
         "year": "1965",
         "musicbrainz_track_id": recording_id,
         "musicbrainz_release_id": release_id
@@ -107,7 +107,7 @@ stage_tag_changes(
     notes="Verified duration match (diff 0.3s) on 1965 original mono release."
 )
 ```
-Only propose fields supported by the preview/apply pipeline and corroborated by the evidence. A passing recording verification does not by itself verify a particular release, album, year, or album artist; leave those fields unchanged unless separately confirmed. Preview each proposal and stage only fields that actually differ.
+Only propose fields supported by the preview/apply pipeline and corroborated by the evidence. A passing recording verification does not by itself verify a particular release, album, year, or album artist; leave those fields unchanged unless separately confirmed. For multiple artists, set `artist` to the tool's `artist_tag_value` (or `mb_artist_tag_value`) separated by `"; "` (never `&`, `and`, or `,`), keep `album_artist` to one artist, and do not split names MusicBrainz treats as one act (e.g. `Earth, Wind & Fire`). Preview each proposal and stage only fields that actually differ.
 
 ### Reviewing Existing Stages
 

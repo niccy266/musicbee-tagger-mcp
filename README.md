@@ -276,8 +276,10 @@ For full setup instructions, see [`docs/DOCKER_HOSTING.md`](docs/DOCKER_HOSTING.
 ## Artist split validation (agent-assisted)
 
 The agent loop exposes four read-only tools for splitting malformed artist
-fields: `propose_artist_split` (mechanical pass), `search_musicbrainz_artist`
+fields: `propose_artist_split` (mechanical pass, plus MusicBrainz credit-aware
+`tag_value` and `warnings` when `recording_id` is passed), `search_musicbrainz_artist`
 (existence check), `verify_artists_on_recording` (credit evidence), and
 `flag_suspicious_artists` (garble heuristics). A split is staged only when
 candidates exist on MusicBrainz and the credit evidence supports it;
-verified multi-artist values are staged with `; ` as separator.
+verified multi-artist values are normalized and staged with `"; "` as separator,
+while single-act names (e.g. `Earth, Wind & Fire`) remain intact.

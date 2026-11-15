@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
+from .artist_credit import artist_tag_value, credit_names
 from .musicbrainz_api import musicbrainzngs
 from .match_store import record_match
 from .error_codes import redact_paths
@@ -142,6 +143,10 @@ def evaluate_match(
     genres = _genres(recording.get("tag-list"), release_tags)
     title = recording.get("title", "")
     artist = recording.get("artist-credit-phrase", "")
+    mb_artist_names = credit_names(recording.get("artist-credit"))
+    if not mb_artist_names and artist:
+        mb_artist_names = [artist]
+    mb_artist_tag_value = artist_tag_value(mb_artist_names)
     length = recording.get("length")
     duration = round(int(length) / 1000, 2) if length else None
     title_similarity = string_similarity(expected_title, title) if expected_title else 1.0
@@ -251,13 +256,21 @@ def evaluate_match(
     _match_release_id = release_id
     if _match_release_id is None and top_release:
         _match_release_id = top_release.get("release_id")
-    _match_handle = record_match(recording_id, release_id=_match_release_id, confidence=round(confidence, 1), genre="; ".join(genres))
+    _match_handle = record_match(
+        recording_id,
+        release_id=_match_release_id,
+        confidence=round(confidence, 1),
+        genre="; ".join(genres),
+        artist_names=mb_artist_names,
+    )
     return {
         "verified": pre_fingerprint_verified,
         "confidence": round(confidence, 1),
         "recording_id": recording_id,
         "mb_title": title,
         "mb_artist": artist,
+        "mb_artist_names": mb_artist_names,
+        "mb_artist_tag_value": mb_artist_tag_value,
         "mb_duration_seconds": duration,
         "duration_diff_seconds": duration_diff,
         "title_similarity": title_similarity,

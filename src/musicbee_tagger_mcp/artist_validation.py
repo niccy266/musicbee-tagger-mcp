@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import re
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import musicbrainzngs
 
+from .artist_credit import credit_names, normalize_artist_value
 from .error_codes import redact_paths
 from .artist_split import split_artists
 
@@ -24,23 +25,38 @@ def propose_split(
     artist_field: str,
     split_ampersand: bool = False,
     split_comma: bool = False,
+    recording_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Mechanically split an artist field into candidate artists.
+    """Mechanically split an artist field into candidate artists and tag_value.
 
-    Returns the candidate list plus the joiners that were recognized, so the
-    agent can reason about how confident the mechanical pass is.
+    Returns the candidate list, the '; '-formatted tag_value, any warnings,
+    and the joiners that were recognized. When recording_id is given, fetches
+    its MusicBrainz artist credits once and uses them to normalize without
+    splitting single acts like 'Earth, Wind & Fire'.
     """
     candidates = split_artists(artist_field, split_ampersand, split_comma)
+    credited: Optional[List[str]] = None
+    if recording_id:
+        credit_info = verify_artist_credit(recording_id, candidates)
+        if "error" not in credit_info:
+            credited = credit_info.get("credited_names") or None
+    tag_value, warnings = normalize_artist_value(artist_field, credited)
+    if credited and isinstance(tag_value, str) and len(credited) >= 2:
+        split_from_tag = [p.strip() for p in tag_value.split(";") if p.strip()]
+        if len(split_from_tag) > 1:
+            candidates = split_from_tag
     return {
         "input": artist_field,
         "candidates": candidates,
+        "tag_value": tag_value,
+        "warnings": warnings,
         "joiners_found": sorted({
             marker for marker in ("feat", "ft", "featuring", "with", "vs", "x",
                                   "semicolon", "ampersand", "comma")
             if marker.lower() in artist_field.lower() or (
                 marker == "semicolon" and ";" in artist_field)
         }),
-        "changed": len(candidates) > 1,
+        "changed": tag_value != artist_field or len(candidates) > 1,
     }
 
 
@@ -80,11 +96,7 @@ def verify_artist_credit(
     except Exception as error:
         return {"error": redact_paths(f"MusicBrainz fetch error: {error}")}
 
-    credited: List[str] = []
-    for credit in rec.get("artist-credit", []):
-        name = credit.get("artist", {}).get("name") or credit.get("name", "")
-        if name:
-            credited.append(name)
+    credited = credit_names(rec.get("artist-credit", []))
     credited_join = rec.get("artist-credit-phrase", "")
 
     verdicts = []
@@ -117,9 +129,15 @@ def propose_artist_split(
     artist_field: str,
     split_ampersand: bool = False,
     split_comma: bool = False,
+    recording_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Compatibility alias matching the MCP tool name."""
-    return propose_split(artist_field, split_ampersand, split_comma)
+    return propose_split(
+        artist_field,
+        split_ampersand=split_ampersand,
+        split_comma=split_comma,
+        recording_id=recording_id,
+    )
 
 
 def flag_suspicious_artists(candidate_artists: List[str]) -> List[Dict[str, str]]:

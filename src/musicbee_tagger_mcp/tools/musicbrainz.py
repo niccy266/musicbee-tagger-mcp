@@ -1,6 +1,7 @@
 """MCP wrappers for MusicBrainz search and recording verification."""
 
 from typing import Any, Dict, List, Optional
+from ..artist_credit import artist_tag_value, credit_names
 from ..error_codes import redact_paths, make_error, E_PROVIDER_FAILED
 
 from ..artist_validation import (
@@ -61,6 +62,9 @@ def search_canonical_release(
 ) -> List[Dict[str, Any]]:
     """Search MusicBrainz for the canonical release. Returns candidates with MBIDs.
 
+    Use ``artist_tag_value`` (not ``artist``) for the staged ``artist`` tag
+    when multiple artists are credited.
+
     NEXT STEP: Call evaluate_match with the best candidate's recording_id to
     verify the match (duration/artist/title) before staging. Only stage after
     evaluate_match returns verified=true with confidence >= 0.65.
@@ -78,6 +82,9 @@ def _verify_mbid_core(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Evaluate a recording candidate against local title, artist, and duration.
+
+    Use ``mb_artist_tag_value`` (not ``mb_artist``) for the staged ``artist``
+    tag when multiple artists are credited.
 
     Returns verified=true/false with a confidence score (0-100). NOTE: Staging
     does NOT require verified=true — you only need to call evaluate_match once
@@ -105,9 +112,15 @@ def propose_artist_split(
     artist_field: str,
     split_ampersand: bool = False,
     split_comma: bool = False,
+    recording_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Split a malformed artist field into candidate artists mechanically."""
-    return propose_split(artist_field, split_ampersand, split_comma)
+    """Split a malformed artist field into candidate artists and '; '-joined tag_value."""
+    return propose_split(
+        artist_field,
+        split_ampersand=split_ampersand,
+        split_comma=split_comma,
+        recording_id=recording_id,
+    )
 
 
 def search_musicbrainz_artist(name: str, limit: int = 5) -> List[Dict[str, Any]]:
@@ -117,6 +130,9 @@ def search_musicbrainz_artist(name: str, limit: int = 5) -> List[Dict[str, Any]]
 
 def get_release_tracklist(release_id: str) -> Dict[str, Any]:
     """Return a release's full tracklist with disc, track number, title, duration.
+
+    Use ``artist_tag_value`` (not ``artist``) for the staged ``artist`` tag
+    when multiple artists are credited.
 
     Given a release MBID, returns the release identity (title, artist, date)
     and a list of tracks with disc number, track number, title, and duration.
@@ -141,21 +157,34 @@ def get_release_tracklist(release_id: str) -> Dict[str, Any]:
             recording = track.get("recording", {})
             length = recording.get("length") or track.get("length")
             duration = round(int(length) / 1000, 2) if length else None
+            track_artist_phrase = recording.get("artist-credit-phrase", "")
+            track_artist_names = credit_names(
+                recording.get("artist-credit") or track.get("artist-credit")
+            )
+            if not track_artist_names and track_artist_phrase:
+                track_artist_names = [track_artist_phrase]
             entry = {
                 "disc_number": disc_number,
                 "track_number": track.get("number"),
                 "title": recording.get("title", track.get("title", "")),
-                "artist": recording.get("artist-credit-phrase", ""),
+                "artist": track_artist_phrase,
+                "artist_names": track_artist_names,
+                "artist_tag_value": artist_tag_value(track_artist_names),
             }
             if duration is not None:
                 entry["duration_seconds"] = duration
             tracks.append(entry)
 
     artist_credit = release.get("artist-credit-phrase", "")
+    release_artist_names = credit_names(release.get("artist-credit"))
+    if not release_artist_names and artist_credit:
+        release_artist_names = [artist_credit]
     return {
         "release_id": release_id,
         "title": release.get("title", ""),
         "artist": artist_credit,
+        "artist_names": release_artist_names,
+        "artist_tag_value": artist_tag_value(release_artist_names),
         "date": release.get("date", ""),
         "country": release.get("country", ""),
         "total_tracks": len(tracks),
@@ -225,6 +254,7 @@ def verify_mbid(
                 confidence=result.get("confidence"),
                 token=_token,
                 genre=result.get("genre"),
+                artist_names=result.get("mb_artist_names"),
             )
         if _handle is not None:
             result["match_handle"] = _handle

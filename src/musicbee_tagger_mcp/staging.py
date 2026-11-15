@@ -15,7 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .artist_credit import normalize_artist_value
 from .field_map import FIELD_MAP
+from .match_store import resolve_match_for_recording, resolve_match_for_token
 from .metadata_reader import read_audio_metadata
 from .stage_manifest_store import StageManifestStore
 from .tag_writer import preview_tag_changes
@@ -152,6 +154,25 @@ class StagingManager:
         Returns:
             {"stage_id": str, "display_name": str, "diff_summary": list, "notes": str}
         """
+        # Normalize artist tag using stored MusicBrainz credit names (no network calls).
+        proposed_tags = dict(proposed_tags)
+        artist_warnings: List[str] = []
+        artist_norm_note: Optional[str] = None
+        if isinstance(proposed_tags.get("artist"), str):
+            raw_artist = proposed_tags["artist"]
+            credited_names = self._lookup_artist_names(
+                token=token,
+                mb_recording_id=mb_recording_id or proposed_tags.get("musicbrainz_track_id"),
+            )
+            normalized_artist, artist_warnings = normalize_artist_value(
+                raw_artist, credited_names
+            )
+            if normalized_artist != raw_artist:
+                proposed_tags["artist"] = normalized_artist
+                artist_norm_note = (
+                    f"artist normalised to semicolon-separated: '{raw_artist}' -> '{normalized_artist}'"
+                )
+
         # Generate the field-by-field diff (reads file for current values).
         diff = _changed_fields(str(absolute_path), proposed_tags)
         try:
@@ -184,6 +205,8 @@ class StagingManager:
         if rationale:
             notes = (str(notes).strip() + ", " + str(rationale).strip()).strip() if notes else str(rationale).strip()
         notes = notes if isinstance(notes, str) else ("" if notes is None else str(notes))
+        if artist_norm_note:
+            notes = f"{notes.strip()} | {artist_norm_note}".strip(" |") if notes.strip() else artist_norm_note
 
         stage_id = str(uuid.uuid4())
         manifest = {
@@ -224,7 +247,7 @@ class StagingManager:
         self.store.save(manifest)
 
         # Return only safe, non-path fields to the caller
-        return {
+        response = {
             "stage_id": stage_id,
             "display_name": display_name,
             "revision": 1,
@@ -235,6 +258,9 @@ class StagingManager:
                 f"Run `python -m musicbee_tagger_mcp.apply_staged --stage-id {stage_id}` to apply."
             ),
         }
+        if artist_warnings:
+            response["warnings"] = artist_warnings
+        return response
 
     def stage_manual_override(self, *args, **kwargs):
         kwargs.setdefault("manual_override", True)
@@ -388,6 +414,8 @@ class StagingManager:
         ):
             raise ValueError("Provide tag fields, fields to remove, or a MusicBrainz ID to amend.")
 
+        amend_warnings: List[str] = []
+
         def update(manifest: dict) -> None:
             self._require_pending(manifest)
             current_revision = manifest.get("revision", 1)
@@ -406,6 +434,29 @@ class StagingManager:
             proposed.update(new_tags)
             for field in remove_fields:
                 proposed.pop(field)
+
+            amend_norm_note: Optional[str] = None
+            if isinstance(new_tags.get("artist"), str) and isinstance(proposed.get("artist"), str):
+                raw_artist = proposed["artist"]
+                effective_rec_id = (
+                    (mb_recording_id.strip() or None)
+                    if mb_recording_id is not None
+                    else manifest.get("mb_recording_id")
+                ) or proposed.get("musicbrainz_track_id")
+                credited_names = self._lookup_artist_names(
+                    token=manifest.get("token"),
+                    mb_recording_id=effective_rec_id,
+                )
+                normalized_artist, warnings = normalize_artist_value(
+                    raw_artist, credited_names
+                )
+                amend_warnings.extend(warnings)
+                if normalized_artist != raw_artist:
+                    proposed["artist"] = normalized_artist
+                    amend_norm_note = (
+                        f"artist normalised to semicolon-separated: '{raw_artist}' -> '{normalized_artist}'"
+                    )
+
             diff = _changed_fields(manifest["absolute_path"], proposed)
             if not diff:
                 raise ValueError(
@@ -427,11 +478,19 @@ class StagingManager:
             if match_confidence is not None:
                 manifest["match_confidence"] = match_confidence
                 amended_fields.append("match_confidence")
-            if notes:
-                manifest["notes"] = notes
-                manifest["note"] = notes
-                manifest["rationale"] = notes
-                amended_fields.append("notes")
+            effective_notes = notes if notes else manifest.get("notes", "")
+            if amend_norm_note:
+                effective_notes = (
+                    f"{effective_notes.strip()} | {amend_norm_note}".strip(" |")
+                    if isinstance(effective_notes, str) and effective_notes.strip()
+                    else amend_norm_note
+                )
+            if notes or amend_norm_note:
+                manifest["notes"] = effective_notes
+                manifest["note"] = effective_notes
+                manifest["rationale"] = effective_notes
+                if notes:
+                    amended_fields.append("notes")
 
             manifest["proposed_tags"] = proposed
             manifest["diff"] = diff
@@ -446,13 +505,16 @@ class StagingManager:
             })
 
         manifest = self.store.mutate(stage_id, update)
-        return _path_free({
+        result = {
             "stage_id": manifest["stage_id"],
             "display_name": manifest["display_name"],
             "status": self._status(manifest),
             "revision": manifest["revision"],
             "diff_summary": manifest["diff"],
-        })
+        }
+        if amend_warnings:
+            result["warnings"] = amend_warnings
+        return _path_free(result)
 
     def withdraw(self, stage_id: str, expected_revision: int, reason: str) -> dict:
         """Soft-withdraw a pending proposal so it cannot be applied."""
@@ -506,6 +568,22 @@ class StagingManager:
     staged_change_audit = audit_staged_changes
     audit_staged_change = audit_staged_changes
 
+
+    @staticmethod
+    def _lookup_artist_names(
+        token: Optional[str] = None,
+        mb_recording_id: Optional[str] = None,
+    ) -> Optional[List[str]]:
+        if mb_recording_id:
+            match = resolve_match_for_recording(mb_recording_id)
+            if match and isinstance(match.get("artist_names"), list):
+                return list(match["artist_names"])
+        if token:
+            match = resolve_match_for_token(token)
+            if match and isinstance(match.get("artist_names"), list):
+                if not mb_recording_id or match.get("recording_id") == mb_recording_id:
+                    return list(match["artist_names"])
+        return None
 
     @staticmethod
     def _validate_mbid(field: str, value: str) -> None:

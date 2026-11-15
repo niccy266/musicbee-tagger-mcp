@@ -175,6 +175,7 @@ K:\bin\musicbee-tagger-register-playlist.cmd</code></pre>
         <li>A MusicBrainz recording is the performance/version candidate; a release is a particular edition; a release group groups related editions. Do not infer a release from recording verification alone.</li>
         <li>Duration is useful evidence, not proof. Compare title and artist credit, release context, embedded tags, and reliable web sources; treat ambiguous artist/title order and filenames as clues.</li>
         <li>Keep canonical script and spelling, including Cyrillic and Japanese text, when supported by reliable evidence. Do not strip meaningful live, demo, regional, or version details.</li>
+        <li>For multiple artists, set <code>artist</code> to the MusicBrainz tool's <code>artist_tag_value</code> (or <code>mb_artist_tag_value</code>) separated by <code>"; "</code> (never <code>&amp;</code>, <code>and</code>, or <code>,</code>). Staging normalizes multi-artist credits automatically while keeping single-act names like <code>Earth, Wind &amp; Fire</code> intact.</li>
         <li>When evidence conflicts or a candidate fails verification, leave it unstaged and explain the uncertainty.</li>
       </ul>
     </section>

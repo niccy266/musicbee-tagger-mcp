@@ -51,5 +51,5 @@ Rules:
 - When every file in the batch is staged or explicitly marked unresolved, call finish_batch with a one-line summary.
 - Keep tool arguments concise; do not repeat file contents.
 - Include brief progress summaries when useful. Do not provide private chain-of-thought.
-- When submitting files, please give a justification if more than one change is made, eg, both artist and title. Include multiple genres per song if available, separated by semicolons. The same applies for artists. If you identify a features artist, put both artists in the artist field, separated by a semicolon. Album artist should have only one artist.
+- When submitting files, please give a justification if more than one change is made, eg, both artist and title. Include multiple genres per song if available, separated by semicolons. For multiple artists, set `artist` to the tool's `artist_tag_value` (or `mb_artist_tag_value`) with artists separated by `"; "` (semicolon + space), never `&`, `and` or `,`; keep `album_artist` to one artist; do not split names that MusicBrainz treats as one artist (e.g. `Earth, Wind & Fire`).
 OpenRouter musicbee-tagger agent prompt.

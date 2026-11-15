@@ -550,7 +550,12 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "propose_artist_split",
-            "description": "Mechanically split a malformed artist field into candidate artists (feat./ft./with/vs./x/semicolon markers).",
+            "description": (
+                "Split a malformed artist field into candidate artists and return a '; '-separated "
+                "tag_value plus any warnings. Pass recording_id when available so MusicBrainz "
+                "artist credits are used to split multi-artist collaborations without breaking "
+                "single-act names like 'Earth, Wind & Fire'."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -562,6 +567,9 @@ TOOLS = [
                     },
                     "split_comma": {
                         "type": "boolean"
+                    },
+                    "recording_id": {
+                        "type": "string"
                     }
                 },
                 "required": [
@@ -1017,7 +1025,7 @@ LOCAL_TOOLS = {
     "gh_issue_comment": lambda issue=None, body="", repo=None: gh_issue_comment(issue, body, repo=repo),
 
     "identify_acrcloud": lambda token: _identify_acrcloud(token),
-    "propose_artist_split": lambda artist_field, split_ampersand=False, split_comma=False: propose_artist_split(artist_field, split_ampersand=split_ampersand, split_comma=split_comma),
+    "propose_artist_split": lambda artist_field, split_ampersand=False, split_comma=False, recording_id=None: propose_artist_split(artist_field, split_ampersand=split_ampersand, split_comma=split_comma, recording_id=recording_id),
     "search_musicbrainz_artist": lambda name, limit=5: search_musicbrainz_artist(name, limit),
     "verify_artists_on_recording": lambda recording_id, candidate_artists: verify_artists_on_recording(recording_id, candidate_artists),
     "flag_suspicious_artists": lambda candidate_artists: flag_suspicious_artists(candidate_artists),

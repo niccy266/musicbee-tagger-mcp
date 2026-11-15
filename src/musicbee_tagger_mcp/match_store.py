@@ -5,6 +5,7 @@ import uuid
 
 _HANDLES: Dict[str, Dict[str, Any]] = {}
 _LATEST_BY_TOKEN: Dict[str, str] = {}
+_LATEST_BY_RECORDING: Dict[str, str] = {}
 
 
 def record_match(
@@ -26,6 +27,8 @@ def record_match(
     _HANDLES[handle] = entry
     if token is not None:
         _LATEST_BY_TOKEN[token] = handle
+    if isinstance(recording_id, str) and recording_id.strip():
+        _LATEST_BY_RECORDING[recording_id.strip()] = handle
     return handle
 
 
@@ -52,9 +55,19 @@ def resolve_match_for_token(token: Optional[str]) -> Optional[Dict[str, Any]]:
     return resolve_match(handle)
 
 
+def resolve_match_for_recording(recording_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not isinstance(recording_id, str) or not recording_id.strip():
+        return None
+    handle = _LATEST_BY_RECORDING.get(recording_id.strip())
+    if handle is None:
+        return None
+    return resolve_match(handle)
+
+
 def clear_matches() -> None:
     _HANDLES.clear()
     _LATEST_BY_TOKEN.clear()
+    _LATEST_BY_RECORDING.clear()
 
 
 record_verified_match = record_match

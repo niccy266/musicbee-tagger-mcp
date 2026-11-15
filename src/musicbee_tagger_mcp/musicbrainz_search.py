@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
+from .artist_credit import artist_tag_value, credit_names
 from .error_codes import redact_paths
 from .musicbrainz_api import musicbrainzngs
 from .musicbrainz_scoring import calculate_duration_score, classify_release
@@ -76,10 +77,16 @@ def search_recordings_forensic(
             release_genres.extend(_genres(release.get("tag-list")))
         candidate_genres = _genres(recording.get("tag-list"),
                                    [{"name": name} for name in release_genres])
+        rec_artist_phrase = recording.get("artist-credit-phrase", "")
+        rec_artist_names = credit_names(recording.get("artist-credit"))
+        if not rec_artist_names and rec_artist_phrase:
+            rec_artist_names = [rec_artist_phrase]
         candidates.append({
             "recording_id": recording.get("id"),
             "title": recording.get("title", ""),
-            "artist": recording.get("artist-credit-phrase", ""),
+            "artist": rec_artist_phrase,
+            "artist_names": rec_artist_names,
+            "artist_tag_value": artist_tag_value(rec_artist_names),
             "duration_seconds": round(int(length) / 1000, 2) if length else None,
             "forensic_score": float(recording.get("ext:score", 50)) + duration_score,
             "duration_match_note": duration_note,
