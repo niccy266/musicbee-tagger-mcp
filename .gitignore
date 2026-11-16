@@ -11,6 +11,8 @@ logs/
 *.log
 .pytest_cache/
 .pytest-*/
+.pytest*/
+musicbee-mcpb-*/
 pytest-of-*/
 .coverage
 .coverage.*
