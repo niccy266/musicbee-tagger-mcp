@@ -19,17 +19,15 @@ def resolve_lastfm_title(
     display_name: Optional[str] = None,
     folder_context: Optional[List[str]] = None,
     confidence: Optional[float] = None,
-    **kwargs: Any,
+    filename: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Resolve the most popular Last.fm title/artist form for a track."""
-    filename = kwargs.pop("filename", display_name)
     return resolve_lastfm(
         title=title,
         artist=artist,
-        filename=filename,
+        filename=filename if filename is not None else display_name,
         folder_context=folder_context,
         confidence=confidence,
-        **kwargs,
     )
 
 

@@ -223,9 +223,17 @@ def verify_mbid(
     source_token: Optional[str] = None,
     track_token: Optional[str] = None,
     display_name: Optional[str] = None,
-    **kwargs: Any,
+    file_token: Optional[str] = None,
+    acoustid_score: Optional[Any] = None,
+    acoustid_match: Optional[Any] = None,
+    acoustid_recording_id: Optional[str] = None,
+    acoustid_result: Optional[Any] = None,
+    fingerprint_score: Optional[Any] = None,
+    fingerprint_match: Optional[Any] = None,
+    fingerprint_recording_id: Optional[str] = None,
+    fingerprint_result: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    _token = token or source_token or track_token or kwargs.pop("file_token", None)
+    _token = token or source_token or track_token or file_token
     if _token is None and display_name is not None:
         try:
             from ..file_registry import get_registry
@@ -242,7 +250,14 @@ def verify_mbid(
         forensic_score=forensic_score,
         release_id=release_id,
         token=_token,
-        **kwargs,
+        acoustid_score=acoustid_score,
+        acoustid_match=acoustid_match,
+        acoustid_recording_id=acoustid_recording_id,
+        acoustid_result=acoustid_result,
+        fingerprint_score=fingerprint_score,
+        fingerprint_match=fingerprint_match,
+        fingerprint_recording_id=fingerprint_recording_id,
+        fingerprint_result=fingerprint_result,
     )
     try:
         _handle = result.get("match_handle") or result.get("handle")

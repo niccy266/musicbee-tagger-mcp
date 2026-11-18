@@ -88,7 +88,6 @@ def stage_tag_changes(
     batch: Optional[str] = None,
     note: Optional[str] = None,
     rationale: Optional[str] = None,
-    **kwargs: Any,
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
@@ -128,7 +127,6 @@ def stage_tag_changes(
             override_justification=override_justification,
             override_reason=override_reason,
             justification=justification,
-            **kwargs,
         )
     except Exception:
         # Staging errors can include the absolute path held by the manager.
@@ -150,10 +148,13 @@ def list_staged_changes(
     text=None,
     limit=100,
     offset=0,
-    **kwargs: Any,
+    file=None,
+    source=None,
+    file_identity=None,
+    source_identity=None,
 ) -> Any:
-    file = kwargs.get("file") or kwargs.get("source")
-    file_identity = kwargs.get("file_identity") or kwargs.get("source_identity")
+    file = file or source
+    file_identity = file_identity or source_identity
     try:
         return get_staging_manager().list_staged_changes(
             status=status,
@@ -308,7 +309,9 @@ def stage_manual_override(
     )
 def audit_staged_changes(
     low_score_threshold: Optional[float] = None,
-    **kwargs: Any,
+    min_score: Optional[float] = None,
+    score_threshold: Optional[float] = None,
+    low_confidence_threshold: Optional[float] = None,
 ) -> Any:
     """Audit pending staged changes for conflicts, weak matches and duplicates.
 
@@ -316,10 +319,13 @@ def audit_staged_changes(
     more than once with different values, plus entries below the confidence
     threshold. Never exposes filesystem paths.
     """
-    if low_score_threshold is not None:
-        kwargs.setdefault("low_score_threshold", low_score_threshold)
+    threshold = low_score_threshold if low_score_threshold is not None else (
+        min_score if min_score is not None else (
+            score_threshold if score_threshold is not None else low_confidence_threshold
+        )
+    )
     try:
-        return get_staging_manager().audit_staged_changes(**kwargs)
+        return get_staging_manager().audit_staged_changes(low_score_threshold=threshold)
     except Exception:
         return make_error(
             E_STAGING_FAILED,
@@ -335,7 +341,6 @@ def annotate_staged_change(
     rationale: Optional[str] = None,
     expected_revision: Optional[int] = None,
     reason: Optional[str] = None,
-    **kwargs: Any,
 ) -> Any:
     """Attach a note/rationale to a pending stage without writing audio."""
     try:
@@ -346,7 +351,6 @@ def annotate_staged_change(
             rationale=rationale,
             expected_revision=expected_revision,
             reason=reason,
-            **kwargs,
         )
     except (FileNotFoundError, ValueError) as error:
         return error_from_exception(error, function="annotate_staged_change")

@@ -222,11 +222,35 @@ def _normalize_lookup_args(display_name=None, name=None, query=None, **kwargs):
     return value
 
 
-def resolve_track_token(display_name=None, name=None, query=None, **kwargs):
+def resolve_track_token(
+    display_name=None,
+    name=None,
+    query=None,
+    filename=None,
+    file_name=None,
+    basename=None,
+    stem=None,
+    track_name=None,
+    identifier=None,
+    value=None,
+):
     """Resolve a registered track token from identifying file information."""
     registry = get_registry()
-    value = _normalize_lookup_args(display_name=display_name, name=name, query=query, **kwargs)
-    matches = registry.find_tokens(value) if value is not None else []
+    _value = display_name or name or query
+    if _value is None:
+        for candidate in (
+            filename,
+            file_name,
+            basename,
+            stem,
+            track_name,
+            identifier,
+            value,
+        ):
+            if candidate is not None:
+                _value = candidate
+                break
+    matches = registry.find_tokens(_value) if _value is not None else []
     if len(matches) == 1:
         return {
             "token": matches[0]["token"],
