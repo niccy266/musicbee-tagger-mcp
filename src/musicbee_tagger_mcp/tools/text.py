@@ -29,13 +29,14 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         return {"error": "query is required"}
     if max_results < 1:
         max_results = 5
-    url = "https://html.duckduckgo.com/html/"
-    data = urllib.parse.urlencode({"q": query}).encode("utf-8")
+    url = "https://html.duckduckgo.com/html/?" + urllib.parse.urlencode({"q": query})
     try:
         request = urllib.request.Request(
             url,
-            data=data,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; MusicBeeTagger/1.0)"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
         )
         with urllib.request.urlopen(request, timeout=15) as response:
             body = response.read().decode("utf-8", errors="replace")

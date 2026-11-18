@@ -1,3 +1,11 @@
+### 2026-11-18 — Fix web_search: DuckDuckGo anti-bot anomaly on POST requests
+
+- Root cause: DuckDuckGo's HTML endpoint (`html.duckduckgo.com/html/`) was returning an anti-bot "anomaly" challenge page instead of search results. The original `web_search` used a POST request with a custom `Mozilla/5.0 (compatible; MusicBeeTagger/1.0)` User-Agent, which triggered the bot detection. The response contained no `result__a` / `result__snippet` classes, so the regex parsed zero results.
+- Fix: switched from POST to GET with query string in the URL, and replaced the custom User-Agent with a realistic Chrome/Windows browser string plus `Accept-Language: en-US,en;q=0.9`. Verified working against the exact query `half•alive Tip Toes genre` — returns Genius, Wikipedia, and Ultimate-Guitar results.
+- Applied the identical fix to `scripts/openrouter_agent_loop.py::_web_search` (the agent loop's own duplicate implementation) so both code paths work.
+- Files changed: `src/musicbee_tagger_mcp/tools/text.py`, `scripts/openrouter_agent_loop.py`.
+- Verification: `web_search` now returns structured `{title, url, snippet}` results through all three call paths (`tools.text.web_search`, `lastfm.web_search` alias chain, `openrouter_agent_loop._web_search`). Existing test suite unaffected (54/55 pass; the one failure is a pre-existing missing `mcp` dependency unrelated to this change).
+
 ### 2026-11-15 — Semicolon-separated multi-artist staging normalization
 
 - Added `src/musicbee_tagger_mcp/artist_credit.py` with `credit_names()`, `artist_tag_value()`, and `normalize_artist_value()` for MusicBrainz credit-aware artist tag handling.
