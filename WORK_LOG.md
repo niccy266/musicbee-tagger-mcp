@@ -1,3 +1,9 @@
+### 2026-11-18 — Issue #132: investigate `search_musicbrainz_artist` and `verify_artists_on_recording`
+
+- Confirmed both tools are registered under `musicbee-tagger-mcp-local` and their MCP schemas now expose explicit parameters (`name`/`limit` and `recording_id`/`candidate_artists` respectively) with no required `kwargs` field.
+- Functional test: `search_musicbrainz_artist(name="coldplay", limit=2)` returns two MusicBrainz artist records; `verify_artists_on_recording` correctly reports a 404 for a fake MBID, proving it handles provider errors as expected.
+- Root cause: the earlier kwargs-schema fix (branch `codex/fix-mcp-tool-schema-kwargs`, merged to master as 710b94f) corrected the 7 tools whose `**kwargs` parameter produced an opaque required `kwargs` field. These two tools already had clean signatures and were never broken; they simply were not called with the right arguments in the old workflow.
+- Next step: rebuild the Docker image and run `pytest tests/test_tool_schemas.py` in CI to confirm zero `kwargs` violations across all tools.
 ### 2026-11-18 — Fix web_search: DuckDuckGo anti-bot anomaly on POST requests
 
 - Root cause: DuckDuckGo's HTML endpoint (`html.duckduckgo.com/html/`) was returning an anti-bot "anomaly" challenge page instead of search results. The original `web_search` used a POST request with a custom `Mozilla/5.0 (compatible; MusicBeeTagger/1.0)` User-Agent, which triggered the bot detection. The response contained no `result__a` / `result__snippet` classes, so the regex parsed zero results.
