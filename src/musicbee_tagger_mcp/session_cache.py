@@ -7,10 +7,16 @@ work without a ``Context`` (direct calls, scripts, tests) and always accept an
 explicit ``job_id`` that overrides whatever was remembered.
 """
 
+from collections import OrderedDict
 from typing import Any, Optional
 from weakref import WeakKeyDictionary
 
 _ACTIVE_JOB_IDS: "WeakKeyDictionary[Any, str]" = WeakKeyDictionary()
+# Sessions that cannot be weakly referenced (rare, but real MCP server
+# implementations have shipped them). Keyed by ``id(session)``; bounded so a
+# churning server process cannot grow it without limit.
+_UNWEAKREFABLE_IDS: "OrderedDict[int, str]" = OrderedDict()
+_UNWEAKREFABLE_LIMIT = 64
 
 
 def _session_for(context: Any) -> Any:
@@ -32,11 +38,14 @@ def remember_job_id(job_id: Optional[str], context: Any = None) -> None:
     session = _session_for(context)
     if session is None:
         return
+    value = job_id.strip()
     try:
-        _ACTIVE_JOB_IDS[session] = job_id.strip()
+        _ACTIVE_JOB_IDS[session] = value
     except TypeError:
-        # Session objects that cannot be weakly referenced simply go uncached.
-        return
+        _UNWEAKREFABLE_IDS[id(session)] = value
+        _UNWEAKREFABLE_IDS.move_to_end(id(session))
+        while len(_UNWEAKREFABLE_IDS) > _UNWEAKREFABLE_LIMIT:
+            _UNWEAKREFABLE_IDS.popitem(last=False)
 
 
 def recall_job_id(context: Any = None) -> Optional[str]:
@@ -47,7 +56,7 @@ def recall_job_id(context: Any = None) -> Optional[str]:
     try:
         return _ACTIVE_JOB_IDS.get(session)
     except TypeError:
-        return None
+        return _UNWEAKREFABLE_IDS.get(id(session))
 
 
 def clear_job_id(context: Any = None) -> bool:
@@ -58,7 +67,7 @@ def clear_job_id(context: Any = None) -> bool:
     try:
         return _ACTIVE_JOB_IDS.pop(session, None) is not None
     except TypeError:
-        return False
+        return _UNWEAKREFABLE_IDS.pop(id(session), None) is not None
 
 
 def resolve_job_id(
@@ -69,8 +78,17 @@ def resolve_job_id(
     An explicit ``job_id`` always wins and becomes the connection's active
     job. When it is omitted, the value remembered for this connection is used.
     """
-    if isinstance(job_id, str) and job_id.strip():
-        resolved = job_id.strip()
-        remember_job_id(resolved, context)
-        return resolved
+    if isinstance(job_id, str):
+        stripped = job_id.strip()
+        if not stripped:
+            # An empty job_id is almost certainly a bug at the call site.
+            # Silently falling back to the remembered job would contaminate
+            # another playlist's batch, so refuse loudly instead.
+            raise ValueError(
+                "job_id cannot be empty or whitespace-only. "
+                "Omit it to use the job remembered for this connection, "
+                "or pass a valid job id."
+            )
+        remember_job_id(stripped, context)
+        return stripped
     return recall_job_id(context)

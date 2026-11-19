@@ -829,3 +829,7 @@ dead code with no call sites; testing them would be wasted effort.
 - Updated `.agents/skills/musicbee-investigator/SKILL.md` (and its marketplace copy), `prompts/openrouter_agent.md`, and the OpenRouter agent tool schemas so agents only report a stage when the response is verified, and omit `job_id` after the first call.
 - Added `tests/test_stage_verification_and_job_cache.py` covering persisted/verified staging responses, the `limit=1` default, the `stage_id` filter, session-scoped job memory (including isolation between connections), and the reflected MCP schemas.
 
+- Merged feature/table-format, fix-docker-compose-entrypoint, port-version-security-fixes,
+  fix-test-system-prompt, stage-verification-and-job-cache.
+- Fixed session_cache bugs #1 (unweakrefable sessions silently uncached → bounded id-keyed
+  fallback) and #2 (blank job_id silently reused previous job → ValueError).

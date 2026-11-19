@@ -215,3 +215,51 @@ def test_tool_schemas_keep_job_id_optional_and_limit_default_one():
     stage_schema = tools["stage_tag_changes"].input_schema
     assert "ctx" not in stage_schema["properties"]
     assert "verified" in (tools["stage_tag_changes"].description or "")
+
+
+class _Unweakrefable:
+    """Instances of __slots__-without-__weakref__ classes cannot be weakref'd."""
+
+    __slots__ = ("marker",)
+
+    def __init__(self):
+        self.marker = "no-weakref"
+
+
+import pytest
+
+
+def test_remember_job_id_survives_unweakrefable_sessions():
+    """Bug #1 regression: TypeError from WeakKeyDictionary must not be silent."""
+    import musicbee_tagger_mcp.session_cache as sc
+
+    session = _FakeContext(_Unweakrefable())
+    sc.remember_job_id("job-abc", session)
+    assert sc.recall_job_id(session) == "job-abc"
+    assert sc.clear_job_id(session) is True
+    assert sc.recall_job_id(session) is None
+
+
+def test_unweakrefable_cache_is_bounded():
+    import musicbee_tagger_mcp.session_cache as sc
+
+    for i in range(sc._UNWEAKREFABLE_LIMIT + 10):
+        sc.remember_job_id(f"job-{i}", _FakeContext(_Unweakrefable()))
+    assert len(sc._UNWEAKREFABLE_IDS) <= sc._UNWEAKREFABLE_LIMIT
+
+
+def test_resolve_job_id_rejects_whitespace_instead_of_falling_back():
+    """Bug #2 regression: blank job_id must raise, not reuse the old job."""
+    import musicbee_tagger_mcp.session_cache as sc
+
+    class _Session:
+        pass
+
+    session = _FakeContext(_Session())
+    sc.remember_job_id("job-original", session)
+    with pytest.raises(ValueError):
+        sc.resolve_job_id("   ", session)
+    # The cached job is untouched by the failed resolution.
+    assert sc.recall_job_id(session) == "job-original"
+    # Omitting job_id still resolves the remembered value.
+    assert sc.resolve_job_id(None, session) == "job-original"

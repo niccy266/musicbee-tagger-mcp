@@ -1,7 +1,7 @@
 # Critical Bugs Report: Stage Verification & Job Caching
 **Branch:** `cline/stage-verification-and-job-cache`  
 **Commit:** `08ae71c` (feat: verify staging writes and remember job ids per connection)  
-**Status:** 🔴 **3 Critical Bugs Found**  
+**Status:** ✅ Bugs #1 and #2 fixed in the merge commit (see bottom); Bug #3 partially addressed by the new regression tests.  
 **Tests:** 10/10 pass (but tests are insufficient to catch bugs)
 
 ---
@@ -287,3 +287,16 @@ Tests use `_FakeSession` (a custom class that IS weakly-referenceable), masking 
 **Fix Strategy:**
 Replace tests with ContextVar-based caching (which requires async tests), add isolation tests, whitespace rejection tests.
 
+
+
+---
+
+## Resolution (2026-11-19, merge session)
+
+- **Bug #1 fixed** without abandoning weakrefs: unweakrefable sessions now fall
+  back to a bounded `OrderedDict` keyed by `id(session)` (limit 64, LRU
+  eviction). No silent data loss; no unbounded growth.
+- **Bug #2 fixed**: `resolve_job_id` now raises `ValueError` on a
+  whitespace-only `job_id` instead of silently reusing the remembered job.
+- Regression tests added to `tests/test_stage_verification_and_job_cache.py`
+  (unweakrefable session round-trip, cache bound, blank job_id rejection).
