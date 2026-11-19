@@ -29,10 +29,11 @@ from pathlib import Path
 
 # Allow running from a source checkout without installing.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Expose agent helpers used by the monitor.
 from musicbee_tagger_mcp.data_paths import ensure_data_subdirectory  # noqa: E402
-from scripts import openrouter_agent_loop as agent  # noqa: E402
+import openrouter_agent_loop as agent  # noqa: E402
 
 
 def default_log_path() -> Path:
@@ -137,28 +138,29 @@ def run_agent_once(job_id, model, max_batches, state_path, log_path):
         print("[{}] OPENROUTER_API_KEY is not set; skipping agent run.".format(time.strftime("%H:%M:%S")), flush=True)
         return 0
 
-    args = argparse.Namespace()
-    args.job_id = job_id
-    args.model = model
-    args.batch_size = 1
-    args.lookahead = 10
-    args.context_chars = 4000
-    args.max_batches = max_batches
-    args.no_compact_context = False
-    args.thought_tokens = 10000
-    args.agent_mode = "thorough"
-    args.max_turns = 15
-    args.state = state_path
-    args.log = log_path
-    args.debug = False
-    args.max_consecutive_incomplete = 3
+    # Build CLI argument list for agent.main() which expects sys.argv-style args.
+    argv = []
+    if job_id is not None:
+        argv.append(str(job_id))
+    argv.extend(["--model", model])
+    argv.extend(["--batch-size", "1"])
+    argv.extend(["--lookahead", "10"])
+    argv.extend(["--context-chars", "4000"])
+    if max_batches is not None:
+        argv.extend(["--max-batches", str(max_batches)])
+    argv.extend(["--thought-tokens", "10000"])
+    argv.extend(["--agent-mode", "thorough"])
+    argv.extend(["--max-turns", "15"])
+    argv.extend(["--state", str(state_path)])
+    argv.extend(["--log", str(log_path)])
+    argv.extend(["--max-consecutive-incomplete", "3"])
 
     run_id = str(time.time())
     run_log = agent.RunLog(log_path, str(run_id))
     agent._RUN_LOG = run_log
 
     try:
-        agent.main(args)
+        agent.main(argv)
     except SystemExit as exc:
         if exc.code in (None, 130):
             return 0

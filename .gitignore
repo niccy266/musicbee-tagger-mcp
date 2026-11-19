@@ -67,6 +67,7 @@ id_ecdsa*
 *.kdbx
 
 # Authentication & Cloud Provider Tokens
+.secrets/
 .netrc
 _netrc
 .aws/
