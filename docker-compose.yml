@@ -42,7 +42,7 @@ services:
     volumes:
       - ${MUSICBEE_AUDIO_DIR:-./audio}:/audio:ro
       - musicbee-staging:/staging:rw
-      - musicbee-data:/data:rw
+      - ${MUSICBEE_DATA_DIR:-musicbee-data}:/data:rw
       - musicbee-certs:/certs:rw
     read_only: true
     tmpfs:
@@ -67,7 +67,7 @@ services:
     volumes:
       - ${MUSICBEE_AUDIO_DIR:-./audio}:/audio:rw
       - musicbee-staging:/staging:ro
-      - musicbee-data:/data:rw
+      - ${MUSICBEE_DATA_DIR:-musicbee-data}:/data:rw
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=50m

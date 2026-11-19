@@ -24,11 +24,16 @@ COPY src/ ./src/
 COPY pyproject.toml ./
 COPY scripts/ ./scripts/
 
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN pip install --no-cache-dir "loguru>=0.7.0" && \
+    pip install --no-cache-dir --no-deps -e .
+
+COPY scripts/ ./scripts/
 
 # The apply container needs WRITE access to the real audio directory (/audio)
 # and READ access to the shared staging directory (/staging).
-RUN mkdir -p /staging /data /audio && \
+RUN sed -i 's/\r$//' /app/scripts/*.sh && \
+    chmod +x /app/scripts/*.sh && \
+    mkdir -p /staging /data /audio && \
     chown -R applyuser:applyuser /staging /data /audio /app
 
 USER applyuser
