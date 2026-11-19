@@ -6,42 +6,98 @@ jobs. The same operations are both MCP tools available to the LLM and
 callable directly by any MCP client — the boundary never carries paths.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+from mcp.server.mcpserver import Context
 
 from ..job_store import get_job_store
+from ..session_cache import remember_job_id, resolve_job_id
+
+_NO_ACTIVE_JOB = {
+    "error": (
+        "No active playlist job for this MCP connection. Call list_jobs and "
+        "pass job_id once; the server remembers it for later calls."
+    )
+}
 
 
-def list_jobs() -> Dict[str, Any]:
-    """List available playlist jobs using path-free summaries."""
+def _resolved_job_id(
+    job_id: Optional[str], ctx: Optional[Context]
+) -> Optional[str]:
+    return resolve_job_id(job_id, ctx)
+
+
+def list_jobs(ctx: Optional[Context] = None) -> Dict[str, Any]:
+    """List available playlist jobs using path-free summaries.
+
+    When exactly one job has pending work, its id is remembered for this MCP
+    connection so later batch calls may omit job_id.
+    """
     try:
-        return {"jobs": get_job_store().list_jobs()}
+        jobs = get_job_store().list_jobs()
     except Exception:
         return {"error": "Unable to list playlist jobs"}
+    if isinstance(jobs, list) and len(jobs) == 1:
+        first = jobs[0] if isinstance(jobs[0], dict) else {}
+        remember_job_id(first.get("job_id"), ctx)
+    return {"jobs": jobs}
 
 
-def next_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
-    """Serve the next batch of unprocessed tokens for a job."""
-    return get_job_store().next_batch(job_id, size=size)
+def next_batch(
+    job_id: Optional[str] = None, size: int = 10, ctx: Optional[Context] = None
+) -> Dict[str, Any]:
+    """Serve the next batch of unprocessed tokens for a job.
+
+    Omit job_id to reuse the job remembered for this MCP connection.
+    """
+    resolved = _resolved_job_id(job_id, ctx)
+    if resolved is None:
+        return dict(_NO_ACTIVE_JOB)
+    return get_job_store().next_batch(resolved, size=size)
 
 
-def preview_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
+def preview_batch(
+    job_id: Optional[str] = None, size: int = 10, ctx: Optional[Context] = None
+) -> Dict[str, Any]:
     """Preview the next batch of tokens without claiming them."""
-    return get_job_store().preview_batch(job_id, size=size)
+    resolved = _resolved_job_id(job_id, ctx)
+    if resolved is None:
+        return dict(_NO_ACTIVE_JOB)
+    return get_job_store().preview_batch(resolved, size=size)
 
 
-def complete_batch(job_id: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+def complete_batch(
+    job_id: Optional[str] = None,
+    results: Optional[List[Dict[str, Any]]] = None,
+    ctx: Optional[Context] = None,
+) -> Dict[str, Any]:
     """Report per-token outcomes back to the job."""
-    return get_job_store().complete_batch(job_id, results)
+    resolved = _resolved_job_id(job_id, ctx)
+    if resolved is None:
+        return dict(_NO_ACTIVE_JOB)
+    return get_job_store().complete_batch(resolved, results or [])
 
 
-def release_batch(job_id: str, tokens: List[str]) -> Dict[str, Any]:
+def release_batch(
+    job_id: Optional[str] = None,
+    tokens: Optional[List[str]] = None,
+    ctx: Optional[Context] = None,
+) -> Dict[str, Any]:
     """Return selected claimed tokens to pending after an interrupted batch."""
-    return get_job_store().release_batch(job_id, tokens)
+    resolved = _resolved_job_id(job_id, ctx)
+    if resolved is None:
+        return dict(_NO_ACTIVE_JOB)
+    return get_job_store().release_batch(resolved, tokens or [])
 
 
-def job_status(job_id: str) -> Dict[str, Any]:
+def job_status(
+    job_id: Optional[str] = None, ctx: Optional[Context] = None
+) -> Dict[str, Any]:
     """Return progress counts and failures for a job."""
-    return get_job_store().job_status(job_id)
+    resolved = _resolved_job_id(job_id, ctx)
+    if resolved is None:
+        return dict(_NO_ACTIVE_JOB)
+    return get_job_store().job_status(resolved)
 
 
 def manual_stage_override(job_id: str, token: str, justification: str = "", **kwargs) -> Dict[str, Any]:
@@ -73,37 +129,12 @@ def review_unresolved(job_id: str) -> Dict[str, Any]:
 
 
 def register_playlist_tools(app) -> None:
-    @app.tool()
-    def list_jobs() -> Dict[str, Any]:
-        """List playlist jobs that still have pending tracks."""
-        try:
-            return {"jobs": get_job_store().list_jobs()}
-        except Exception:
-            return {"error": "Unable to list playlist jobs"}
-    @app.tool()
-    def next_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
-        """Get the next batch (default 10) of unprocessed tokens for a job."""
-        return get_job_store().next_batch(job_id, size=size)
-
-    @app.tool()
-    def preview_batch(job_id: str, size: int = 10) -> Dict[str, Any]:
-        """Preview the next batch (default 10) without claiming any tracks."""
-        return get_job_store().preview_batch(job_id, size=size)
-
-    @app.tool()
-    def complete_batch(job_id: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Report outcomes: [{token, success, error?}] for a claimed batch."""
-        return get_job_store().complete_batch(job_id, results)
-
-    @app.tool()
-    def release_batch(job_id: str, tokens: List[str]) -> Dict[str, Any]:
-        """Return selected in-progress tokens to pending after interrupted work."""
-        return get_job_store().release_batch(job_id, tokens)
-
-    @app.tool()
-    def job_status(job_id: str) -> Dict[str, Any]:
-        """Get progress counts and any failed tracks for a playlist job."""
-        return get_job_store().job_status(job_id)
+    app.tool()(list_jobs)
+    app.tool()(next_batch)
+    app.tool()(preview_batch)
+    app.tool()(complete_batch)
+    app.tool()(release_batch)
+    app.tool()(job_status)
 
 # Issue #45: ordering/grouping helpers
 _ORDERING_METHODS = [

@@ -2,6 +2,8 @@
 
 from typing import Any, Dict, List, Optional
 
+from mcp.server.mcpserver import Context
+
 from ..error_codes import (
     E_AUDIO_READ_FAILED,
     E_FILE_NOT_FOUND,
@@ -17,6 +19,7 @@ from ..error_codes import (
 from ..field_map import FIELD_MAP
 from ..file_registry import get_registry
 from ..match_store import resolve_match, resolve_match_for_token
+from ..session_cache import resolve_job_id
 from ..staging import get_staging_manager
 from ..tag_writer import preview_tag_changes
 
@@ -88,13 +91,24 @@ def stage_tag_changes(
     batch: Optional[str] = None,
     note: Optional[str] = None,
     rationale: Optional[str] = None,
+    ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
     """Save a pending manifest for user review; does not write audio.
 
     PREREQUISITE: Call evaluate_match first (once is enough — staging is
-    allowed regardless of whether verification passed). NEXT STEP: After
-    staging, call finish_batch when all files are resolved.
+    allowed regardless of whether verification passed).
+
+    SUCCESS IS ONLY CONFIRMED BY THE RESPONSE: report a stage to the user only
+    when the result contains ``verified: true``, ``persisted: true``, a
+    ``stage_id``, and ``status: "pending"``. If the tool call fails or the
+    response lacks those fields, nothing was staged; retry and never assume
+    success. Follow up with ``get_staged_change(stage_id=...)`` when unsure.
+
+    ``job_id`` is remembered per MCP connection: pass it once (or after
+    ``list_jobs``) and later calls may omit it. NEXT STEP: After staging, call
+    finish_batch when all files are resolved.
     """
+    job_id = resolve_job_id(job_id, ctx)
     validation_error = _validate_tags(new_tags, "stage_tag_changes")
     if validation_error is not None:
         return validation_error
@@ -138,27 +152,40 @@ def stage_tag_changes(
 
 
 def list_staged_changes(
-    status=None,
-    token=None,
-    display_name=None,
-    job_id=None,
-    batch=None,
-    query=None,
-    search=None,
-    text=None,
-    limit=100,
-    offset=0,
-    file=None,
-    source=None,
-    file_identity=None,
-    source_identity=None,
+    status: Optional[str] = None,
+    token: Optional[str] = None,
+    stage_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+    job_id: Optional[str] = None,
+    batch: Optional[str] = None,
+    query: Optional[str] = None,
+    search: Optional[str] = None,
+    text: Optional[str] = None,
+    limit: int = 1,
+    offset: int = 0,
+    file: Optional[str] = None,
+    source: Optional[str] = None,
+    file_identity: Optional[str] = None,
+    source_identity: Optional[str] = None,
+    ctx: Optional[Context] = None,
 ) -> Any:
+    """List staged changes for verification (oldest first).
+
+    ``limit`` defaults to 1 so a verification call stays small; raise it (or
+    pass ``status="all"``) to page through history with ``offset``. Filter by
+    ``stage_id`` or ``token`` to confirm one specific proposal. Results are
+    path-free summaries; use ``get_staged_change`` for full review context.
+
+    ``job_id`` defaults to the job remembered for this MCP connection.
+    """
     file = file or source
     file_identity = file_identity or source_identity
+    job_id = resolve_job_id(job_id, ctx)
     try:
         return get_staging_manager().list_staged_changes(
             status=status,
             token=token,
+            stage_id=stage_id,
             file=file,
             file_identity=file_identity,
             display_name=display_name,

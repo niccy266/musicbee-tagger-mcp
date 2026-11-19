@@ -152,7 +152,13 @@ class StagingManager:
         It is NEVER returned to the caller.
 
         Returns:
-            {"stage_id": str, "display_name": str, "diff_summary": list, "notes": str}
+            {"stage_id": str, "display_name": str, "status": "pending",
+             "revision": int, "persisted": True, "verified": True,
+             "diff_summary": list, "notes": str}
+
+        The manifest is read back from disk before returning, so a response
+        containing ``verified: true`` and ``stage_id`` proves the proposal
+        persisted and an agent may report it as staged.
         """
         # Normalize artist tag using stored MusicBrainz credit names (no network calls).
         proposed_tags = dict(proposed_tags)
@@ -246,16 +252,33 @@ class StagingManager:
 
         self.store.save(manifest)
 
+        # Read the manifest back so a reported stage_id is proof it persisted.
+        persisted = self.store.load(stage_id)
+        if (
+            persisted.get("stage_id") != stage_id
+            or persisted.get("proposed_tags") != manifest["proposed_tags"]
+        ):
+            raise RuntimeError("Staged change could not be verified after saving.")
+
         # Return only safe, non-path fields to the caller
         response = {
             "stage_id": stage_id,
             "display_name": display_name,
+            "status": "pending",
             "revision": 1,
+            "persisted": True,
+            "verified": True,
+            "job_id": job_id,
+            "batch": batch,
             "diff_summary": diff,
             "notes": notes,
             "message": (
-                f"Staged {len(diff)} field change(s) for '{display_name}'. "
-                f"Run `python -m musicbee_tagger_mcp.apply_staged --stage-id {stage_id}` to apply."
+                f"Staged and verified {len(diff)} field change(s) for "
+                f"'{display_name}' (stage_id={stage_id}, revision=1, "
+                "status=pending). Confirm with "
+                f"get_staged_change(stage_id='{stage_id}') before reporting "
+                "success. Run `python -m musicbee_tagger_mcp.apply_staged "
+                f"--stage-id {stage_id}` to apply."
             ),
         }
         if artist_warnings:
@@ -505,11 +528,20 @@ class StagingManager:
             })
 
         manifest = self.store.mutate(stage_id, update)
+        persisted = self.store.load(stage_id)
+        if (
+            persisted.get("stage_id") != stage_id
+            or persisted.get("revision") != manifest["revision"]
+            or persisted.get("proposed_tags") != manifest["proposed_tags"]
+        ):
+            raise RuntimeError("Amended change could not be verified after saving.")
         result = {
             "stage_id": manifest["stage_id"],
             "display_name": manifest["display_name"],
             "status": self._status(manifest),
             "revision": manifest["revision"],
+            "persisted": True,
+            "verified": True,
             "diff_summary": manifest["diff"],
         }
         if amend_warnings:

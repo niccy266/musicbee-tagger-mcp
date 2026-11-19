@@ -10,7 +10,7 @@ For each token, the batch brief ALREADY contains read_track_metadata (tags, dura
 1. Inspect (already done for you): metadata and filename clues are in the batch brief. Skip this step.
 2. Search: use search_canonical_release with the artist/title/duration from the brief. Repair mojibake if needed. You may also web_search for genre or corroboration.
 3. Verify: call verify_mbid with the best candidate's recording_id.
-4. Stage: call stage_tag_changes with corrected tags, mb_recording_id, mb_release_id, forensic_score, and a short note.
+4. Stage: call stage_tag_changes with corrected tags, mb_recording_id, mb_release_id, forensic_score, and a short note. Treat the stage as done only when the response contains `verified: true`, `persisted: true`, `status: "pending"`, a `stage_id`, and a `revision`; otherwise nothing was staged and you must retry. Confirm with get_staged_change(stage_id=...) when a call looks malformed.
 5. Unresolved tokens are appended to the queue. There is NO DOWN SIDE to marking as unresolved and moving on.
 
 Genre is mandatory. Every staged file must include a non-empty genre.

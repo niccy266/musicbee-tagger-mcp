@@ -410,10 +410,27 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "list_staged_changes",
-            "description": "List all pending staged changes.",
+            "description": "List staged changes (path-free). Defaults to a single page item; pass stage_id or token to verify one proposal, or raise limit to page through history.",
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "stage_id": {
+                        "type": "string"
+                    },
+                    "token": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "default": 1
+                    },
+                    "offset": {
+                        "type": "integer"
+                    }
+                },
                 "required": []
             }
         }
@@ -1020,7 +1037,7 @@ LOCAL_TOOLS = {
     "amend_staged_changes": amend_staged_changes,
     "withdraw_staged_change": withdraw_staged_change,
     "get_staged_change": get_staged_change,
-    "list_staged_changes": lambda: list_staged_changes(),
+    "list_staged_changes": lambda stage_id=None, token=None, status=None, limit=1, offset=0: list_staged_changes(stage_id=stage_id, token=token, status=status, limit=limit, offset=offset),
     "web_search": lambda query, max_results=5: web_search(query, max_results),
     "run_commands": lambda commands=None: run_commands(commands),
     "gh_issue_comment": lambda issue=None, body="", repo=None: gh_issue_comment(issue, body, repo=repo),
