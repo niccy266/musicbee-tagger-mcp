@@ -102,3 +102,5 @@ temp_diff.txt
 agent_run.err
 out.txt
 output.txt
+
+.secrets/
