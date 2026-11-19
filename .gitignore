@@ -1,4 +1,4 @@
-# Python virtual environments & bytecode
+﻿# Python virtual environments & bytecode
 .venv/
 env/
 venv/
@@ -27,7 +27,6 @@ build/
 #Temp files:
 .pytest*
 TEMP
-temp
 .temp
 .tmp
 
@@ -82,7 +81,6 @@ _netrc
 # Agent runtime state
 agent_state.json
 agent_state*.json
-musicbee-mcpb-*/
 .pytest-tmp/
 
 token_ACRcloud_key
@@ -104,3 +102,5 @@ out.txt
 output.txt
 
 .secrets/
+.run_log.jsonl
+logs/run_log.jsonl
