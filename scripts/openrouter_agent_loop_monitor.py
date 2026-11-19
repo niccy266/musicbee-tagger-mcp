@@ -29,6 +29,7 @@ from pathlib import Path
 
 # Allow running from a source checkout without installing.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Expose agent helpers used by the monitor.
 from musicbee_tagger_mcp.data_paths import ensure_data_subdirectory  # noqa: E402
@@ -137,28 +138,25 @@ def run_agent_once(job_id, model, max_batches, state_path, log_path):
         print("[{}] OPENROUTER_API_KEY is not set; skipping agent run.".format(time.strftime("%H:%M:%S")), flush=True)
         return 0
 
-    args = argparse.Namespace()
-    args.job_id = job_id
-    args.model = model
-    args.batch_size = 1
-    args.lookahead = 10
-    args.context_chars = 4000
-    args.max_batches = max_batches
-    args.no_compact_context = False
-    args.thought_tokens = 10000
-    args.agent_mode = "thorough"
-    args.max_turns = 15
-    args.state = state_path
-    args.log = log_path
-    args.debug = False
-    args.max_consecutive_incomplete = 3
+    argv = [
+        "openrouter_agent_loop.py",
+        "--model", model,
+        "--batch-size", "1",
+        "--max-batches", str(max_batches) if max_batches is not None else "1",
+        "--state", str(state_path),
+        "--log", str(log_path),
+    ]
+    if job_id:
+        argv.extend(["--job-id", job_id])
 
     run_id = str(time.time())
     run_log = agent.RunLog(log_path, str(run_id))
     agent._RUN_LOG = run_log
 
+    old_argv = sys.argv
+    sys.argv = argv
     try:
-        agent.main(args)
+        agent.main()
     except SystemExit as exc:
         if exc.code in (None, 130):
             return 0
@@ -166,6 +164,8 @@ def run_agent_once(job_id, model, max_batches, state_path, log_path):
     except Exception as exc:
         print("[{}] agent run error: {}: {}".format(time.strftime("%H:%M:%S"), type(exc).__name__, exc), flush=True)
         return 1
+    finally:
+        sys.argv = old_argv
     return 0
 
 
@@ -199,7 +199,7 @@ def main():
             # Exponential backoff on rate limits
             backoff_base = 5  # seconds
             backoff_cap = 60  # max seconds
-            backoff = getattr("_monitor_backoff", 0, 0)
+            backoff = getattr(sys.modules[__name__], "_monitor_backoff", 0)
             if backoff > 0:
                 print("[{}] backoff waiting {}s...".format(time.strftime("%H:%M:%S"), backoff), flush=True)
                 time.sleep(backoff)
