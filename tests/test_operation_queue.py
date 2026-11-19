@@ -60,6 +60,11 @@ def test_mcp_tools_include_shared_batch_queue(tmp_path, monkeypatch):
         def __init__(self):
             self.tools = []
 
+        def resource(self, *args, **kwargs):
+            def decorate(function):
+                return function
+            return decorate
+
         def tool(self, *args, **kwargs):
             def decorate(function):
                 self.tools.append(function)

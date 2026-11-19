@@ -226,8 +226,6 @@ def resolve_track_token(
     display_name=None,
     name=None,
     query=None,
-    filename=None,
-    file_name=None,
     basename=None,
     stem=None,
     track_name=None,
@@ -239,8 +237,6 @@ def resolve_track_token(
     _value = display_name or name or query
     if _value is None:
         for candidate in (
-            filename,
-            file_name,
             basename,
             stem,
             track_name,

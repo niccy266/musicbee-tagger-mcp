@@ -19,13 +19,13 @@ def resolve_lastfm_title(
     display_name: Optional[str] = None,
     folder_context: Optional[List[str]] = None,
     confidence: Optional[float] = None,
-    filename: Optional[str] = None,
+    name_hint: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Resolve the most popular Last.fm title/artist form for a track."""
     return resolve_lastfm(
         title=title,
         artist=artist,
-        filename=filename if filename is not None else display_name,
+        filename=name_hint if name_hint is not None else display_name,
         folder_context=folder_context,
         confidence=confidence,
     )

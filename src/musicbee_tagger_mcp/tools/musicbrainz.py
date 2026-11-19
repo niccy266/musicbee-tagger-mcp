@@ -220,10 +220,7 @@ def verify_mbid(
     forensic_score: Optional[float] = None,
     release_id: Optional[str] = None,
     token: Optional[str] = None,
-    source_token: Optional[str] = None,
-    track_token: Optional[str] = None,
     display_name: Optional[str] = None,
-    file_token: Optional[str] = None,
     acoustid_score: Optional[Any] = None,
     acoustid_match: Optional[Any] = None,
     acoustid_recording_id: Optional[str] = None,
@@ -233,7 +230,7 @@ def verify_mbid(
     fingerprint_recording_id: Optional[str] = None,
     fingerprint_result: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    _token = token or source_token or track_token or file_token
+    _token = token
     if _token is None and display_name is not None:
         try:
             from ..file_registry import get_registry

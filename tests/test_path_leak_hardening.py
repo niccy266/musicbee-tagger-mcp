@@ -99,6 +99,11 @@ def test_no_mcp_tool_takes_a_path_parameter():
         def __init__(self):
             self.tools = []
 
+        def resource(self, *a, **k):
+            def deco(fn):
+                return fn
+            return deco
+
         def tool(self, *a, **k):
             def deco(fn):
                 self.tools.append(fn)

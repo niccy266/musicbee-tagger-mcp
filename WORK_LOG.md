@@ -800,3 +800,15 @@ dead code with no call sites; testing them would be wasted effort.
 - Fixed `test_amend_rechecks_diff_records_reason_and_rejects_stale_revision` in `tests/test_staged_change_controls.py` to check `manifest["history"][0]["reason"]`.
 - Added unit tests for `src/musicbee_tagger_mcp/tools/operations.py` in `tests/test_operations_tools.py` covering `enqueue_operation`, `list_operations`, `claim_operations`, `complete_operation`, path-redacted error wrapping, and `register_operation_tools` (100% coverage of `tools/operations.py`).
 - Validation: `pylint --recursive=y --errors-only src` passed with 0 errors; 325 unit tests passed, 1 skipped, 0 failures.
+
+## 2026-11-19 — repo health repair (session by Rool Machine)
+
+- Fixed 3 CI failures on master introduced by the #132 resource-registration work:
+  - `FakeApp` test doubles lacked a `resource()` method, so `register_tools` crashed
+    during registration in `test_operation_queue` and `test_path_leak_hardening`.
+- Removed location-like parameters from MCP tools per the #2/#3 threat-model rule:
+  - `verify_mbid`: dropped unused `source_token`/`track_token`/`file_token` aliases.
+  - `resolve_track_token`: dropped `filename`/`file_name` (redundant with `display_name`/`query`).
+  - `resolve_lastfm_title`: `filename` → `name_hint`.
+  - `list_staged_changes`: `file` → `staged_name`, `file_identity` → `staged_identity`.
+- Coverage gate unchanged (58); current master measures 59.14%.

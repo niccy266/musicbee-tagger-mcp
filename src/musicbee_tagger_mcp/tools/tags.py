@@ -148,19 +148,19 @@ def list_staged_changes(
     text=None,
     limit=100,
     offset=0,
-    file=None,
+    staged_name=None,
     source=None,
-    file_identity=None,
+    staged_identity=None,
     source_identity=None,
 ) -> Any:
-    file = file or source
-    file_identity = file_identity or source_identity
+    staged_name = staged_name or source
+    staged_identity = staged_identity or source_identity
     try:
         return get_staging_manager().list_staged_changes(
             status=status,
             token=token,
-            file=file,
-            file_identity=file_identity,
+            file=staged_name,
+            file_identity=staged_identity,
             display_name=display_name,
             job_id=job_id,
             batch=batch,
