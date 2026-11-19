@@ -205,6 +205,7 @@ class StageManifestStore:
         self,
         status=None,
         token=None,
+        stage_id=None,
         file=None,
         file_identity=None,
         display_name=None,
@@ -215,10 +216,15 @@ class StageManifestStore:
         query=None,
         search=None,
         text=None,
-        limit=100,
+        limit=1,
         offset=0,
         **kwargs,
     ):
+        """Return page metadata plus path-free summaries of staged changes.
+
+        ``limit`` defaults to 1 so a single verification call stays small;
+        pass a larger ``limit`` (or ``status="all"``) to page through history.
+        """
         if status is None:
             status_filter = None
         elif isinstance(status, str):
@@ -253,6 +259,8 @@ class StageManifestStore:
         # Accept aliases from kwargs.
         if token is None:
             token = kwargs.get("token") or kwargs.get("file_token") or kwargs.get("fileToken") or kwargs.get("file_token")
+        if stage_id is None:
+            stage_id = kwargs.get("stage_id") or kwargs.get("stageId")
         if file is None:
             file = kwargs.get("file")
         if file_identity is None:
@@ -303,6 +311,10 @@ class StageManifestStore:
             if token is not None:
                 manifest_token = manifest.get("token")
                 if str(token).lower() not in str(manifest_token or "").lower():
+                    continue
+            if stage_id is not None:
+                manifest_stage_id = str(manifest.get("stage_id") or "").strip().lower()
+                if str(stage_id).strip().lower() != manifest_stage_id:
                     continue
             if file_filter is not None:
                 name = str(manifest.get("display_name") or "")

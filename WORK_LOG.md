@@ -821,3 +821,11 @@ dead code with no call sites; testing them would be wasted effort.
   - `resolve_lastfm_title`: `filename` → `name_hint`.
   - `list_staged_changes`: `file` → `staged_name`, `file_identity` → `staged_identity`.
 - Coverage gate unchanged (58); current master measures 59.14%.
+## 2026-11-19 — Stage verification signals, single-item staged listing, and per-connection job ids
+
+- `StagingManager.stage()` and `.amend()` now read the manifest back from disk before returning and include `status`, `persisted`, `verified`, and `job_id` in the response. A stage response with `verified: true` is therefore proof the proposal persisted; a failed write raises instead of returning a plausible-looking summary.
+- `list_staged_changes` now defaults to `limit=1` (previously 100) at the tool and store layers, accepts an exact `stage_id` filter, and documents that agents should confirm a specific proposal with `get_staged_change` or `list_staged_changes(stage_id=..., limit=1)`.
+- Added `session_cache.py`: a `WeakKeyDictionary` keyed by the MCP session object remembers the active `job_id` per connection. `next_batch`, `preview_batch`, `complete_batch`, `release_batch`, `job_status`, `stage_tag_changes`, and `list_staged_changes` accept an optional `job_id` and fall back to the remembered value; `list_jobs` remembers the id when exactly one job has pending work. Explicit `job_id` always wins, and direct (non-MCP) callers are unaffected.
+- Updated `.agents/skills/musicbee-investigator/SKILL.md` (and its marketplace copy), `prompts/openrouter_agent.md`, and the OpenRouter agent tool schemas so agents only report a stage when the response is verified, and omit `job_id` after the first call.
+- Added `tests/test_stage_verification_and_job_cache.py` covering persisted/verified staging responses, the `limit=1` default, the `stage_id` filter, session-scoped job memory (including isolation between connections), and the reflected MCP schemas.
+
