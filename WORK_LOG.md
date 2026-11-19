@@ -848,3 +848,13 @@ dead code with no call sites; testing them would be wasted effort.
   committed OpenRouter API key (.secrets/API_KEYS). Rotate the key, then
   cherry-pick its code fixes (agent argv invocation, staging overrides, audit
   tool registration, test fixture cleanup) without the secret commit.
+
+## 2026-11-19 — cherry-picked agent argv fix, secret excluded (session 3)
+
+- Cherry-picked 3041986 from codex/fix-merge-conflict-release-ready WITHOUT the
+  .secrets/API_KEYS hunk (commit message documents the exclusion; key rotated
+  by owner prior). Kept: _agent_monitor_loop.py argv-style invocation fix
+  (Namespace -> argv list, direct import), .secrets/ in .gitignore.
+- Resolved all six conflicts to master: the branch predates #132 explicit
+  parameters, the audit tool schema and the conftest restore work; re-adding
+  its versions would have reintroduced alias params the hardening tests forbid.
