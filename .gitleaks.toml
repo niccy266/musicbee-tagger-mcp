@@ -1,0 +1,27 @@
+# Gitleaks configuration.
+#
+# Purpose-built to keep real findings visible: only allowlist what is
+# verifiably not a credential.
+
+[allowlist]
+description = "Ephemeral session tokens, not credentials"
+paths = [
+  '''(^|/)logs/''',
+  '''\.run_log\.jsonl$''',
+  '''(^|/)logs/run_log\.jsonl$''',
+]
+
+# File-registry tokens are UUIDs minted at runtime to stand in for file paths
+# (src/musicbee_tagger_mcp/file_registry.py). They authorize nothing outside a
+# live server process and are logged as part of normal MCP tool traffic.
+# Generic entropy rules flag them; a UUID-shaped match in a run log is by
+# definition one of these.
+[[rules]]
+id = "generic-api-key"
+description = "generic api key"
+regex = '''(?i)(key|token|secret|api)[^,\n]{0,40}["':=][ "']{0,3}[a-f0-9-]{30,}'''
+secretGroup = 4
+[rules.allowlist]
+regexes = [
+  '''\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b''',
+]
