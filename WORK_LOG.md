@@ -833,3 +833,18 @@ dead code with no call sites; testing them would be wasted effort.
   fix-test-system-prompt, stage-verification-and-job-cache.
 - Fixed session_cache bugs #1 (unweakrefable sessions silently uncached → bounded id-keyed
   fallback) and #2 (blank job_id silently reused previous job → ValueError).
+
+## 2026-11-19 — branch sweep completed (Rool Machine session 2)
+
+- Merged: feature/table-format, claude/fix-docker-compose-entrypoint,
+  claude/port-version-security-fixes, codex/fix-test-system-prompt,
+  cline/stage-verification-and-job-cache (with session_cache bugs #1/#2 fixed
+  per its own CRITICAL_BUGS_REPORT; regression tests added).
+- Deleted review/security-boundary after content review: all 15 of its security
+  tests already exist on master by name; its file versions predate 400+ commits
+  of master evolution. Nothing unique was lost.
+- Deleted claude/bump-version-0-4-6 (master already at 0.4.6).
+- NOT merged: codex/fix-merge-conflict-release-ready — its history contains a
+  committed OpenRouter API key (.secrets/API_KEYS). Rotate the key, then
+  cherry-pick its code fixes (agent argv invocation, staging overrides, audit
+  tool registration, test fixture cleanup) without the secret commit.
